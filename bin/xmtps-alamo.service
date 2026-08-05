@@ -1,0 +1,15 @@
+[Unit]
+Description=XMTPS Decoder Service
+
+[Service]
+Type=simple
+PIDFile=/data1/alamo/var/lock/xmtps.pid
+User=argo
+Group=floatgroup
+Restart=always
+StandardOutput=null
+StandardError=null
+ExecStart=/data1/alamo/bin/xmtps --config /data1/alamo/etc/xmtps.cfg --daemon --pid-file /data1/alamo/var/lock/xmtps.pid --debug
+
+[Install]
+WantedBy=multi-user.target

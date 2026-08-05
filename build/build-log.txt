@@ -1,0 +1,47 @@
+
+**** Build of configuration Debug for project xmtps ****
+
+make -j9 pre-build main-build 
+if [ -f /var/lock/xmtps/lock.pid ]; then rm /var/lock/xmtps/lock.pid; fi; ./../build/incrementBuild.sh
+Building file: ../src/utility/thread/Lockable.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=53' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/thread/Lockable.d" -MT"src/utility/thread/Lockable.d" -o "src/utility/thread/Lockable.o" "../src/utility/thread/Lockable.cpp"
+54
+Building file: ../src/utility/thread/RecursiveLockable.cpp
+ 
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=53' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/thread/RecursiveLockable.d" -MT"src/utility/thread/RecursiveLockable.d" -o "src/utility/thread/RecursiveLockable.o" "../src/utility/thread/RecursiveLockable.cpp"
+Building file: ../src/utility/thread/Service.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=54' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/thread/Service.d" -MT"src/utility/thread/Service.d" -o "src/utility/thread/Service.o" "../src/utility/thread/Service.cpp"
+Building file: ../src/utility/thread/ThreadUtils.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=54' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/thread/ThreadUtils.d" -MT"src/utility/thread/ThreadUtils.d" -o "src/utility/thread/ThreadUtils.o" "../src/utility/thread/ThreadUtils.cpp"
+Building file: ../src/utility/system/FileSystemUtils.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=54' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/system/FileSystemUtils.d" -MT"src/utility/system/FileSystemUtils.d" -o "src/utility/system/FileSystemUtils.o" "../src/utility/system/FileSystemUtils.cpp"
+Building file: ../src/utility/system/SystemUtils.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=54' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/system/SystemUtils.d" -MT"src/utility/system/SystemUtils.d" -o "src/utility/system/SystemUtils.o" "../src/utility/system/SystemUtils.cpp"
+Building file: ../src/utility/string/Stringifiable.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=54' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/string/Stringifiable.d" -MT"src/utility/string/Stringifiable.d" -o "src/utility/string/Stringifiable.o" "../src/utility/string/Stringifiable.cpp"
+Building file: ../src/utility/sql/ColumnDescription.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=54' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/sql/ColumnDescription.d" -MT"src/utility/sql/ColumnDescription.d" -o "src/utility/sql/ColumnDescription.o" "../src/utility/sql/ColumnDescription.cpp"
+Building file: ../src/utility/sql/MysqlUtils.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=54' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/sql/MysqlUtils.d" -MT"src/utility/sql/MysqlUtils.d" -o "src/utility/sql/MysqlUtils.o" "../src/utility/sql/MysqlUtils.cpp"
+Finished building: ../src/utility/system/SystemUtils.cpp
+ 
+Building file: ../src/utility/sql/PersistentEntity.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=54' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/sql/PersistentEntity.d" -MT"src/utility/sql/PersistentEntity.d" -o "src/utility/sql/PersistentEntity.o" "../src/utility/sql/PersistentEntity.cpp"
+Finished building: ../src/utility/string/Stringifiable.cpp
+ 
+Building file: ../src/utility/signal/SignalHandler.cpp
+Invoking: Cross G++ Compiler
+g++-4.7 -D'BUILD_NUMBER=54' -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="2014-09-15T17:59-04:00"' -DBUILD_DEBUG=1 -DBUILD_RELEASE=0 -D__cplusplus=201103L -I/usr/include/c++/4.7 -O3 -g -Wall -c -fmessage-length=0 --std=c++11 -MMD -MP -MF"src/utility/signal/SignalHandler.d" -MT"src/utility/signal/SignalHandler.d" -o "src/utility/signal/SignalHandler.o" "../src/utility/signal/SignalHandler.cpp"
+make: *** [src/utility/thread/Lockable.o] Terminated
+make: *** [src/utility/thread/RecursiveLockable.o] Terminated
+make: *** [src/utility/thread/Service.o] Terminated
