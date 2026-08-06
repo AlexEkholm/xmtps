@@ -6201,6 +6201,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
 
 
       case 0x0A080004: // ALAMO Software version 10.8.0.4 (SBE)
+      case 0x0A0C0001: // ALAMO Software version 10.12.0.1 (RBR)
       case 0x0A0C0032: // ALAMO/MM2 Software version 10.12.0.32
 
         if(msg_idx == 0) {
@@ -11375,6 +11376,7 @@ const string XMfaMissionCfg::GenerateListingString(int whoi, int dive, int idx) 
 
       case 0x0A070101: // ALAMO Software version 10.7.1.1
       case 0x0A080004: // ALAMO Software version 10.8.0.4 (SBE)
+      case 0x0A0C0001: // ALAMO Software version 10.12.0.1 (RBR)
       case 0x0A0C0032: // ALAMO/MM2 Software version 10.12.0.32
 
       {
