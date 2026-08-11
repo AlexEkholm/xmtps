@@ -32,6 +32,7 @@
 
 // local
 #include "ThreadDefinitions.h"
+#include "utility/MysqlUtils.h"
 
 namespace argo {
 namespace iridium {
@@ -248,11 +249,17 @@ public:
                 }
                 insts.clear();
 
-                if(update_master)
+                if(update_master) {
 
                     // Update the master KML file.
                     XFloat::WriteKmlMasterFile();
 
+                } 
+                
+
+                // Close SQL connection when not in use.
+                util::mysql::MysqlUtils::CloseSqlConnection();
+                
 #           endif // defined(XMTPS_POST_PROC_USES_QUEUE) && XMTPS_POST_PROC_USES_QUEUE
 
             }CATCH_NOTHROW("Exception caught in post-processing analysis thread!")
