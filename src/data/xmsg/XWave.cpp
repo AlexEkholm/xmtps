@@ -463,8 +463,8 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
 
              for(unsigned int i = 0; i < (unsigned int)(segment_len() >> 1); ++i) {
 
-               if((unsigned int)(i*2+19) >= (unsigned int)xmsg_size_bytes()) {
-                 lwrn() << "wave sample index exceeds message size";
+               if((unsigned int)(i*2+17) >= (unsigned int)xmsg_size_bytes()) {
+                 lerr() << "wave sample index exceeds message size";
                  break;
                }
 

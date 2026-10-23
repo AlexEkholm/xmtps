@@ -36,6 +36,9 @@
 // header
 #include "stage1_MailRetrievalThread.h"
 
+// vmime
+#include <vmime/utility/urlUtils.hpp>
+
 namespace argo {
 namespace iridium {
 namespace xfloat {
@@ -604,13 +607,16 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
  */
 string XFloatMailRetrievalService::GenerateMailServerUrlString() const {
 
+    using vmime::utility::urlUtils;
+
     ostringstream oss;
 
+    // Percent-encode the credentials so characters such as '@', ':' or '#' do not break parsing.
     oss << mail_server_protocol_
         << "://"
-        << mail_server_user_
+        << urlUtils::encode(mail_server_user_)
         << ":"
-        << mail_server_password_
+        << urlUtils::encode(mail_server_password_)
         << "@"
         << mail_server_host_;
 
@@ -639,12 +645,16 @@ vector<path> XFloatMailRetrievalService::ListRawMailFiles() {
     try {
 
         // List all files in the raw mail file input directory.
-        vector<path> files(ListFiles(mail_file_input_directory_, max_num_msgs_to_fetch_));
+        files = ListFiles(mail_file_input_directory_);
 
         // Copy paths to files matching the regex.
         copy_if(files.begin(), files.end(), back_inserter(paths), [](const path & p) {
             return regex_match(p.string(), regex(".*/.*\\.(raw|txt)", regex::extended));
         });
+
+        // Apply the fetch limit after filtering, so lock and error files do not use it up.
+        if(max_num_msgs_to_fetch_ > 0 && paths.size() > max_num_msgs_to_fetch_)
+            paths.resize(max_num_msgs_to_fetch_);
 
     }CATCH_BLOCK("Failed to get paths to raw mail input files!")
 

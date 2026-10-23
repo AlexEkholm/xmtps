@@ -432,9 +432,9 @@ kmldom::DocumentPtr XFloat::GenerateKmlMasterDocument() {
         }
       } else {
         if((flt_document = flt->GenerateKmlDocument(false, false))) {
-          // Add to active folder.
+          // Add to archive folder.
           flt_document->set_visibility(false);
-          folder_active->add_feature(flt_document);
+          folder_archive->add_feature(flt_document);
         }
       }
     }
@@ -1561,8 +1561,8 @@ void XFloat::WriteStatusFile() {
 
   path target_directory;
 
-  // Check if KML file generation is enabled.
-  if(!kml_file_generation_is_enabled_)
+  // Check if status file generation is enabled.
+  if(!status_file_generation_is_enabled_)
     return;
 
   try {

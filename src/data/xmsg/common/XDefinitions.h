@@ -159,7 +159,7 @@
  *  Any SBD message that has less than this number of bytes will be considered invalid and ignored.
  *
  */
-#define XMSG_SBD_MIN_BYTES                      (7)
+#define XMSG_SBD_MIN_BYTES                      (8)
 
 /** The default/bad/invalid sensor counts fill value. */
 #define XMSG_SENS_BAD                           (-99999)

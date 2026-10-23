@@ -663,15 +663,29 @@ void XCompositeIridiumPosition::ComputeAverageIrdiumPosition() {
             ptime start(not_a_date_time), end(not_a_date_time);
             {    // Iterate over Iridium positions and compute weighted average position.
                 double lat_sum(0), lon_sum(0), weight(0), weight_sum(0);
+
+                /* Longitudes are averaged as offsets from the first position's longitude, wrapped
+                 * to [-180, 180), so positions either side of the antimeridian average correctly. */
+                double lon_ref(0);
+                bool lon_ref_is_set = false;
+                auto wrap_lon = [](double lon) {
+                    lon = fmod(lon + 180., 360.);
+                    return (lon < 0 ? lon + 360. : lon) - 180.;
+                };
+
                 for_each(
                         elements().begin(),
                         elements().end(),
                         [&](const shared_ptr<XFloatMailMessage>& msg) {
                             if(msg) {
+                                if(!lon_ref_is_set) {
+                                    lon_ref = msg->iridium_position_longitude();
+                                    lon_ref_is_set = true;
+                                }
                                 weight = pow((double) msg->iridium_position_cep_radius(), -2.);
                                 weight_sum += weight;
                                 lat_sum += weight * msg->iridium_position_latitude();
-                                lon_sum += weight * msg->iridium_position_longitude();
+                                lon_sum += weight * wrap_lon(msg->iridium_position_longitude() - lon_ref);
                                 if(start.is_not_a_date_time()
                                     || msg->iridium_position_datetime() < start)
                                     start = msg->iridium_position_datetime();
@@ -683,7 +697,7 @@ void XCompositeIridiumPosition::ComputeAverageIrdiumPosition() {
 
                 // Set position and date/time.
                 set_position_latitude(lat_sum / weight_sum);
-                set_position_longitude(lon_sum / weight_sum);
+                set_position_longitude(wrap_lon(lon_ref + lon_sum / weight_sum));
                 set_total_satellite_comm_time_seconds(time_duration(end - start).total_seconds());
             }
             {    // Iterate over Iridium positions and compute weighted average position
@@ -704,10 +718,10 @@ void XCompositeIridiumPosition::ComputeAverageIrdiumPosition() {
                                 * sqrt(
                                         pow(
                                                 CalculateGeographicDistance(
-                                                        msg->iridium_position_longitude(),
                                                         msg->iridium_position_latitude(),
-                                                        position_longitude(),
-                                                        position_latitude()),
+                                                        msg->iridium_position_longitude(),
+                                                        position_latitude(),
+                                                        position_longitude()),
                                                 2)
                                         + pow((double) msg->iridium_position_cep_radius(), 2));
                             }

@@ -269,7 +269,7 @@ istream& operator>>(istream& in, XFloatMetadata& metadata) {
 
                             // Check the date/time values.
                             if(yr > 2000 && yr < 2100 && mo > 0 && mo < 13 && dy > 0 && dy < 32
-                                    && hr > 0 && hr < 25 && mn > 0 && mn < 60) {
+                                    && hr >= 0 && hr < 24 && mn >= 0 && mn < 60) {
 
                                 // Date/time values are valid.
                                 metadata.set_deployment_datetime(

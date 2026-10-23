@@ -757,7 +757,7 @@ class XFloatMailMessage:
         }
 
         // Parse SBD message size (bytes);
-        if(regex_search(msg_body_text_, sm, regex("^Message Size \\(bytes\\): (\\d+)$")))
+        if(regex_search(msg_body_text_, sm, regex("Message Size \\(bytes\\): (\\d+)")))
           istringstream(sm[1]) >> sbd_file_size_bytes_;
 
         // Parse Iridium location.
