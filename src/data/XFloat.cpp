@@ -703,11 +703,15 @@ void XFloat::SaveLocalCacheToDatabase() {
     // Iterate over local cache.
     lout() << "Saving local cache of instrument data to database...";
 
+    // Save each float separately, so one failure does not stop the remaining floats being saved.
     for_each(
         id2float_map_.begin(),
         id2float_map_.end(),
         [](const tuple<int, shared_ptr<XFloat> >& flt) {
-          get<1>(flt)->SaveObjectToDatabase();
+          try {
+            if(get<1>(flt))
+              get<1>(flt)->SaveObjectToDatabase();
+          } CATCH_NOTHROW("Failed to save instrument #" << get<0>(flt) << " to database!")
         });
 
     linf() << "Done. Local data saved successfully.";
@@ -1807,6 +1811,56 @@ void XFloatDiveData::AssignParentInstrument(const shared_ptr<XFloat>& parent) {
       set_id_wmo(parent->id_wmo());
 
   } CATCH_BLOCK("Failed to assign XFloat parent object to XFloatDiveData object!")
+}
+
+/** Save this dive data object to the SQL database.
+ *
+ *  The parent instrument object is saved first, so that its row exists before the dive row that
+ *  references it. Otherwise, the dive data for a float that is not yet in the database would fail
+ *  the foreign key constraint.
+ *
+ *  @throw      util::log::MessageException if an error occurs while saving the dive data or GPS
+ *              message objects.
+ */
+void XFloatDiveData::SaveObjectToDatabase() const {
+
+  using x::XGPS;
+
+  /* Save the parent instrument without holding this object's lock, so the lock order stays
+   * instrument-then-dive, as in XFloat::GetDiveData(). A failure here is logged, and the dive is
+   * still saved, since the instrument row may already exist. */
+  try {
+
+    shared_ptr<XFloat> inst(parent_instrument());
+    if(inst)
+      inst->SaveObjectToDatabase();
+
+  }CATCH_NOTHROW("Failed to save parent instrument object to database before dive!")
+
+  try {
+
+    // Get an exclusive lock.
+    lock_guard<recursive_mutex> guard(mutex_);
+
+    ldbg() << "Saving dive data object to database...";
+
+    sql_table_description_.SaveObjectToDatabase(*this);
+
+  }CATCH_BLOCK("Failed to save dive data object to database!")
+
+  try {
+
+    // Get an exclusive lock.
+    lock_guard<recursive_mutex> guard(mutex_);
+
+    for_each(
+        xmsg_gps_positions_.begin(),
+        xmsg_gps_positions_.end(),
+        [&](const shared_ptr<XGPS>& x) {
+          if(x) x->SaveObjectToDatabase();
+        });
+
+  }CATCH_BLOCK("Failed to save GPS message objects to database for dive!")
 }
 
 /** XXX
@@ -3180,8 +3234,11 @@ string XFloatDiveData::GeneratePhyString() const {
             XMSG_PHY(os, "2. COLUMN", "TEMPERATURE-90 (DEG C)");
             break;
 
-          case 867:
-          case 868:
+          case 867:   // ALAMO, RBR conductivity sensor.
+          case 868:   // ALAMO, SBE conductivity sensor.
+          case 873:   // ALTO, unspecified conductivity sensor.
+          case 875:   // ALTO, RBR conductivity sensor.
+          case 876:   // ALTO, SBE conductivity sensor.
             XMSG_PHY(os, "NUMBER OF COLUMNS", "3");
             XMSG_PHY(os, "1. COLUMN", "PRESSURE (DBAR)");
             XMSG_PHY(os, "2. COLUMN", "TEMPERATURE-90 (DEG C)");
@@ -3405,11 +3462,14 @@ float XFloatDiveData::ComputePressureOffsetFromSurfaceTimeSeries(unsigned int ma
 
       case 866:   // ALAMO, no coductivity sensor.
       case 867:   // ALAMO, RBR coductivity sensor.
+      case 875:   // ALTO, RBR conductivity sensor.
 
         /* Do nothing (proceed with pressure offset computation). */
         break;
 
       case 868:   // ALAMO, SBE conductivity sensor.
+      case 873:   // ALTO, unspecified conductivity sensor (all deployed units are SBE).
+      case 876:   // ALTO, SBE conductivity sensor (corrects pressure onboard).
 
         /* Do not compute surface pressure offset for SBE floats. */
         return 0.;

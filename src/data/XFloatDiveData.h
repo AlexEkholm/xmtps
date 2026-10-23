@@ -845,36 +845,10 @@ class XFloatDiveData:
 
     /** Save this dive data object to the SQL database.
      *
+     *  The parent instrument object is saved first, so that its row exists before the dive row
+     *  that references it.
      */
-    void SaveObjectToDatabase() const {
-
-      using namespace x;
-
-      try {
-
-        // Get an exclusive lock.
-        lock_guard<recursive_mutex> guard(mutex_);
-
-        ldbg() << "Saving dive data object to database...";
-
-        sql_table_description_.SaveObjectToDatabase(*this);
-
-      }CATCH_BLOCK("Failed to save dive data object to database!")
-
-      try {
-
-        // Get an exclusive lock.
-        lock_guard<recursive_mutex> guard(mutex_);
-
-        for_each(
-            xmsg_gps_positions_.begin(),
-            xmsg_gps_positions_.end(),
-            [&](const shared_ptr<XGPS>& x) {
-              if(x) x->SaveObjectToDatabase();
-            });
-
-      }CATCH_BLOCK("Failed to save GPS message objects to database for dive!")
-    }
+    void SaveObjectToDatabase() const;
 
     static shared_ptr<XFloatDiveData> SelectObjectFromDatabase(
         const string& where = "",
