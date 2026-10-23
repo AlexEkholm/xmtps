@@ -140,6 +140,8 @@ float_map = {}
 
 float_aggregate_map = {}
 
+lastprocessed_pending = []
+
 """
 Function Definitions:
 """
@@ -1621,18 +1623,10 @@ def ProcessDirectory(dpath):
                     raise Exception(errstr)
                 logger.error(errstr)
             
-        # TODO Write lastprocessed file
+        # Queue the lastprocessed file; it is written once the aggregate and plot files have been
+        # written, so a failed or interrupted run is retried on the next run.
         if lproc > 0:
-            try: 
-                with open(fpath_lproc, 'w') as file:
-                    file.write(str(lproc))
-            except:
-            
-                errstr = 'Failed write lastprocessed file: ' + fpath_lproc
-                
-                if hasattr(args, 'halt') and args.halt:
-                    raise Exception(errstr)
-                logger.error(errstr)
+            lastprocessed_pending.append((fpath_lproc, lproc))
         
     except:
         
@@ -1645,6 +1639,21 @@ def ProcessDirectory(dpath):
         logger.error(errstr)
         
     logger.debug('Processed directory: ' + dpath + ' ')
+
+def WriteLastProcessedFiles():
+
+    for fpath_lproc, lproc in lastprocessed_pending:
+
+        try:
+            with open(fpath_lproc, 'w') as file:
+                file.write(str(lproc))
+        except:
+
+            errstr = 'Failed write lastprocessed file: ' + fpath_lproc
+
+            if hasattr(args, 'halt') and args.halt:
+                raise Exception(errstr)
+            logger.error(errstr)
 
 def ProcessJsonListingFile(fpath):
     
@@ -12270,8 +12279,12 @@ try:
     if hasattr(args, 'plot_output') and args.plot_output is not None and len(args.plot_output):
         if not os.path.isdir(args.plot_output):
             logger.error('Invalid plot output directory: ' + args.plot_output)
-        else: 
+        else:
             WritePlotFiles()
+
+    # Record processed files only after all output has been written
+
+    WriteLastProcessedFiles()
 
 except:
     

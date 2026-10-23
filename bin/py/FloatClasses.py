@@ -394,11 +394,11 @@ class Drift:
         self.dt_str           = [np.nan] * num_samples
         self.dt_ref           = DateTime()
         self.dt_ref_delta_sec = [np.nan] * num_samples
-        self.pres             = np.empty(num_samples)
-        self.temp             = np.empty(num_samples)
-        self.saln             = np.empty(num_samples)
-        self.dens             = np.empty(num_samples)
-        self.sigma0           = np.empty(num_samples)
+        self.pres             = np.full(num_samples, np.nan)
+        self.temp             = np.full(num_samples, np.nan)
+        self.saln             = np.full(num_samples, np.nan)
+        self.dens             = np.full(num_samples, np.nan)
+        self.sigma0           = np.full(num_samples, np.nan)
         self.n                = num_samples
         
     def EstimateDatetimes(self, epoch_start, epoch_end):
@@ -546,7 +546,7 @@ class Pump:
     def PostProcess(self):
         self.n = len(self.pres)
         
-        self.curr_adj = [ round(c * 12 / v / 0.85, 3) for (c, v) in zip(self.curr, self.volt) ]
+        self.curr_adj = [ round(c * 12 / v / 0.85, 3) if v else np.nan for (c, v) in zip(self.curr, self.volt) ]
         self.power = [ round(v * i, 3) for (i, v) in zip(self.curr_adj, self.volt) ]
         self.energy = [ round(p * t, 2) for (p, t) in zip(self.power, self.time) ] 
    
