@@ -307,14 +307,14 @@ istream& operator>>(istream& in, XFloatMetadata& metadata) {
 
                     try {
 
-                        // Parse deployment position [lat latm lon lonm].
+                        // Parse deployment position [lat latm lon lonm], separated by any whitespace.
                         cmatch cm;
                         if(regex_match(
                                 val.c_str(),
                                 cm,
                                 regex(
-                                        "([+-]?\\d*\\.?\\d*) ([+-]?\\d*\\.?\\d*) "
-                                                "([+-]?\\d*\\.?\\d*) ([+-]?\\d*\\.?\\d*)",
+                                        "([+-]?\\d*\\.?\\d*)[ \t]+([+-]?\\d*\\.?\\d*)[ \t]+"
+                                                "([+-]?\\d*\\.?\\d*)[ \t]+([+-]?\\d*\\.?\\d*)",
                                         regex::extended))) {
 
                             double lat = lexical_cast<double>(cm[1].str())
