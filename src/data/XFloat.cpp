@@ -655,8 +655,8 @@ void XFloat::LoadLocalCacheFromDatabase() {
  *
  *  @note       Metadata files that specify a DAC identifier of 9999 or -99 are used as place
  *              holders for instruments that have not yet been assigned a DAC identifier.
- *              Therefore, metadata files or object specifying a DAC id less than 0 or
- *              greater than 7000 will be discarded.
+ *              Therefore, metadata files or objects specifying a DAC id less than 1, equal
+ *              to 9999, or greater than 99998 will be discarded.
  */
 void XFloat::LoadMetadataFromFiles() {
 
@@ -670,7 +670,7 @@ void XFloat::LoadMetadataFromFiles() {
     vector<shared_ptr<XFloatMetadata> > md(XFloatMetadata::LoadMetadataFromFiles());
     for_each(md.begin(), md.end(), [](shared_ptr<XFloatMetadata>& meta) {
 
-      if(meta && meta->id_dac() > 0 && meta->id_dac() < 99999) {
+      if(meta && meta->id_dac() > 0 && meta->id_dac() != 9999 && meta->id_dac() < 99999) {
 
         BOOST_LOG_SCOPED_THREAD_ATTR("WhoiID", attr::constant<int>(meta->id_instrument()));
         BOOST_LOG_SCOPED_THREAD_ATTR("DacID", attr::constant<int>(meta->id_dac()));
@@ -1019,7 +1019,7 @@ kmldom::DocumentPtr XFloat::GenerateKmlDocument(bool set_default_kml_style, bool
 
     /* Create Placemark: Latest Position */
 
-    if(gps_positions.size() > 1) {
+    if(!gps_positions.empty()) {
 
       // Create latest position coordinates.
       shared_ptr<XGPS> latest_gps_position = gps_positions.at(gps_positions.size() - 1);

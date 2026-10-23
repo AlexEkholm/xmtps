@@ -657,12 +657,12 @@ class XFloatMailMessage:
         // Get "FROM" field.
         set_msg_header_from(head->From()->getValue<vmime::mailbox>()->getEmail().toString());
 
-        // Get "DATE" field.
+        // Get "DATE" field, converted to UTC (the zone is the offset from GMT, in minutes).
         vmime::shared_ptr<const vmime::datetime> vdt(head->Date()->getValue<vmime::datetime>());
         set_msg_header_datetime(
             ptime(
                 date(vdt->getYear(), vdt->getMonth(), vdt->getDay()),
-                hours(vdt->getHour()) + minutes(vdt->getMinute() + vdt->getZone())
+                hours(vdt->getHour()) + minutes(vdt->getMinute() - vdt->getZone())
                 + seconds(vdt->getSecond())));
 
         try {
