@@ -53,7 +53,7 @@ XFLT_QUEUE_SIZE_TELEMETRY);
 
 unsigned int XFloatTelemetryDecoderService::num_threads_;
 
-bool XFloatTelemetryDecoderService::termination_signaled_;
+std::atomic<bool> XFloatTelemetryDecoderService::termination_signaled_(false);
 
 /* Function Definitions: */
 

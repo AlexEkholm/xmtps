@@ -72,7 +72,7 @@ vector<unsigned int> XFloatMailRetrievalService::reprocess_by_inst_ids_;
 
 unsigned int XFloatMailRetrievalService::sleep_seconds_if_no_new_msgs_;
 
-bool XFloatMailRetrievalService::termination_signaled_;
+std::atomic<bool> XFloatMailRetrievalService::termination_signaled_(false);
 
 thread XFloatMailRetrievalService::thread_;
 
@@ -267,6 +267,8 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromFileSystem() {
 
     path mail_file_path;
     path lock_file_path;
+    size_t num_processed = 0;
+    bool is_processed;
 
     // Init vars
     xmsg.reset();
@@ -313,6 +315,8 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromFileSystem() {
 
           }
 
+          is_processed = false;
+
           try {
 
               // Read raw mail file from path
@@ -333,11 +337,24 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromFileSystem() {
 
               // Push message to the processing queue.
               XFloatMailProcessingService::MsgProcessingQueuePush(xmsg, true);
+              is_processed = true;
+              ++num_processed;
 
               // TODO Move raw files to "processed" folder ??
 
 
           } CATCH_NOTHROW("Failed to parse raw mail input file!")
+
+          if(!is_processed && exists(mail_file_path))
+
+              try {
+
+                  // Rename the failed file so it is not fetched again.
+                  lwrn() << "Renaming unprocessable raw mail input file: "
+                         << mail_file_path.string() << ".err";
+                  rename(mail_file_path, path(mail_file_path.string() + ".err"));
+
+              } CATCH_NOTHROW("Failed to rename unprocessable raw mail input file!")
 
           // Remove lock file
           remove(lock_file_path);
@@ -351,7 +368,8 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromFileSystem() {
         // reset pointers
         xmsg.reset();
 
-        return paths.size();
+        // Return only the files actually queued, so the caller sleeps when nothing succeeded.
+        return num_processed;
 
 
     } CATCH_BLOCK("Failed to fetch mail messages from file system.")
@@ -408,6 +426,9 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
      */
     map<string, vector<message::uid> > folder2uid_map;
 
+    bool is_moved;
+    size_t num_not_moved = 0;
+
     try {
 
         ldbg() << "Checking server for mail messages...";
@@ -459,7 +480,9 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
         lout() << "Fetched " << msgs.size() << " new message(s) from mail server...";
 
         // Iterate over fetched messages.
-        for(auto it = msgs.begin(); it != msgs.end(); ++it)
+        for(auto it = msgs.begin(); it != msgs.end(); ++it) {
+
+            is_moved = false;
 
             try {
 
@@ -468,14 +491,22 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
                         xmsg = std::make_shared<XFloatMailMessage>(msg = *it),
                         true);
 
-                if(move_mail_messages_)
+                if(move_mail_messages_) {
 
                     // Determine the appropriate destination folder and add UID to vector.
                     folder2uid_map[util::date::DateUtils::GenerateIso8601String(
                             xmsg->msg_header_datetime(),
                             false).substr(0, 6)].push_back(msg->getUID());
+                    is_moved = true;
+                }
 
-            }CATCH_BLOCK("Failed to process fetched message(s)!")
+            }CATCH_NOTHROW("Failed to process fetched message!")
+
+            /* Skip a failed message rather than aborting the batch, which would cause the whole
+             * batch to be re-fetched and re-queued forever. */
+            if(!is_moved)
+                ++num_not_moved;
+        }
 
         // Reset pointers.
         msg.reset();
@@ -546,6 +577,10 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
                 folder_dest.reset();
 
             }CATCH_BLOCK("Failed to move mail message(s)!")
+
+        /* Messages that could not be moved remain at the start of the fetched range after the
+         * expunge, so step past them to avoid re-fetching them on every iteration. */
+        message_start_index_ += num_not_moved;
 
         // Reset pointer.
         folder_inbox.reset();

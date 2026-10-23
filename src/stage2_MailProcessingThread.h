@@ -106,7 +106,7 @@ class XFloatMailProcessingService:
      *  become TRUE causing all of the instances of the mail processing thread to process the
      *  remaining messages in the incoming queue, exiting their primary loop, and then die.
      */
-    static bool termination_signaled_;
+    static std::atomic<bool> termination_signaled_;
 
     /** The mail processing thread group.
      *

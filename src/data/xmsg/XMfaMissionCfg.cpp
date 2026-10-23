@@ -6461,6 +6461,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
 
       case 0x0A080031: // ALAMO Software version 10.8.0.31 (WIMS)
       case 0x0A0A0031: // ALAMO Software version 10.10.0.31 (WIMS)
+      case 0x0A0C0131: // ALAMO Software version 10.12.1.31 (WIMS)
 
         if(msg_idx == 0) {
 
@@ -11698,6 +11699,8 @@ const string XMfaMissionCfg::GenerateListingString(int whoi, int dive, int idx) 
 
       case 0x0A080031: // ALAMO Software version 10.8.0.31 (WIMS)
       case 0x0A0A0031: // ALAMO Software version 10.10.0.31 (WIMS)
+      case 0x0A0C0131: // ALAMO Software version 10.12.1.31 (WIMS)
+            
 
       {
              static const format fmt_d(                          "%3d " "%-5s " "%10d      "  "%-12s " "# %s");

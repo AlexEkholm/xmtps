@@ -98,7 +98,7 @@ private:
      *  will become TRUE causing all of the single instance of the mail retrieval to to exit its
      *   primary loop and die.
      */
-    static bool termination_signaled_;
+    static std::atomic<bool> termination_signaled_;
 
 private:
 

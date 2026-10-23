@@ -1890,7 +1890,7 @@ int XFloatDiveData::DecodeMailMessageData(shared_ptr<XFloatMailMessage>& msg) {
     // Update the latest Iridium/SBD position, date/time, etc.
     if(msg->iridium_position_is_valid()
         && (parent_instrument()->latest_iridium_position_datetime().is_not_a_date_time()
-            || parent_instrument()->latest_gps_position_datetime()
+            || parent_instrument()->latest_iridium_position_datetime()
                 < msg->iridium_position_datetime())) {
 
       parent_instrument()->set_latest_iridium_position_cep_radius(

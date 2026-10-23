@@ -135,7 +135,7 @@ private:
      *  become TRUE causing all of the instances of the telemetry decoder thread to process the
      *  remaining messages in the incoming queue, exiting their primary loop, and then die.
      */
-    static bool termination_signaled_;
+    static std::atomic<bool> termination_signaled_;
 
 private:
 
@@ -590,6 +590,19 @@ public:
 
         // Terminate.
         ldbg() << "Termination signal received! Shutting down...";
+
+        // Drain messages queued while this thread was sleeping, so none are lost on shutdown.
+        while(MsgProcessingQueuePop(msg, false)) {
+
+            try {
+
+                DecodeMessage(msg);
+
+            }CATCH_NOTHROW("Exception caught while draining telemetry decoder queue!")
+
+            msg.reset();
+        }
+
         CloseSqlConnection();
 
         return;

@@ -51,7 +51,7 @@ util::thread::SynchronousQueue<shared_ptr<XFloatMailMessage> > XFloatMailProcess
 
 unsigned int XFloatMailProcessingService::num_threads_;
 
-bool XFloatMailProcessingService::termination_signaled_;
+std::atomic<bool> XFloatMailProcessingService::termination_signaled_(false);
 
 /* Function Definitions: */
 
@@ -288,6 +288,19 @@ void XFloatMailProcessingService::operator ()() ATTR_NO_EXCEPTIONS {
 
   // Terminate.
   ldbg() << "Termination signal received! Shutting down...";
+
+  // Drain messages queued while this thread was sleeping, so none are lost on shutdown.
+  while(MsgProcessingQueuePop(msg, false)) {
+
+    try {
+
+      ProcessMailMsg(msg);
+
+    }CATCH_NOTHROW("Exception caught while draining mail processing queue!")
+
+    msg.reset();
+  }
+
   CloseSqlConnection();
 
   return;

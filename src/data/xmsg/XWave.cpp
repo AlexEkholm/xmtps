@@ -251,7 +251,7 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
           case 16: assf_ = ASSF_SPECTRAL_V1[3]; break;
           default:
 //            EXC_THROW("Invalid accelerometer sensitivity scale factor!");
-            lwrn() << "Invalid accelerometer sensitivity scale factor: " << d[13];
+            lerr() << "Invalid accelerometer sensitivity scale factor: " << d[13];
             assf_ = (int)ASSF_SPECTRAL_V1[1];
             break;
         }
@@ -463,8 +463,8 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
 
              for(unsigned int i = 0; i < (unsigned int)(segment_len() >> 1); ++i) {
 
-               if((unsigned int)(i*2+17) >= (unsigned int)xmsg_size_bytes()) {
-                 lerr() << "wave sample index exceeds message size";
+               if((unsigned int)(i*2+19) >= (unsigned int)xmsg_size_bytes()) {
+                 lwrn() << "wave sample index exceeds message size";
                  break;
                }
 

@@ -50,7 +50,7 @@ thread XFloatPostProcessingService::thread_;
 
 shared_ptr<XFloatPostProcessingService>  XFloatPostProcessingService::thread_object_;
 
-bool XFloatPostProcessingService::termination_signaled_;
+std::atomic<bool> XFloatPostProcessingService::termination_signaled_(false);
 
 } /* namespace xfloat */
 } /* namespace iridium */
