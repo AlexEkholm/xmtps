@@ -946,25 +946,24 @@ class Wave:
             
             # Calculate directional spreading coeffs
             
+            # Displacement (heave/north/east) formulation: the horizontal channels are displacements,
+            # not surface slopes, so the coefficients are normalized by the spectra rather than by
+            # the wavenumber. r1 and r2 are then in [0, 1].
+
             self.a0 = self.Szz / math.pi
-            self.a1 = self.Qzx / (self.wavenumber * math.pi)
-            self.b1 = self.Qzy / (self.wavenumber * math.pi)
-            
-            mag = np.sqrt((self.a1 ** 2) + (self.b1 ** 2))
-            
-            self.a1 = self.a1 / np.where(mag > 0, mag, np.nan)
-            self.b1 = self.b1 / np.where(mag > 0, mag, np.nan)
-            
-            self.a2 = ( self.Sxx - self.Syy ) / ( (self.wavenumber ** 2) * math.pi )
-            self.b2 = ( 2 * self.Cxy ) / ( (self.wavenumber ** 2) * math.pi )
-            
-            mag = np.sqrt((self.a2 ** 2) + (self.b2 ** 2))
-            
-            self.a2 = self.a2 / np.where(mag > 0, mag, np.nan)
-            self.b2 = self.b2 / np.where(mag > 0, mag, np.nan)
-            
-            self.r1 = np.sqrt((self.a1 ** 2) + (self.b1 ** 2)) / np.where(self.a0 == 0, np.nan, self.a0)
-            self.r2 = np.sqrt((self.a1 ** 2) + (self.b1 ** 2)) / np.where(self.a0 == 0, np.nan, self.a0)
+
+            norm1 = np.sqrt(self.Szz * (self.Sxx + self.Syy))
+            norm1 = np.where(norm1 > 0, norm1, np.nan)
+            norm2 = self.Sxx + self.Syy
+            norm2 = np.where(norm2 > 0, norm2, np.nan)
+
+            self.a1 = self.Qzx / norm1
+            self.b1 = self.Qzy / norm1
+            self.a2 = ( self.Sxx - self.Syy ) / norm2
+            self.b2 = ( 2 * self.Cxy ) / norm2
+
+            self.r1 = np.sqrt((self.a1 ** 2) + (self.b1 ** 2))
+            self.r2 = np.sqrt((self.a2 ** 2) + (self.b2 ** 2))
             
             self.theta1 = np.arctan2(self.a1, self.b1)
             self.theta1 = np.where(np.isnan(self.theta1), 0, self.theta1)
