@@ -238,12 +238,22 @@ public:
 
 #                   endif // defined(XMTPS_DEBUG_POST_PROC_THREAD) ...
 
-                    // Write KML file.
-                    if(inst->WriteKmlFile())
-                        update_master = true;
+                    /* Catch per-float failures so one bad float does not skip the remaining
+                     * floats, the master KML update, or closing the SQL connection. */
+                    try {
 
-                    // Write the status file.
-                    inst->WriteStatusFile();
+                        // Write KML file.
+                        if(inst->WriteKmlFile())
+                            update_master = true;
+
+                    }CATCH_NOTHROW("Failed to write KML file for instrument!")
+
+                    try {
+
+                        // Write the status file.
+                        inst->WriteStatusFile();
+
+                    }CATCH_NOTHROW("Failed to write status file for instrument!")
 
                     inst.reset();
                 }
@@ -251,10 +261,14 @@ public:
 
                 if(update_master) {
 
-                    // Update the master KML file.
-                    XFloat::WriteKmlMasterFile();
+                    try {
 
-                } 
+                        // Update the master KML file.
+                        XFloat::WriteKmlMasterFile();
+
+                    }CATCH_NOTHROW("Failed to write KML master file!")
+
+                }
                 
 
                 // Close SQL connection when not in use.
