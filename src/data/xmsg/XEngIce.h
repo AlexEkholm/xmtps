@@ -224,10 +224,17 @@ public:
 
             case 0x11: // TODO Engineering (Ice) message version 0x11.
 
+                /* Message layout (from transmitted messages): bytes 4-19 as in version 0x10,
+                 * bytes 20-21 an undocumented u16 field (observed values 0-30, apparently a
+                 * counter; not decoded),
+                 * byte 22 the number of error codes, then one 6-byte entry per error code from
+                 * byte 23 (s2000 timestamp, u16 code), then the ';' terminator. A message with no
+                 * error codes is 24 bytes. */
+
                 // Check message size.
-                if(data.size() < 21) {
+                if(data.size() < 24) {
                     ostringstream os;
-                    os << "Invalid X-Message: Expected at least 21 bytes, but received "
+                    os << "Invalid X-Message: Expected at least 24 bytes, but received "
                        << data.size()
                        << " bytes!";
                     EXC_THROW(os.str());
@@ -244,14 +251,14 @@ public:
                 set_pres_min_counts(u16(d, 14));
                 set_temp_threshold_test(u16(d, 16));
                 set_saln_surface_test(u16(d, 18));
-                set_num_errors(u08(d, 20));
+                set_num_errors(u08(d, 22));
 
-                // Parse the error codes.
-                for(size_t i = 0; 6 * i + 26 < xmsg_size_bytes(); i++)
+                // Parse the error codes (each entry must end before the terminator).
+                for(size_t i = 0; 6 * i + 29 < xmsg_size_bytes(); i++)
                     error_codes_.push_back(
                             std::make_shared<XEngIceErrorCode>(
-                                    s2000(d, (6 * i) + 21),
-                                    u16(d, (6 * i) + 25)));
+                                    s2000(d, (6 * i) + 23),
+                                    u16(d, (6 * i) + 27)));
 
                 // Check the number of error codes.
                 if(num_errors() != error_codes().size()) {
