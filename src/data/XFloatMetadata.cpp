@@ -210,7 +210,8 @@ istream& operator>>(istream& in, XFloatMetadata& metadata) {
             if(val.empty())
                 continue;
 
-            // Parse the value, according to the field string.
+            /* Parse the value, according to the field string. A bad field is logged and skipped
+             * (not rethrown), so the remaining fields in the file are still parsed. */
             try {
 
                 /** @todo   Implement the functionality for parsing additional metadata field from
@@ -413,7 +414,7 @@ istream& operator>>(istream& in, XFloatMetadata& metadata) {
 
                 }
 
-            }CATCH_BLOCK("Failed to extract metadata from field: '" + field + "' = '" + val + "'")
+            }CATCH_NOTHROW("Failed to extract metadata from field: '" + field + "' = '" + val + "'")
 
         }
 
