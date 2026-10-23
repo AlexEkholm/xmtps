@@ -1,10 +1,15 @@
 #!/usr/bin/python3
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
 Created on Thu Apr  7 13:50:06 2022
 
 @author: aekholm
 """
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 
 import argparse
 #from colour import Color
@@ -15,7 +20,7 @@ import dateutil
 # import json
 import jsonpickle
 import logging
-#import math
+import math
 import numpy as np
 import os
 import pandas as pd
@@ -46,7 +51,7 @@ Static configuration:
 CPOS_SPAN_SECONDS = 3600
 CPOS_MAX_CEP_KM = 1.0
 
-JSON_VERSION = "0.09"
+JSON_VERSION = "0.11"
 
 opts = dict(
     fig = dict(
@@ -164,6 +169,7 @@ def AggregateDiveData():
                                                  'dt_epoch', 
                                                  'dt_ref_delta_sec', 
                                                  'dt_str', 
+                                                 'phase_code', 
                                                  'rate',
                                                  ]) ,
                     'descent':  
@@ -172,6 +178,7 @@ def AggregateDiveData():
                                                  'dt_epoch', 
                                                  'dt_ref_delta_sec', 
                                                  'dt_str', 
+                                                 'phase_code', 
                                                  'rate',
                                                  ]) ,
                     'drift':    
@@ -397,6 +404,7 @@ def AggregateDiveData():
                                 'dt_epoch':         np.array(ascent_data.dt_epoch, dtype='float'),
                                 'dt_ref_delta_sec': np.array(ascent_data.dt_ref_delta_sec, dtype='float'),
                                 'dt_str':           np.array(ascent_data.dt_str, dtype='str'),
+                                'phase_code':       np.array(ascent_data.phase_code, dtype='int'),
                                 'rate':             np.array(ascent_data.rate, dtype='float')*100,
                             }
                         )
@@ -411,6 +419,7 @@ def AggregateDiveData():
                                 'dt_epoch':         np.array([np.nan], dtype='float'),
                                 'dt_ref_delta_sec': np.array([np.nan], dtype='float'),
                                 'dt_str':           np.array([np.nan], dtype='str'),
+                                'phase_code':       np.array([-1], dtype='int'),
                                 'rate':             np.array([np.nan], dtype='float'),
                             }
                         )
@@ -455,6 +464,7 @@ def AggregateDiveData():
                                 'dt_epoch':         np.array(descent_data.dt_epoch, dtype='float'),
                                 'dt_ref_delta_sec': np.array(descent_data.dt_ref_delta_sec, dtype='float'),
                                 'dt_str':           np.array(descent_data.dt_str, dtype='str'),
+                                'phase_code':       np.array(descent_data.phase_code, dtype='int'),
                                 'rate':             np.array(descent_data.rate, dtype='float')*100,
                             }
                         )
@@ -469,6 +479,7 @@ def AggregateDiveData():
                                 'dt_epoch':         np.array([np.nan], dtype='float'),
                                 'dt_ref_delta_sec': np.array([np.nan], dtype='float'),
                                 'dt_str':           np.array([np.nan], dtype='str'),
+                                'phase_code':       np.array([-1], dtype='int'),
                                 'rate':             np.array([np.nan], dtype='float'),
                             }
                         )
@@ -920,7 +931,7 @@ def AggregateDiveData():
                         df_wave = pd.DataFrame(
                             {
                                 'dive':         np.array([dive_num], dtype='int'),
-                                'mwd':          np.array([wave_data.mwd], dtype='float'),
+                                'mwd':          np.array([wave_data.mwd], dtype='int'),
                                 'period_peak':  np.array([wave_data.period_peak], dtype='float'),
                                 'period_avg':   np.array([wave_data.period_avg], dtype='float'),
                                 'period_zero':  np.array([wave_data.period_zero], dtype='float'),
@@ -952,8 +963,8 @@ def AggregateDiveData():
                                 'b2':       np.array(wave_data.b2, dtype='float'),
                                 'r1':       np.array(wave_data.r1, dtype='float'),
                                 'r2':       np.array(wave_data.r2, dtype='float'),
-                                'theta1':   np.array(wave_data.theta1, dtype='float'),
-                                'theta2':   np.array(wave_data.theta2, dtype='float'),
+                                'theta1':   np.array(wave_data.theta1, dtype='int'),
+                                'theta2':   np.array(wave_data.theta2, dtype='int'),
                             }
                         )
                         float_aggregate_data['wave_spectra'] = pd.concat([float_aggregate_data['wave_spectra'], df_wave_spectra], ignore_index=True)
@@ -1500,7 +1511,7 @@ def ProcessDirectory(dpath):
             # total_empty_dirs += 1
             return
             
-        logger.info('Processsing directory: ' + dpath + ' ...')
+        logger.debug('Processing directory: ' + dpath + ' ...')
             
         # Process files and subdirectories and generate file list
         file_list = [] 
@@ -1627,7 +1638,11 @@ def ProcessDirectory(dpath):
         
         # raise Exception('Failed to process directory: '  + dpath)
         
-        logger.error('Failed to process directory: '  + dpath)
+        errstr = 'Failed to process directory: '  + dpath
+        
+        if hasattr(args, 'halt') and args.halt:
+            raise Exception(errstr)
+        logger.error(errstr)
         
     logger.debug('Processed directory: ' + dpath + ' ')
 
@@ -2016,9 +2031,7 @@ def WriteHtmlFile(float_id):
                     
                     # Create styles - tables
                     
-                    
                     text('th { text-align: left; } ')
-                    
                     
                     # Create styles - navigation links
                     
@@ -2039,8 +2052,8 @@ def WriteHtmlFile(float_id):
                     # Create styles - figures table
                     
                     text('.figt { font-size: 11px; margin: auto; } ')
-                    text('.figt td { padding: 4px; vertical-align: top; max-width: 220px; } ')
-                    text('.figt td img {{ width: {}px; text-align: center; }} '.format(opts['figThumb']['width']))
+                    text('.figt tbody td { height: 110px; padding: 5px; vertical-align: top; max-width: 220px; } ')
+                    text('.figt tbody td img {{ width: {}px; text-align: center; }} '.format(opts['figThumb']['width']))
                     
                     # Create styles - footer
                     
@@ -2433,84 +2446,86 @@ def WriteHtmlFile(float_id):
                         
                         with tag('table', klass='figt'):
                         
-                            with tag('tr'):
-                                with tag('th'):
-                                    text(' ')
-                                with tag('th'):
-                                    text('Title')
-                                with tag('th'):
-                                    text('Category')
-                                with tag('th'):
-                                    text(' ')
-                                with tag('th'):
-                                    text('Files')
-                                
-                            i=0
-                            for key in sorted(figs_meta_dict.keys()):
-                                fig_meta = figs_meta_dict[key]
-                                i=i+1
-                                
+                            with tag('thead'):
                                 with tag('tr'):
+                                    with tag('th'):
+                                        text(' ')
+                                    with tag('th'):
+                                        text('Title')
+                                    with tag('th'):
+                                        text('Category')
+                                    with tag('th'):
+                                        text(' ')
+                                    with tag('th'):
+                                        text('Files')
                                 
-                                    with tag('td'): # no.
-                                        text('{}'.format(i))
+                            with tag('tbody'):
+                                i=0
+                                for key in sorted(figs_meta_dict.keys()):
+                                    fig_meta = figs_meta_dict[key]
+                                    i=i+1
                                     
-                                    with tag('td'): # title
-                                        # text(re.sub('.*: ', '',fig_meta['title']))
-                                        doc.asis(fig_meta['title'])
+                                    with tag('tr'):
                                     
-                                    with tag('td'): # category
-                                        text(fig_meta['category'])
+                                        with tag('td'): # no.
+                                            text('{}'.format(i))
                                         
-                                    
-                                    with tag('td'): # image
-                                        with tag('div'):
+                                        with tag('td'): # title
+                                            # text(re.sub('.*: ', '',fig_meta['title']))
+                                            doc.asis(fig_meta['title'])
+                                        
+                                        with tag('td'): # category
+                                            text(fig_meta['category'])
+                                            
+                                        
+                                        with tag('td'): # image
+                                            with tag('div'):
+                                                with tag('a', href=fig_meta['fpath_html']):
+                                                    doc.stag(
+                                                        'img', 
+                                                        alt=fig_meta['title'],
+                                                        klass='itiny', 
+                                                        src=fig_meta['fpath_img_thumb'])
+                                        
+                                        with tag('td'): # files
+                                            text(key)
+                                            
+                                            doc.stag('br')
+                                            # with tag('a', href=fig_meta['fpath_json']):
+                                                # text('.json')
+                                            # text(' ({:.1f}kB)'.format(fig_meta['size_json']/1024.))
+                                            # doc.stag('br')
                                             with tag('a', href=fig_meta['fpath_html']):
-                                                doc.stag(
-                                                    'img', 
-                                                    alt=fig_meta['title'],
-                                                    klass='itiny', 
-                                                    src=fig_meta['fpath_img_thumb'])
-                                    
-                                    with tag('td'): # files
-                                        text(key)
-                                        
-                                        doc.stag('br')
-                                        # with tag('a', href=fig_meta['fpath_json']):
-                                            # text('.json')
-                                        # text(' ({:.1f}kB)'.format(fig_meta['size_json']/1024.))
-                                        # doc.stag('br')
-                                        with tag('a', href=fig_meta['fpath_html']):
-                                            text('.html')
-                                        text(' ({:.1f}kB)'.format(fig_meta['size_html']/1024.))
-                                        doc.stag('br')                                       
-                                        
-                                        with tag('a', href=fig_meta['fpath_img_small']):
-                                            text('.png [{}x{}]'.format(opts[fig_meta['size']]['small_width'], opts[fig_meta['size']]['small_height']))
-                                        text(' ({:.1f}kB)'.format(fig_meta['size_img_small']/1024.))
-                                        doc.stag('br')
-                                        
-                                        with tag('a', href=fig_meta['fpath_img']):
-                                            text('.png [{}x{}]'.format(opts[fig_meta['size']]['width'], opts[fig_meta['size']]['height']))
-                                        text(' ({:.1f}kB)'.format(fig_meta['size_img']/1024.))
-                                        doc.stag('br')
-                                        
-                                        with tag('a', href=fig_meta['fpath_svg_small']):
-                                            text('.svg [{}x{}]'.format(opts[fig_meta['size']]['small_width'], opts[fig_meta['size']]['small_height']))
-                                        text(' ({:.1f}kB)'.format(fig_meta['size_svg_small']/1024.))
-                                        doc.stag('br')
-                                        
-                                        with tag('a', href=fig_meta['fpath_svg']):
-                                            text('.svg [{}x{}]'.format(opts[fig_meta['size']]['width'], opts[fig_meta['size']]['height']))
-                                        text(' ({:.1f}kB)'.format(fig_meta['size_svg']/1024.))
+                                                text('.html')
+                                            text(' ({:.1f}kB)'.format(fig_meta['size_html']/1024.))
+                                            doc.stag('br')                                       
+                                            
+                                            with tag('a', href=fig_meta['fpath_img_small']):
+                                                text('.png [{}x{}]'.format(opts[fig_meta['size']]['small_width'], opts[fig_meta['size']]['small_height']))
+                                            text(' ({:.1f}kB)'.format(fig_meta['size_img_small']/1024.))
+                                            doc.stag('br')
+                                            
+                                            with tag('a', href=fig_meta['fpath_img']):
+                                                text('.png [{}x{}]'.format(opts[fig_meta['size']]['width'], opts[fig_meta['size']]['height']))
+                                            text(' ({:.1f}kB)'.format(fig_meta['size_img']/1024.))
+                                            doc.stag('br')
+                                            
+                                            # with tag('a', href=fig_meta['fpath_svg_small']):
+                                            #     text('.svg [{}x{}]'.format(opts[fig_meta['size']]['small_width'], opts[fig_meta['size']]['small_height']))
+                                            # text(' ({:.1f}kB)'.format(fig_meta['size_svg_small']/1024.))
+                                            # doc.stag('br')
+                                            
+                                            # with tag('a', href=fig_meta['fpath_svg']):
+                                            #     text('.svg [{}x{}]'.format(opts[fig_meta['size']]['width'], opts[fig_meta['size']]['height']))
+                                            # text(' ({:.1f}kB)'.format(fig_meta['size_svg']/1024.))
                                         
  
                 # Create footer
                 
                 with tag('div', klass='footer'):        
                     with tag('i'):
-                        text('Page last updated ' + datetime.datetime.utcnow().isoformat()[:16] + 'Z' + ' - version ' + JSON_VERSION)
-                        # text('Page last updated ' + datetime.datetime.utcnow().isoformat()[:16] + 'Z' + ' - v' + JSON_VERSION + ' - Float Group, Department of Physical Oceanography, Woods Hole Oceanographic Institution, Woods Hole, MA, USA')
+                        text('Page last updated ' + datetime.datetime.now(datetime.UTC).isoformat()[:16] + 'Z' + ' - version ' + JSON_VERSION)
+                        # text('Page last updated ' + datetime.datetime.now(datetime.UTC).isoformat()[:16] + 'Z' + ' - v' + JSON_VERSION + ' - Float Group, Department of Physical Oceanography, Woods Hole Oceanographic Institution, Woods Hole, MA, USA')
                         
         
         
@@ -2573,6 +2588,8 @@ def WritePlotFiles():
                 if len(dives) < 1:
                     logger.debug('No dive data for float {}.'.format(float_id))
                     continue
+                max_dive = np.max(dives)
+                
                 
                 # Generate path
                 
@@ -2585,6 +2602,8 @@ def WritePlotFiles():
                         logger.warning('Creating directory: \'' + dpath_float + '\'')
                         os.makedirs(dpath_float)
                         
+
+                        
                 # Write geo plots
                 
                 if not 'profile_position' in float_aggregate_data or len(float_aggregate_data['profile_position']) < 1:
@@ -2593,13 +2612,11 @@ def WritePlotFiles():
                 
                     try: 
             
+
                         # Create color range
                         
-                        #colors = list(Color("#0000FF").range_to(Color("#FF0000"), len(dives)))
-                        #colors = [ 'rgb'+str(tuple([round(255*y) for y in x.rgb])) for x in colors ]
                         colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
                         colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
-                        
                         
                         # Preprocess data
                         
@@ -4743,8 +4760,9 @@ def WritePlotFiles():
                         
                         df_profiles = float_aggregate_data['profile']
                         df_profiles.loc[
-                            (df_profiles['pres'] <= -5 )|(df_profiles['pres'] >= 3000)|df_profiles['pres'].isna(),
+                            (df_profiles['pres'] < 2 )|(df_profiles['pres'] >= 3000)|df_profiles['pres'].isna(),
                             ['pres','dens','sigma0']] = np.nan
+                        df_profiles = df_profiles[~df_profiles['pres'].isna()]
                         df_profiles.loc[
                             (df_profiles['saln'] <= 20 )|(df_profiles['saln'] >= 40)|df_profiles['saln'].isna(),
                             ['saln','dens','sigma0']] = np.nan
@@ -4759,7 +4777,7 @@ def WritePlotFiles():
                         rng = dict(
                             dens   = np.percentile(df_profiles['dens'][~df_profiles['dens'].isna()].values, [1, 99]).astype(np.double),
                             pres   = np.array([np.max(df_profiles['pres'][~df_profiles['pres'].isna()].values), 0 ]).astype(np.double),
-                            saln   = np.percentile(df_profiles['saln'][~df_profiles['saln'].isna()].values, [2, 98]).astype(np.double),
+                            saln   = np.percentile(df_profiles['saln'][~df_profiles['saln'].isna()].values, [1, 99]).astype(np.double),
                             sigma0 = np.percentile(df_profiles['sigma0'][~df_profiles['sigma0'].isna()].values, [1, 99]).astype(np.double),
                             temp   = np.percentile(df_profiles['temp'][~df_profiles['temp'].isna()].values, [1, 99]).astype(np.double),
                             )
@@ -5352,8 +5370,11 @@ def WritePlotFiles():
                                         )
                                     ),
                                     colorbar=dict(
-                                        title='In-situ Density Anomaly, ρ - 1000 [kg m<sup>−3</sup>]', 
-                                        titleside='top',
+                                        title=dict(
+                                            text='In-situ Density Anomaly, ρ - 1000 [kg m<sup>−3</sup>]',
+                                            side='top'
+                                            ), 
+                                        #side='top',
                                         thickness=20,
                                         orientation='h',
                                     ),
@@ -5422,8 +5443,11 @@ def WritePlotFiles():
                                         ),
                                     ),
                                     colorbar=dict(
-                                        title='Salinity [PSU]', 
-                                        titleside='top',
+                                        title=dict(
+                                            text='Salinity [PSU]',
+                                            side='top'
+                                            ), 
+                                        #side='top',
                                         thickness=20,
                                         orientation='h',
                                     ),
@@ -5484,8 +5508,11 @@ def WritePlotFiles():
                                         )
                                     ),
                                     colorbar=dict(
-                                        title='Potential Density, σ<sub>0</sub> [kg m<sup>−3</sup>]', 
-                                        titleside='top',
+                                        title=dict(
+                                            text='Potential Density, σ<sub>0</sub> [kg m<sup>−3</sup>]',
+                                            side='top'
+                                            ), 
+                                        #side='top',
                                         thickness=20,
                                         orientation='h',
                                     ),
@@ -5546,8 +5573,11 @@ def WritePlotFiles():
                                         )
                                     ),
                                     colorbar=dict(
-                                        title='Temperature [°C]', 
-                                        titleside='top',
+                                        title=dict(
+                                            text='Temperature [°C]',
+                                            side='top'
+                                            ), 
+                                        #side='top',
                                         thickness=20,
                                         orientation='h',
                                     ),
@@ -5662,9 +5692,10 @@ def WritePlotFiles():
                         df_dives = float_aggregate_data['ascent']
                         df_dives = df_dives[~df_dives['pres'].isna()]
                         df_dives = df_dives[~df_dives['dt_ref_delta_sec'].isna()]
+
                         
                         
-                        df_dives_gb = df_dives[["dive","pres","rate"]].groupby(['dive'])
+                        df_dives_gb =  df_dives[df_dives['phase_code'] == 13][["dive","pres","rate"]].groupby(['dive'])
                         df_dives_gb_min = df_dives_gb.min()
                         df_dives_gb_max = df_dives_gb.max()
                         df_dives_gb_mean = df_dives_gb.mean()
@@ -8382,6 +8413,7 @@ def WritePlotFiles():
                         
                         df_dives = df_dives[~df_dives['pres'].isna()]
                         df_dives = df_dives[~df_dives['dt_ref_delta_sec'].isna()]
+                        df_dives = df_dives[df_dives['dt_ref_delta_sec'] < 30000]
                         
                         df_dives_gb = df_dives[["dive","pres","temp"]].groupby(['dive'])
                         df_dives_gb_min = df_dives_gb.min()
@@ -10046,11 +10078,10 @@ def WritePlotFiles():
                     
                         # Create color range
                         
-                        #colors = list(Color("#3333FF").range_to(Color("#FF3333"), len(dives)))
-                        #colors = [ 'rgb'+str(tuple([round(255*y) for y in x.rgb])) for x in colors]
-                        colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+                                                
+                        colors = [colorsys.hsv_to_rgb(x*.666/(max_dive),.8,1) for x in range(max_dive+1)][::-1]
                         colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
-                        colors[len(dives)-1] = 'rgb(0,0,0)'
+                        colors[-1] = 'rgb(0,0,0)'
                     
                         # Preprocess data
                     
@@ -10060,10 +10091,10 @@ def WritePlotFiles():
                         
                         df_wave = df_wave[(~df_wave['swh'].isna()) & (df_wave['dive'] > 0)]
                         
-                        df_wave_spectra = df_wave_spectra[(~df_wave_spectra['Szz'].isna()) & (df_wave_spectra['freq'] > 0.03) & (df_wave_spectra['freq'] <= 1.2) & (df_wave_spectra['dive'] > 0) ]
+                        df_wave_spectra = df_wave_spectra[(~df_wave_spectra['Szz'].isna()) & (df_wave_spectra['freq'] >= 0.03) & (df_wave_spectra['freq'] <= 1.25) & (df_wave_spectra['dive'] > 0) ]
                         # df_wave_spectra = df_wave_spectra[(~df_wave_spectra['Szz'].isna())  & (df_wave_spectra['dive'] > 0) ]
                         df_wave_spectra.loc[
-                            (df_wave_spectra['Szz'] < 0.05),
+                            (df_wave_spectra['Szz'] < 0.02),
                             ['theta1']] = np.nan
                         df_wave_spectra.loc[
                             (df_wave_spectra['Sxx'] < 0.001),
@@ -10089,13 +10120,11 @@ def WritePlotFiles():
                         df_wave = pd.merge(df_wave, df_profile_positions, on=['dive'])
                         
                         
-                        
-                        
                         # Calculate Ranges
                         
                         rng = dict(
                             freq       = np.array([0.03, 0.53]).astype(np.double),
-                            freq_g     = np.array([0.00, 1.00]).astype(np.double),
+                            freq_g     = np.array([0.03, 0.53]).astype(np.double),
                             period     = np.array([2, np.max(df_wave['period_peak'].values)]).astype(np.double),
                             period_avg = np.array([2, np.max(df_wave['period_avg'].values)]).astype(np.double),
                             swh        = np.array([0, np.max(df_wave['swh'].values)]).astype(np.double),
@@ -10114,10 +10143,14 @@ def WritePlotFiles():
                                 ])
                             
                             )
+                        
+                        
                             
                         rng['Cxy'][0] = -rng['Cxy'][1] 
                         rng['Cxy_g'][0] = -rng['Cxy_g'][1] 
-                            
+                        
+                        rng['Szz'][1] = np.max([rng['Szz'][1], 100])
+                        
                         rng['time'] = np.round(rng['time'] + [(rng['time'][1] - rng['time'][0]) * -0.01, (rng['time'][1] - rng['time'][0]) * +0.01] + [-3600, +3600])
                         rng['time'] = [ DateTime().dt_from_epoch(x).dt_str for x in rng['time'] ]     
                             
@@ -10126,8 +10159,6 @@ def WritePlotFiles():
                         rng['period_avg']   = np.round(rng['period_avg']    + [ 0.00, 0.5], 0)
 
                         # Generate Figures
-                        
-                        
                         
                         figs = dict(
                             wave_direction_mean = go.Figure(
@@ -10139,31 +10170,17 @@ def WritePlotFiles():
                                     zmin=0,
                                     zmax=360,
                                     connectgaps=False,
-                                    # contours=dict(
-                                        # coloring ='heatmap',
-                                        # showlabels = False, 
-                                        # labelfont = dict( 
-                                            # size = 10,
-                                            # color = 'white',
-                                            # )
-                                        # ),
                                     colorbar=dict(
-                                        title='Mean Direction', 
+                                        title=dict(
+                                            text='Mean Direction',
+                                            side='top'
+                                            ), 
                                         nticks=8,
                                         tickvals=[0, 90, 180, 270, 360],
                                         ticktext=['S', 'W', 'N', 'E', 'S'],
-                                        titleside='top',
                                         thickness=20,
                                         orientation='h',
                                         ),
-                                    # colorscale=[
-                                        # [0.00, "rgb(50,50,50)"], 
-                                        # [0.125, "rgb(50,50,250)"], 
-                                        # [0.375, "rgb(100,250,250)"], 
-                                        # [0.525, "rgb(250,250,100)"], 
-                                        # [0.875, "rgb(250,50,50)"], 
-                                        # [1.00, "rgb(50,50,50)"], 
-                                        # ],
                                     colorscale=[
                                         [0.00, "rgb(150,150,150)"], 
                                         [0.01, "rgb(150,150,150)"], 
@@ -10185,17 +10202,11 @@ def WritePlotFiles():
                                     hovertemplate='<br>'.join([
                                         'Dive <b>%{customdata[0]}</b>',
                                         '%{x|%Y-%m-%d %H:%M}Z',
-                                        'f = %{y:.4f} Hz',
+                                        'f = %{y:.3f} Hz',
                                         'θ<sub>1</sub> = %{customdata[2]}°',
                                         'Szz = %{customdata[1]:.2f} m<sup>2</sup> Hz<sup>-1</sup>',
                                         '<extra></extra>',
                                         ]),
-                                   # line=dict(
-                                        # color='rgba(0,0,0,0.5)',
-                                        # smoothing=0.85,
-                                        # width=0.3,
-                                        # ),
-                                    # zsmooth='fast',
                                     ),
                                 layout=dict(
                                     showlegend = True,
@@ -10218,7 +10229,6 @@ def WritePlotFiles():
                                         ),
                                     legend=dict(
                                         title='Dive',
-                                        # font=dict(size=10)
                                         ),
                                     plot_bgcolor='white',
                                     margin=dict(l=10,r=10,b=20,t=50,pad=4)
@@ -10227,7 +10237,7 @@ def WritePlotFiles():
                             wave_mwm = go.Figure(
                                 layout=dict(
                                     showlegend = False,
-                                    title=dict(text='{}: Significant Wave Height, Period, and Mean Direction'.format(float_id)),
+                                    title=dict(text='{}: Significant Wave Height, Average Period, and Average Direction'.format(float_id)),
                                     polar=dict(
                                         angularaxis = dict(
                                             direction='clockwise',
@@ -10306,26 +10316,26 @@ def WritePlotFiles():
                                         '%{customdata[1]|%Y-%m-%d %H:%M}Z',
                                         'H<sub>m0</sub> = %{y} m',
                                         'θ<sub>mean</sub> = %{customdata[2]}°',
-                                        'T<sub>peak</sub> = %{customdata[3]:.1f} s',
+                                        'T<sub>peak</sub> = %{customdata[3]:.0f} s',
                                         'T<sub>avg</sub> = %{customdata[4]:.1f} s',
                                         'T<sub>0</sub> = %{customdata[5]:.1f} s',
                                         '<extra></extra>',
                                         ]),
                                     line=dict(
-                                        color='rgb(194,204,204)',
+                                        color='black',
                                         width=2,
                                         ),
                                     marker=dict(
-                                        color='rgb(0,0,0)',
+                                        color=[ colors[x] for x in df_wave['dive'].values ],
                                         line=dict(
-                                            color='rgb(0,0,0)',
-                                            width=1.0,
+                                            color='rgb(88,88,88)',
+                                            width=0.5,
                                             ),
-                                        symbol='cross-thin',
+                                        symbol='cross',
+                                        size=6,
                                         ),
                                     mode='lines+markers',
                                     showlegend=False,
-                                    # name='min./max.'
                                     ),
                                 layout=dict(
                                     showlegend = True,
@@ -10359,7 +10369,7 @@ def WritePlotFiles():
                             wave_period = go.Figure(
                                 layout=dict(
                                     showlegend = True,
-                                    title = dict(text='{}: Wave Period'.format(float_id)),
+                                    title = dict(text='{}: Average Wave Period'.format(float_id)),
                                     xaxis=dict(
                                         title='',
                                         autorange=False,
@@ -10378,10 +10388,6 @@ def WritePlotFiles():
                                             ),
                                         ),
                                     hovermode='x',
-                                    legend=dict(
-                                        # title='Dive',
-                                        # font=dict(size=10)
-                                        ),
                                     plot_bgcolor='white',
                                     margin=dict(l=10,r=10,b=20,t=50,pad=4)
                                     )
@@ -10399,7 +10405,6 @@ def WritePlotFiles():
                                         title='Co-Spectral Density (C<sub>XY</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
                                         autorange=False,
                                         range=rng['Cxy_g'],
-                                        # type='log',
                                         ),
                                     hoverlabel=dict(
                                         font=dict(
@@ -10409,7 +10414,6 @@ def WritePlotFiles():
                                         ),
                                     legend=dict(
                                         title='Dive',
-                                        # font=dict(size=10)
                                         ),
                                     plot_bgcolor='white',
                                     margin=dict(l=10,r=10,b=20,t=50,pad=4)
@@ -10417,32 +10421,31 @@ def WritePlotFiles():
                                 ),
                             wave_spectra_accel_Sxx = go.Figure(
                                 layout=dict(
-                                    showlegend = True,
-                                    title = dict(text='{}: Wave East-West Horizontal Acceleration Spectra (S<sub>XX</sub>)'.format(float_id)),
-                                    xaxis=dict(
-                                        title='Frequency [Hz]',
-                                        autorange=False,
-                                        range=rng['freq_g']
+                                showlegend = True,
+                                title = dict(text='{}: Wave East-West Horizontal Acceleration Spectra (S<sub>XX</sub>)'.format(float_id)),
+                                xaxis=dict(
+                                    title='Frequency [Hz]',
+                                    autorange=False,
+                                    range=rng['freq_g']
+                                    ),
+                                yaxis=dict(
+                                    title='Power Spectral Density (S<sub>XX</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                                    autorange=False,
+                                    range=np.log10(rng['Sxx_g']),
+                                    type='log',
+                                    ),
+                                hoverlabel=dict(
+                                    font=dict(
+                                        family='Consolas, monospace',
+                                        size=14,
                                         ),
-                                    yaxis=dict(
-                                        title='Power Spectral Density (S<sub>XX</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
-                                        autorange=False,
-                                        range=np.log10(rng['Sxx_g']),
-                                        type='log',
-                                        ),
-                                    hoverlabel=dict(
-                                        font=dict(
-                                            family='Consolas, monospace',
-                                            size=14,
-                                            ),
-                                        ),
-                                    legend=dict(
-                                        title='Dive',
-                                        # font=dict(size=10)
-                                        ),
-                                    plot_bgcolor='white',
-                                    margin=dict(l=10,r=10,b=20,t=50,pad=4)
-                                    )
+                                    ),
+                                legend=dict(
+                                    title='Dive',
+                                    ),
+                                plot_bgcolor='white',
+                                margin=dict(l=10,r=10,b=20,t=50,pad=4)
+                                ),
                                 ),
                             wave_spectra_accel_Sxx_linear = go.Figure(
                                 layout=dict(
@@ -10457,7 +10460,6 @@ def WritePlotFiles():
                                         title='Power Spectral Density (S<sub>XX</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
                                         autorange=False,
                                         range=rng['Sxx_g'],
-                                        # type='log',
                                         ),
                                     hoverlabel=dict(
                                         font=dict(
@@ -10467,7 +10469,6 @@ def WritePlotFiles():
                                         ),
                                     legend=dict(
                                         title='Dive',
-                                        # font=dict(size=10)
                                         ),
                                     plot_bgcolor='white',
                                     margin=dict(l=10,r=10,b=20,t=50,pad=4)
@@ -10496,7 +10497,6 @@ def WritePlotFiles():
                                         ),
                                     legend=dict(
                                         title='Dive',
-                                        # font=dict(size=10)
                                         ),
                                     plot_bgcolor='white',
                                     margin=dict(l=10,r=10,b=20,t=50,pad=4)
@@ -10798,34 +10798,26 @@ def WritePlotFiles():
                                     y=df_wave_spectra['freq'],
                                     z=np.round(np.where(df_wave_spectra['Szz_g'] > .001, np.log10(df_wave_spectra['Szz_g'].astype(np.double)), -3), 3).astype(np.double),
                                     zauto=False,
-                                    zmin=-3,
-                                    zmax=-0.6,
+                                    zmin=-2.7,
+                                    zmax=-0.7,
                                     connectgaps=True,
-                                    # contours=dict(
-                                        # coloring ='heatmap',
-                                        # showlabels = False, 
-                                        # labelfont = dict( 
-                                            # size = 10,
-                                            # color = 'white',
-                                            # )
-                                        # ),
                                     colorbar=dict(
-                                        title='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]', 
-                                        # nticks=5,
-                                        tickvals=[ -3, -2.5, -2, -1.5, -1],
-                                        ticktext=[ '10<sup>-3.0</sup>', '10<sup>-2.5</sup>', '10<sup>-2.0</sup>','10<sup>-1.5</sup>',  '10<sup>-1.0</sup>'],
-                                        titleside='top',
+                                        title=dict(
+                                            text='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                                            side='top'
+                                            ), 
+                                        tickvals=[ -2.5, -2, -1.5, -1, -0.5],
+                                        ticktext=[ '10<sup>-2.5</sup>', '10<sup>-2.0</sup>','10<sup>-1.5</sup>', '10<sup>-1.0</sup>', '10<sup>-0.5</sup>'],
                                         thickness=20,
                                         orientation='h',
                                         ),
-                                    # colorscale='BuPu',
                                     colorscale=[
-                                        [0.0, "rgb(255,255,255)"], 
-                                        [0.1, "rgb(255,255,255)"], 
-                                        [0.4, "rgb(156,185,216)"], 
-                                        [0.8, "rgb(138,86,167)"], 
-                                        [0.9, "rgb(78,0,76)"], 
-                                        [1.0, "rgb(245,7,7)"], 
+                                        [0.00, "rgb(255,255,255)"], 
+                                        [0.40, "rgb(227,235,245)"], 
+                                        [0.55, "rgb(156,185,216)"], 
+                                        [0.70, "rgb(138,86,167)"], 
+                                        [0.85, "rgb(78,0,76)"], 
+                                        [1.00, "rgb(245,7,7)"], 
                                         ],
                                     customdata=np.stack((
                                             df_wave_spectra['dive'],
@@ -10839,16 +10831,11 @@ def WritePlotFiles():
                                     hovertemplate='<br>'.join([
                                         'Dive <b>%{customdata[0]}</b>',
                                         '%{x|%Y-%m-%d %H:%M}Z',
-                                        'f = %{y:.4f} Hz',
+                                        'f = %{y:.3f} Hz',
                                         'Szz = %{customdata[2]:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[1]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
                                         'θ<sub>1</sub> = %{customdata[3]}°',
                                         '<extra></extra>',
                                         ]),
-                                    # line=dict(
-                                        # color='rgba(0,0,0,0.5)',
-                                        # smoothing=0.85,
-                                        # width=0.3,
-                                        # ),
                                     zsmooth='best',
                                     ),
                                 layout=dict(
@@ -10884,25 +10871,17 @@ def WritePlotFiles():
                                     y=df_wave_spectra['freq'],
                                     z=df_wave_spectra['Szz_g'],
                                     zauto=False,
-                                    # zmin=rng['Szz'][0],
-                                    # zmax=rng['Szz'][1],
                                     zmin=0,
-                                    zmax=0.25,
+                                    zmax=0.20,
                                     connectgaps=True,
-                                    # contours=dict(
-                                        # coloring ='heatmap',
-                                        # showlabels = False, 
-                                        # labelfont = dict( 
-                                            # size = 10,
-                                            # color = 'white',
-                                            # )
-                                        # ),
                                     colorbar=dict(
-                                        title='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]', 
-                                        # nticks=5,
-                                        tickvals=[0, 0.05, 0.10, 0.15, 0.20, 0.25],
-                                        ticktext=['0', '0.05', '0.10', '0.15', '0.20', '0.25'],
-                                        titleside='top',
+                                        title=dict(
+                                            text='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                                            side='top'
+                                            ), 
+                                        tickvals=[0, 0.05, 0.10, 0.15, 0.20],
+                                        ticktext=['0', '0.05', '0.10', '0.15', '0.20'],
+                                        # side='top',
                                         thickness=20,
                                         orientation='h',
                                         ),
@@ -10926,16 +10905,11 @@ def WritePlotFiles():
                                     hovertemplate='<br>'.join([
                                         'Dive <b>%{customdata[0]}</b>',
                                         '%{x|%Y-%m-%d %H:%M}Z',
-                                        'f = %{y:.4f} Hz',
+                                        'f = %{y:.3f} Hz',
                                         'Szz = %{z:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[1]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
                                         'θ<sub>1</sub> = %{customdata[2]}°',
                                         '<extra></extra>',
                                         ]),
-                                    # line=dict(
-                                        # color='rgba(0,0,0,0.5)',
-                                        # smoothing=0.85,
-                                        # width=0.3,
-                                        # ),
                                     zsmooth='best',
                                 ),
                                 layout=dict(
@@ -10959,7 +10933,6 @@ def WritePlotFiles():
                                         ),
                                     legend=dict(
                                         title='Dive',
-                                        # font=dict(size=10)
                                         ),
                                     plot_bgcolor='white',
                                     margin=dict(l=10,r=10,b=20,t=50,pad=4)
@@ -10974,54 +10947,41 @@ def WritePlotFiles():
                                     zmin=-2,
                                     zmax=2.2,
                                     connectgaps=True,
-                                    # contours=dict(
-                                        # coloring ='heatmap',
-                                        # showlabels = False, 
-                                        # labelfont = dict( 
-                                            # size = 10,
-                                            # color = 'white',
-                                            # )
-                                        # ),
                                     colorbar=dict(
-                                        title='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]', 
+                                        title=dict(
+                                            text='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]', 
+                                            side='top'
+                                            ), 
                                         nticks=5,
                                         tickvals=[-2, -1, 0, 1, 2],
                                         ticktext=['10<sup>-2</sup>', '10<sup>-1</sup>', '10<sup>0</sup>', '10<sup>1</sup>', '10<sup>2</sup>'],
-                                        titleside='top',
                                         thickness=20,
                                         orientation='h',
                                         ),
-                                    # colorscale='BuPu',
                                     colorscale=[
-                                        [0.0, "rgb(255,255,255)"], 
-                                        [0.1, "rgb(255,255,255)"], 
-                                        [0.4, "rgb(156,185,216)"], 
-                                        [0.8, "rgb(138,86,167)"], 
-                                        [0.9, "rgb(78,0,76)"], 
-                                        [1.0, "rgb(245,7,7)"], 
+                                        [0.00, "rgb(255,255,255)"], 
+                                        [0.40, "rgb(227,235,245)"], 
+                                        [0.55, "rgb(156,185,216)"], 
+                                        [0.70, "rgb(138,86,167)"], 
+                                        [0.85, "rgb(78,0,76)"], 
+                                        [1.00, "rgb(245,7,7)"], 
                                         ],
                                     customdata=np.stack((
                                             df_wave_spectra['dive'],
                                             df_wave_spectra['Szz'],
                                             df_wave_spectra['Szz_g'],
                                             np.where(df_wave_spectra['theta1'].isna(), '-', df_wave_spectra['theta1'].map('{:.0f}'.format)),
-                                            # np.array(['-' if np.isnan(x) else '{:.0f}'.format(x) for x in df_wave_spectra['theta1'].values])
                                             ), 
                                         -1
                                         ),
                                     hovertemplate='<br>'.join([
                                         'Dive <b>%{customdata[0]}</b>',
                                         '%{x|%Y-%m-%d %H:%M}Z',
-                                        'f = %{y:.4f} Hz',
+                                        'f = %{y:.3f} Hz',
                                         'Szz = %{customdata[1]:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[2]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
                                         'θ<sub>1</sub> = %{customdata[3]}°',
                                         '<extra></extra>',
                                         ]),
-                                    # line=dict(
-                                        # color='rgba(0,0,0,0.5)',
-                                        # smoothing=0.85,
-                                        # width=0.3,
-                                        # ),
                                     zsmooth='best',
                                     ),
                                 layout=dict(
@@ -11057,32 +11017,21 @@ def WritePlotFiles():
                                     y=df_wave_spectra['freq'],
                                     z=df_wave_spectra['Szz'],
                                     zauto=False,
-                                    # zmin=rng['Szz'][0],
-                                    # zmax=rng['Szz'][1],
                                     zmin=0,
-                                    zmax=110,
+                                    zmax=100,
                                     connectgaps=True,
-                                    # contours=dict(
-                                        # coloring ='heatmap',
-                                        # showlabels = False, 
-                                        # labelfont = dict( 
-                                            # size = 10,
-                                            # color = 'white',
-                                            # )
-                                        # ),
                                     colorbar=dict(
-                                        title='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]', 
-                                        # nticks=5,
+                                        title=dict(
+                                            text='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]', 
+                                            side='top'
+                                            ), 
                                         tickvals=[0, 20, 40, 60, 80, 100],
                                         ticktext=['0', '20', '40', '60', '80', '100'],
-                                        titleside='top',
                                         thickness=20,
                                         orientation='h',
                                         ),
-                                    # colorscale='BuPu',
                                     colorscale=[
                                         [0.0, "rgb(255,255,255)"], 
-                                        # [0.1, "rgb(255,255,255)"], 
                                         [0.005, "rgb(156,185,216)"], 
                                         [0.10, "rgb(138,86,167)"], 
                                         [0.90, "rgb(78,0,76)"], 
@@ -11099,16 +11048,11 @@ def WritePlotFiles():
                                     hovertemplate='<br>'.join([
                                         'Dive <b>%{customdata[0]}</b>',
                                         '%{x|%Y-%m-%d %H:%M}Z',
-                                        'f = %{y:.4f} Hz',
+                                        'f = %{y:.3f} Hz',
                                         'Szz = %{z:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[1]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
                                         'θ<sub>1</sub> = %{customdata[2]}°',
                                         '<extra></extra>',
                                         ]),
-                                    # line=dict(
-                                        # color='rgba(0,0,0,0.5)',
-                                        # smoothing=0.85,
-                                        # width=0.3,
-                                        # ),
                                     zsmooth='best',
                                 ),
                                 layout=dict(
@@ -11132,7 +11076,6 @@ def WritePlotFiles():
                                         ),
                                     legend=dict(
                                         title='Dive',
-                                        # font=dict(size=10)
                                         ),
                                     plot_bgcolor='white',
                                     margin=dict(l=10,r=10,b=20,t=50,pad=4)
@@ -11142,6 +11085,35 @@ def WritePlotFiles():
                             
 
                         # Add traces - wave period
+                        
+                        figs['wave_period'].add_trace(
+                            go.Scatter(
+                                x = df_wave['dt_str'],
+                                y = df_wave['period_zero'],
+                                hoverinfo='none',
+                                line=dict(
+                                    color='rgb(194,204,204)',
+                                    width=2,
+                                    dash='dot',
+                                    ),
+                                mode='lines',
+                                name='Zero-crossing',
+                                ),
+                            )
+                        
+                        figs['wave_period'].add_trace(
+                            go.Scatter(
+                                x = df_wave['dt_str'],
+                                y = np.round(df_wave['period_peak'], 0),
+                                hoverinfo='none',
+                                line=dict(
+                                    color='rgb(194,204,204)',
+                                    width=1,
+                                    ),
+                                mode='lines',
+                                name='Dominant'
+                                ),
+                            )
                         
                         figs['wave_period'].add_trace(
                             go.Scatter(
@@ -11163,56 +11135,28 @@ def WritePlotFiles():
                                     '%{customdata[1]|%Y-%m-%d %H:%M}Z',
                                     'H<sub>m0</sub> = %{customdata[2]} m',
                                     'θ<sub>mean</sub> = %{customdata[3]}°',
-                                    'T<sub>peak</sub> = %{customdata[4]:.1f} s',
+                                    'T<sub>peak</sub> = %{customdata[4]:.0f} s',
                                     'T<sub>avg</sub> = %{y:.1f} s',
                                     'T<sub>0</sub> = %{customdata[5]:.1f} s',
                                     '<extra></extra>',
                                     ]),
                                 
                                 line=dict(
-                                    color='rgb(0,0,0)',
+                                    color='black',
                                     width=2,
-                                    # dash='dash',
                                     ),
-                                mode='lines',
+                                marker=dict(
+                                    color=[ colors[x] for x in df_wave['dive'].values ],
+                                    line=dict(
+                                        color='rgb(88,88,88)',
+                                        width=0.5,
+                                        ),
+                                    symbol='cross',
+                                    size=6,
+                                    ),
+                                # mode='lines+markers',
+                                mode='lines+markers',
                                 name='Average'
-                                ),
-                            )
-                            
-                        figs['wave_period'].add_trace(
-                            go.Scatter(
-                                x = df_wave['dt_str'],
-                                y = df_wave['period_peak'],
-                                hoverinfo='none',
-                                line=dict(
-                                    color='rgb(194,204,204)',
-                                    width=1,
-                                    ),
-                                # marker=dict(
-                                    # color='rgb(0,0,0)',
-                                    # line=dict(
-                                        # color='rgb(0,0,0)',
-                                        # width=1.0,
-                                        # ),
-                                    # symbol='cross-thin',
-                                    # ),
-                                mode='lines',
-                                name='Dominant'
-                                ),
-                            )
-                            
-                        figs['wave_period'].add_trace(
-                            go.Scatter(
-                                x = df_wave['dt_str'],
-                                y = df_wave['period_zero'],
-                                hoverinfo='none',
-                                line=dict(
-                                    color='rgb(194,204,204)',
-                                    width=2,
-                                    dash='dot',
-                                    ),
-                                mode='lines',
-                                name='Zero',
                                 ),
                             )
                         
@@ -11223,12 +11167,7 @@ def WritePlotFiles():
                         
                             try:
                             
-                                # df_wave_spectra_dive = df_wave_spectra[df_wave_spectra['dive'] == dive]
                                 df_wave_dive = df_wave[df_wave['dive'] == dive]
-                                
-                                # if len(df_wave_spectra_dive) < 1:
-                                    # i = i+1
-                                    # continue
                                 
                                 if len(df_wave_dive) < 1:
                                     i = i+1
@@ -11260,7 +11199,7 @@ def WritePlotFiles():
                                         '<extra></extra>',
                                         ]),
                                     marker=dict(
-                                        color = colors[i],
+                                        color = colors[dive],
                                         size = df_wave_dive['swh'].values[0] * 60 / 10 + 4,
                                         line = dict(
                                             color='rgb(0,0,0)' ,
@@ -11283,25 +11222,6 @@ def WritePlotFiles():
                         figs['wave_mwm'].add_trace(go.Scatterpolar( 
                             r = [rng['period_avg'][1]*0.90,rng['period_avg'][1]*0.93,rng['period_avg'][1]*0.95,rng['period_avg'][1]*0.955],
                             theta = [-73, -66, -62.5, -60.6],
-                            # customdata=np.stack((
-                                    # df_wave_dive['swh'],
-                                    # np.where(df_wave_dive['mwd'].isna(), '-', df_wave_dive['mwd'].map('{:.0f}'.format)),
-                                    # df_wave_dive['period_peak'],
-                                    # df_wave_dive['period_avg'],
-                                    # df_wave_dive['period_zero'],
-                                    # ), 
-                                # -1
-                                # ),
-                            # hovertemplate='<br>'.join([
-                                # 'Dive <b>{}</b>'.format(dive),
-                                # dt_str,
-                                # 'H<sub>m0</sub> = %{customdata[0]} m',
-                                # 'θ<sub>mean</sub> = %{customdata[1]}°',
-                                # 'T<sub>peak</sub> = %{customdata[2]:.1f} s',
-                                # 'T<sub>avg</sub> = %{customdata[3]:.1f} s',
-                                # 'T<sub>0</sub> = %{customdata[4]:.1f} s',
-                                # '<extra></extra>',
-                                # ]),
                             hoverinfo = 'none',
                             marker=dict(
                                 color = 'rgb(255,255,255)',
@@ -11313,17 +11233,118 @@ def WritePlotFiles():
                                 ),
                             text=['10m', '5m', '2', '1'],
                             textfont=dict(
-                                # family="sans serif",
                                 size=[14, 12, 10, 8],
-                                # color="crimson"
                                 ),
                             textposition=['middle center','middle center','middle center','middle center'],    
                             mode='markers+text',
                             name = 'SWH',
-                            # showlegend=False,
                             opacity=0.8,
                             ))   
                         
+                        
+                        # Add constant acceleration spectral density lines to vertical displacement spectra plot   
+                        
+                        for x in np.arange(-3.5, 0.5, 0.5): 
+                            f = np.arange(0.02, 1.255, 0.005)
+                            y = (5 * (10 ** x)) * 9.80665**2 / ((2*math.pi*f)**4)
+                            f = np.extract((y > 0.001) & (y < 500), f)
+                            y = np.extract((y > 0.001) & (y < 500), y)
+                            # y = np.where((y < 0.001) | (y > 2*rng['Szz'][1]), np.nan, y)
+                            figs['wave_spectra_disp_Szz'].add_trace(
+                                go.Scatter(
+                                    x = f,
+                                    y = y,
+                                    hoverinfo='none',  
+                                    line=dict(
+                                        width = 1.0,
+                                        color = 'rgb(222,222,222)',
+                                        ),
+                                    mode = 'lines',
+                                    showlegend = False,
+                                    )
+                                )
+                            
+                        # Add shaded region and text to vertical displacement spectra plot    
+                            
+                        f = np.arange(0.02, 1.255, 0.005)
+                        y = (0.0005) * 9.80665**2 / ((2*math.pi*f)**4)
+                        # f = np.extract((y > 0.001) & (y < 2*rng['Szz'][1]), f)
+                        # y = np.extract((y > 0.001) & (y < 2*rng['Szz'][1]), y)
+                        # y = np.where((y < 0.001) | (y > 2*rng['Szz'][1]), np.nan, y)
+                        f = np.extract(y < 500, f)
+                        y = np.extract(y < 500, y)
+                        y = np.where((y < 0.001) , 0.001, y)
+                        figs['wave_spectra_disp_Szz'].add_trace(
+                            go.Scatter(
+                                x = f,
+                                y = y,
+                                fill = 'tozeroy',
+                                fillcolor='rgba(244,244,244,0.7)',
+                                hoverinfo='none',  
+                                line=dict(
+                                    width = 1.0,
+                                    color = 'rgb(222,222,222)',
+                                    ),
+                                mode = 'lines',
+                                # name = '<5E-4 g<sup>2</sup>Hz<sup>-1</sup>',
+                                showlegend = False,
+                                )
+                            )
+                            
+                            
+                        # Add labels to constant acceleration spectral density lines
+                            
+                        f = np.array([ 0.50 ])
+                        x = np.array([ 5 ])
+                        y = x * 9.80665**2 / ((2*math.pi*f)**4)
+                        figs['wave_spectra_disp_Szz'].add_trace(
+                            go.Scatter(
+                                x = f,
+                                y = y,
+                                mode = 'text',
+                                text=[ '5g<sup>2</sup>Hz<sup>-1</sup>' ],
+                                textposition=[ 'middle center' ],   
+                                textfont=dict(
+                                    size=12,
+                                    ),
+                                # name = '<5E-4 g<sup>2</sup>Hz<sup>-1</sup>',
+                                showlegend = False,
+                                )
+                            )
+                        x = np.array([ 0.5 ])
+                        y = x * 9.80665**2 / ((2*math.pi*f)**4)
+                        figs['wave_spectra_disp_Szz'].add_trace(
+                            go.Scatter(
+                                x = f,
+                                y = y,
+                                mode = 'text',
+                                text=[ '0.5' ],
+                                textposition=[ 'middle center' ],   
+                                textfont=dict(
+                                    size=12,
+                                    ),
+                                # name = '<5E-4 g<sup>2</sup>Hz<sup>-1</sup>',
+                                showlegend = False,
+                                )
+                            )
+                        x = np.array([ 0.05 ])
+                        y = x * 9.80665**2 / ((2*math.pi*f)**4)
+                        figs['wave_spectra_disp_Szz'].add_trace(
+                            go.Scatter(
+                                x = f,
+                                y = y,
+                                mode = 'text',
+                                text=[ '0.05' ],
+                                textposition=[ 'middle center' ],   
+                                textfont=dict(
+                                    size=12,
+                                    ),
+                                # name = '<5E-4 g<sup>2</sup>Hz<sup>-1</sup>',
+                                showlegend = False,
+                                )
+                            )
+                        
+                        del f, y, x
                         
                         # Add traces - wave spectra    
                             
@@ -11360,13 +11381,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             'C<sub>XY</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
                                             # 'θ<sub>1</sub> = %{customdata[1]}°',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11392,7 +11413,7 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             'S<sub>XX</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
                                             # 'θ<sub>1</sub> = %{customdata[1]}°',
                                             # 'S<sub>YY</sub> = %{customdata[1]:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[2]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
@@ -11400,7 +11421,7 @@ def WritePlotFiles():
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11421,13 +11442,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             'S<sub>XX</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
                                             # 'θ<sub>1</sub> = %{customdata[1]}°',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11449,13 +11470,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             'S<sub>YY</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
                                             # 'θ<sub>1</sub> = %{customdata[1]}°',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11476,13 +11497,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             'S<sub>YY</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
                                             # 'θ<sub>1</sub> = %{customdata[1]}°',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11504,13 +11525,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             # 'θ<sub>1</sub> = %{customdata[1]}°',
                                             'S<sub>ZZ</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11531,13 +11552,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             # 'θ<sub>1</sub> = %{customdata[1]}°',
                                             'S<sub>ZZ</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11558,13 +11579,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             # 'θ<sub>1</sub> = %{customdata[0]}°',
                                             'C<sub>XY</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11585,13 +11606,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             # 'θ<sub>1</sub> = %{customdata[0]}°',
                                             'S<sub>XX</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11611,13 +11632,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             # 'θ<sub>1</sub> = %{customdata[0]}°',
                                             'S<sub>XX</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11638,13 +11659,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             # 'θ<sub>1</sub> = %{customdata[0]}°',
                                             'S<sub>YY</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11664,13 +11685,13 @@ def WritePlotFiles():
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             # 'θ<sub>1</sub> = %{customdata[0]}°',
                                             'S<sub>YY</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11685,21 +11706,21 @@ def WritePlotFiles():
                                         customdata=np.stack((
                                                 round((1/df_wave_spectra_dive['freq']).astype(np.double), 1),
                                                 np.where(df_wave_spectra_dive['theta1'].isna(), '-', df_wave_spectra_dive['theta1'].map('{:.0f}'.format)),
-                                                df_wave_spectra_dive['Szz_g'],
+                                                round(df_wave_spectra_dive['Szz'] / ( 9.80665**2 / ((2*math.pi*df_wave_spectra_dive['freq'])**4)), 3),
                                                 ), 
                                             -1
                                             ),
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             'T = %{customdata[0]:.1f} s',
                                             'θ<sub>1</sub> = %{customdata[1]}°',
                                             'S<sub>ZZ</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[2]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11713,21 +11734,21 @@ def WritePlotFiles():
                                         customdata=np.stack((
                                                 round((1/df_wave_spectra_dive['freq']).astype(np.double), 1),
                                                 np.where(df_wave_spectra_dive['theta1'].isna(), '-', df_wave_spectra_dive['theta1'].map('{:.0f}'.format)),
-                                                df_wave_spectra_dive['Szz_g'],
+                                                round(df_wave_spectra_dive['Szz'] / ( 9.80665**2 / ((2*math.pi*df_wave_spectra_dive['freq'])**4)), 3),
                                                 ), 
                                             -1
                                             ),
                                         hovertemplate='<br>'.join([
                                             'Dive <b>{}</b>'.format(dive),
                                             dt_str,
-                                            'f = %{x:.4f} Hz',
+                                            'f = %{x:.3f} Hz',
                                             'T = %{customdata[0]:.1f} s',
                                             'θ<sub>1</sub> = %{customdata[1]}°',
                                             'S<sub>ZZ</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[2]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
                                             '<extra></extra>',
                                             ]),
                                         line=dict(
-                                            color=colors[i],
+                                            color=colors[dive],
                                             width=2 if dive == dives[-1] else 1.2,
                                             ),
                                         mode='lines',
@@ -11862,7 +11883,7 @@ def WritePlotImageFiles(
         
         fig_meta = dict(
             id_str = id_str,
-            dt_str = datetime.datetime.utcnow().isoformat()[:16] + 'Z',
+            dt_str = datetime.datetime.now(datetime.UTC).isoformat()[:16] + 'Z',
             title = figure.layout.title.text,
             category = category,
             fpath = re.sub('\\\\', '/', os.path.join(dpath_float, '{}_{}'.format(float_id, id_str))),
@@ -11882,17 +11903,54 @@ def WritePlotImageFiles(
         fig_meta['fpath_svg_small'] = fig_meta['fpath'] + '_small.svg'
         fig_meta['fpath_img_thumb'] = fig_meta['fpath'] + '_thumb.png'
         
+        # Write HTML file
+        
+        figure.update_layout(
+            showlegend=showlegend, 
+            height=opts[size]['html_height'], 
+            width=opts[size]['html_width'],
+            # height=None, 
+            # width=None,
+            )
+        
+        try:
+            with open(fig_meta['fpath_html'], 'w', encoding='utf-8') as file:
+            
+                figure.write_html(
+                    file, 
+                    include_plotlyjs='cdn',
+                    config=dict(
+                        # scrollZoom = False,
+                        displaylogo = False,
+                        # autosizable = True,
+                        modeBarButtonsToRemove = [ 'select2d', 'lasso2d' ]
+                        )
+                    )
+            # figs[fig].write_html(fig_meta['fpath_html'])
+        except:
+            errstr = 'Failed to write file: ' + fig_meta['fpath_html']
+            if hasattr(args, 'halt') and args.halt:
+                raise Exception(errstr)
+            logger.error(errstr)
+            return None
+                
+
         # Write small images
         
         figure.update_layout(
             showlegend=False, 
+            # title_font_size=12,
             height=opts[size]['small_height'], 
             width=opts[size]['small_width'],
             margin=opts[size]['margin'],
             )
         
         try:
-            figure.write_image(fig_meta['fpath_img_small'])
+            figure.write_image(
+                fig_meta['fpath_img_small'],
+                height=opts[size]['small_height'], 
+                width=opts[size]['small_width'],
+                )
         except:
             errstr = 'Failed to write file: ' + fig_meta['fpath_img_small']
             if hasattr(args, 'halt') and args.halt:
@@ -11900,14 +11958,18 @@ def WritePlotImageFiles(
             logger.error(errstr)
             return None
             
-        try:
-            figure.write_image(fig_meta['fpath_svg_small'])
-        except:
-            errstr = 'Failed to write file: ' + fig_meta['fpath_svg_small']
-            if hasattr(args, 'halt') and args.halt:
-                raise Exception(errstr)
-            logger.error(errstr)
-            return None
+        # try:
+        #     figure.write_image(
+        #         fig_meta['fpath_svg_small'],
+        #         height=opts[size]['small_height'], 
+        #         width=opts[size]['small_width'],
+        #         )
+        # except:
+        #     errstr = 'Failed to write file: ' + fig_meta['fpath_svg_small']
+        #     if hasattr(args, 'halt') and args.halt:
+        #         raise Exception(errstr)
+        #     logger.error(errstr)
+        #     return None
 
         # TODO Write thumbnail
         try:
@@ -11947,37 +12009,7 @@ def WritePlotImageFiles(
             # logger.error(errstr)
             # return None
         
-        # Write HTML file
-        
-        figure.update_layout(
-            showlegend=showlegend, 
-            height=opts[size]['html_height'], 
-            width=opts[size]['html_width'],
-            # height=None, 
-            # width=None,
-            )
-        
-        try:
-            with open(fig_meta['fpath_html'], 'w', encoding='utf-8') as file:
-            
-                figure.write_html(
-                    file, 
-                    include_plotlyjs='cdn',
-                    config=dict(
-                        # scrollZoom = False,
-                        displaylogo = False,
-                        # autosizable = True,
-                        modeBarButtonsToRemove = [ 'select2d', 'lasso2d' ]
-                        )
-                    )
-            # figs[fig].write_html(fig_meta['fpath_html'])
-        except:
-            errstr = 'Failed to write file: ' + fig_meta['fpath_html']
-            if hasattr(args, 'halt') and args.halt:
-                raise Exception(errstr)
-            logger.error(errstr)
-            return None
-                
+
         
         # Write PNG file
         
@@ -11988,7 +12020,11 @@ def WritePlotImageFiles(
             )
         
         try:
-            figure.write_image(fig_meta['fpath_img'])
+            figure.write_image(
+                fig_meta['fpath_img'],
+                height=opts[size]['height'], 
+                width=opts[size]['width'],
+                )
         except:
             errstr = 'Failed to write file: ' + fig_meta['fpath_img']
             if hasattr(args, 'halt') and args.halt:
@@ -11996,14 +12032,18 @@ def WritePlotImageFiles(
             logger.error(errstr)
             return None
  
-        try:
-            figure.write_image(fig_meta['fpath_svg'])
-        except:
-            errstr = 'Failed to write file: ' + fig_meta['fpath_svg']
-            if hasattr(args, 'halt') and args.halt:
-                raise Exception(errstr)
-            logger.error(errstr)
-            return None
+        # try:
+        #     figure.write_image(
+        #         fig_meta['fpath_svg'],
+        #         height=opts[size]['height'], 
+        #         width=opts[size]['width'],
+        #         )
+        # except:
+        #     errstr = 'Failed to write file: ' + fig_meta['fpath_svg']
+        #     if hasattr(args, 'halt') and args.halt:
+        #         raise Exception(errstr)
+        #     logger.error(errstr)
+        #     return None
  
  
         # Display figures if option set
@@ -12018,8 +12058,8 @@ def WritePlotImageFiles(
         fig_meta['size_img']        = os.path.getsize(fig_meta['fpath_img'])
         fig_meta['size_img_small']  = os.path.getsize(fig_meta['fpath_img_small'])
         fig_meta['size_img_thumb']  = os.path.getsize(fig_meta['fpath_img_thumb'])
-        fig_meta['size_svg']        = os.path.getsize(fig_meta['fpath_svg'])
-        fig_meta['size_svg_small']  = os.path.getsize(fig_meta['fpath_svg_small'])
+        #fig_meta['size_svg']        = os.path.getsize(fig_meta['fpath_svg'])
+        #fig_meta['size_svg_small']  = os.path.getsize(fig_meta['fpath_svg_small'])
         
         # Strip paths
             
@@ -12117,7 +12157,7 @@ parser.add_argument(
     '-i', '--include',
     action='append',
     dest='include',
-    help='include paths that match regular expression REGEX (e.g. "/alamo/data/list/[0-9]+/lis.*\.txt")',
+    help='include paths that match regular expression REGEX (e.g. "/alamo/data/json/[0-9]+/jso.*\\.txt")',
     metavar='REGEX')
 
 parser.add_argument(
@@ -12159,14 +12199,29 @@ parser.add_argument(
 Parse arguments:
 """
 
+
+
 args = parser.parse_args()
 
-# Check logging args:
+
+# setup logger
+
+logging.basicConfig(format='%(asctime)s %(levelname)7s %(message)s', datefmt="%Y%m%dT%H%M%S")
 logger = logging.getLogger('aggregate-json')
+logger.propagate = False
+
+# logger.handlers.clear()
+
+# logger.setLevel(logging.DEBUG)
+
 if not logger.hasHandlers():
     ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter('%(asctime)s %(levelname)7s %(message)s', datefmt="%Y%m%dT%H%M%S"))
+    formatter = logging.Formatter('%(asctime)s %(levelname)7s %(message)s', datefmt="%Y%m%dT%H%M%S")
+    ch.setFormatter(formatter)
     logger.addHandler(ch)
+
+# Check logging args:
+
 if hasattr(args, 'debug')   and args.debug:
     logger.setLevel(logging.DEBUG)
 elif hasattr(args, 'verbose') and args.verbose:
@@ -12175,6 +12230,7 @@ elif hasattr(args, 'quiet')   and args.quiet:
     logger.setLevel(logging.ERROR)
 else:
     logger.setLevel(logging.WARNING)
+
 
 logger.debug('Debug output enabled.')
 

@@ -1,10 +1,14 @@
 #!/usr/bin/python3
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed Sep  1 14:37:00 2021
 
 @author: aekholm
 """
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import argparse
 import gc
@@ -88,7 +92,7 @@ parser.add_argument(
     '-i', '--include',
     action='append',
     dest='include',
-    help='include paths that match regular expression REGEX (e.g. "/alamo/data/list/[0-9]+/lis.*\.txt")',
+    help='include paths that match regular expression REGEX (e.g. "/alamo/data/list/[0-9]+/lis.*\\.txt")',
     metavar='REGEX')
 
 parser.add_argument(
@@ -123,7 +127,7 @@ parser.add_argument(
 Global Variables:
 """
 
-JSON_VERSION = "0.09"
+JSON_VERSION = "0.11"
 
 #float_map = {}
 
@@ -146,7 +150,7 @@ def ProcessDirectory(dpath):
                 
             raise Exception('Invalid input directory: ' + dpath)
                 
-        logger.info('Processsing directory: ' + dpath + ' ...')
+        logger.debug('Processing directory: ' + dpath + ' ...')
         
         # Check if directory is empty
         if len(os.listdir(dpath)) == 0:
@@ -449,6 +453,8 @@ def ProcessListingFile(fpath_list):
                     dive_data.descent.pres.append(float(x[6]))
                     dive_data.descent.n += 1
                     
+                    dive_data.descent.phase_code.append(int(x[9]))
+                    
                     del x
                     
                     continue
@@ -669,6 +675,8 @@ def ProcessListingFile(fpath_list):
                     # Get pressure
                     dive_data.ascent.pres.append(float(x[6]))
                     dive_data.ascent.n += 1
+                    
+                    dive_data.ascent.phase_code.append(int(x[9]))
                     
                     del x
                     del dt_ref_delta_sec
@@ -958,24 +966,41 @@ Parse arguments:
 
 args = parser.parse_args()
 
+
+# setup logger
+
+logging.basicConfig(format='%(asctime)s %(levelname)7s %(message)s', datefmt="%Y%m%dT%H%M%S")
+logger = logging.getLogger('aggregate-json')
+logger.propagate = False
+
+logger.handlers.clear()
+
+# logger.setLevel(logging.DEBUG)
+
+if not logger.hasHandlers():
+    ch = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s %(levelname)7s %(message)s', datefmt="%Y%m%dT%H%M%S")
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    
 # Check boolean args:
 debug    = hasattr(args, 'debug')   and args.debug
 quiet    = hasattr(args, 'quiet')   and args.quiet
 verbose  = hasattr(args, 'verbose') and args.verbose
 
 # Check logging args:
-logger = logging.getLogger('list2json')
-if not logger.hasHandlers():
-    ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter('%(asctime)s %(levelname)7s %(message)s', datefmt="%Y%m%dT%H%M%S"))
-    logger.addHandler(ch)
-if debug:
+
+if hasattr(args, 'debug')   and args.debug:
+    # ch.setLevel(logging.DEBUG)
     logger.setLevel(logging.DEBUG)
-elif verbose:
+elif hasattr(args, 'verbose') and args.verbose:
+    # ch.setLevel(logging.INFO)
     logger.setLevel(logging.INFO)
-elif quiet:
+elif hasattr(args, 'quiet')   and args.quiet:
+    # ch.setLevel(logging.ERROR)
     logger.setLevel(logging.ERROR)
 else:
+    # ch.setLevel(logging.WARNING)
     logger.setLevel(logging.WARNING)
     
 del debug

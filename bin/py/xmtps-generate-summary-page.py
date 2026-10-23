@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
 Created on Mon Sep 26 14:13:17 2022
@@ -18,7 +19,7 @@ import re
 from yattag import Doc 
 
 # local
-from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
+# from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
 
 
 # Set library options
@@ -31,7 +32,7 @@ Static configuration:
 """
 
 
-JSON_VERSION = "0.09"
+JSON_VERSION = "0.11"
 
 """
 Global Variables:
@@ -183,7 +184,7 @@ def WriteSummaryFile(dpath):
         
         # Create document
         
-        doc, tag, text = Doc().tagtext()
+        doc, tag, text, line = Doc().ttl()
         
         doc.asis('<!DOCTYPE html>')
         with tag('html'):
@@ -197,7 +198,90 @@ def WriteSummaryFile(dpath):
                     
                 doc.asis('<script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>')
                 doc.asis('<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.12.1/datatables.min.css"/>')
-                doc.asis('<script>$(document).ready(function () { $("#stable").DataTable({ order: [[9, \'desc\']], "pageLength": 10, "lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]], scrollX: false }); jQuery(".dataTable").wrap("<div id=\'tat\' />"); });</script>')
+                
+                # doc.asis('<link href="https://cdn.datatables.net/v/dt/jq-3.7.0/dt-2.3.5/datatables.min.css" rel="stylesheet" integrity="sha384-lw6xqXSsLbv9Bk8p8sb0Eoqxc5YTKvHwiXBG3EDVIqCaj4r4rCCnDDHY4As+neWR" crossorigin="anonymous">')
+                # doc.asis('<script src="https://cdn.datatables.net/v/dt/jq-3.7.0/dt-2.3.5/datatables.min.js" integrity="sha384-GnTdsJpz17/btlSP5bFmeEv1QtW4NUnE9Atd4eMZjHBvJvYTrQTmTzLAKL2wlBEt" crossorigin="anonymous"></script>')
+
+                # doc.asis('<script type="text/javascript" src="/alamo/js/datatables.min.js"></script>')
+                # doc.asis('<link rel="stylesheet" type="text/css" href="/alamo/js/datatables.min.css"/>')
+                
+                doc.asis('''<script type="text/javascript"> 
+function elapsedTimeString(dt) {
+    if (dt < 0) 
+        return "";
+    if (dt < 120) 
+        return "just now";
+    if (dt < 10800)
+        return `${Math.floor(dt/60)} minutes ago`;
+    if (dt < 345600)
+        return `${Math.floor(dt/3600)} hours ago`;
+    if (dt < 63072000)
+        return `${Math.floor(dt/3600/24)} days ago`;
+    return `${Math.floor(dt/3600/24/365)} years ago`;
+}
+function updateElapsedTimes() { 
+    epoch_now = Math.floor(Date.now() / 1000);
+    document.querySelectorAll('#last-report').forEach((elem) => {
+        dt = epoch_now - elem.getAttribute('epoch');
+        if (dt < 0 || dt > 946080000) 
+            return;
+        elapsed_text = elapsedTimeString(dt);  
+        elapsed_elem = document.createElement('small');
+        elapsed_elem.textContent = elapsed_text;
+        elem.append(document.createElement('br'));
+        elem.append(elapsed_elem);
+    });
+        document.querySelectorAll('#deployed').forEach((elem) => {
+        dt = epoch_now - elem.getAttribute('epoch');
+        if (dt < 0 || dt > 946080000) 
+            return;
+        elapsed_text = elapsedTimeString(dt);  
+        elapsed_elem = document.createElement('small');
+        elapsed_elem.textContent = elapsed_text;
+        elem.append(document.createElement('br'));
+        elem.append(elapsed_elem);
+    });
+    elem = document.getElementById("pue");
+    dt = epoch_now - elem.getAttribute('epoch');
+    if (dt < 0 || dt > 946080000) 
+        return;
+    elem.textContent = '(' +  elapsedTimeString(dt) + ')';
+}
+var reloading;
+function checkAutoRefresh() {
+    const url = new URL(window.location.href);
+    const urlparams = url.searchParams;  
+    let r = +urlparams.get("r");
+    if(r < 1) { 
+        urlparams.delete("r")
+        window.history.pushState({}, '', url.toString());
+        return;
+    } else if(r == 1) {
+        r = 60;
+    } else if(r < 10) { 
+        r = 10;
+        urlparams.set("r","10");
+        window.history.pushState({}, '', url.toString());
+    }
+    reloading=setTimeout("window.location.reload();", r * 1000);
+    document.getElementById("autorefresh").checked=true;
+}
+function toggleAutoRefresh(cb) {
+    const url = new URL(window.location.href);
+    const urlparams = url.searchParams;
+    if (cb.checked) {
+        urlparams.set("r","1");
+        reloading=setTimeout("window.location.reload();", 60000);
+    } else {
+        urlparams.delete("r");
+        clearTimeout(reloading);
+    }
+    window.history.pushState({}, '', url.toString());
+}
+$(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
+</script>''')
+                doc.asis('<script type="text/javascript">$(document).ready(function () { $("#stable").DataTable({ order: [[9, \'desc\']], "pageLength": 10, "lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]], scrollX: false }); jQuery(".dataTable").wrap("<div id=\'tat\' />"); });</script>')
+
                 # Create styles
                     
                 with(tag('style')):
@@ -224,14 +308,22 @@ def WriteSummaryFile(dpath):
                     text('#stable td { padding: 8px; text-align: left; height: 28px; } ')
                     text('#stable td .stimg { width: 80px; } ')
                     text('#stable td .stimg img { padding-right: 4px; display:inline; padding-bottom: 1px; } ')
+                    text('#stable td small { color: #aaa; } ')
                     
                     # text('.itiny { width: 120px; text-align: center; } ')
                     
                     
                     # Create styles - footer
                     
-                    text('.footer { font-size: 12px; color: #aaa; margin: 30px 0px; } ')
+                    text('#foot { font-size: 12px; color: #aaa; margin: 30px 0px; width: 100%;   } ')
+                    text('#lfoot { float: left; width: 50%; white-space: preserve; margin: 0 0 30px 0;  } ')
+                    text('#lfoot i { display: inline-block; margin 3px; } ')
+                    text('#rfoot { float: right; white-space: preserve; margin: 0 0 30px 0; } ')
+                    text('#rfoot label,input { margin: 3px; inline-block; vertical-align:middle; } ')
                     
+                    
+                    # text('label,input { display:  }')
+
                 
             # Create body
 
@@ -269,7 +361,7 @@ def WriteSummaryFile(dpath):
                                     
                                     with tag('th', colspan=6):
                                         text('Summary')
-                                    with tag('th', colspan=5):
+                                    with tag('th', colspan=4):
                                         text('Most Recent Cycle')
                                 with tag('tr'):
                                     # with tag('th'):
@@ -384,8 +476,9 @@ def WriteSummaryFile(dpath):
                                                 else:
                                                     text('-')
                                                     
-                                                
-                                            with tag('td'): # deployed
+                                            # deployed     
+                                            dt_epoch = x['deployment']['gps'].dt_epoch    
+                                            with tag('td', id='deployed', epoch=f'{dt_epoch}'): 
                                             
                                                 if x['deployment']['gps'].is_valid():
                                             
@@ -411,7 +504,7 @@ def WriteSummaryFile(dpath):
                                                     
                                             with tag('td'): # status
 
-                                                time_since_last = (datetime.datetime.utcnow().timestamp() - x['latest']['sbd'].dt_epoch) /86400
+                                                time_since_last = (datetime.datetime.now(datetime.UTC).timestamp() - x['latest']['sbd'].dt_epoch) /86400
 
                                                 if time_since_last < 30:
                                                     with tag('div', klass='stimg'):
@@ -434,21 +527,23 @@ def WriteSummaryFile(dpath):
                                                     text('{}'.format(x['latest']['cycle']))
                                                 else: 
                                                     text('-')
-                                                
-                                            with tag('td'): # last report
+                                             
+                                            # last report
+                                            dt_epoch = x['latest']['sbd'].dt_epoch    
+                                            with tag('td', id='last-report', epoch=f'{dt_epoch}'): 
                                                 dt_str = x['latest']['sbd'].dt_str
                                                 dt_str = dt_str[0:10] + ' ' +  dt_str[11:16]
                                                 text(dt_str)
-                                            
+                                                
                                             with tag('td'): # depth
+                                                depth = x['latest']['depth']
                                             
-                                                if (x['latest']['depth'] <= 0) or (x['latest']['depth'] >= 3000) or (np.isnan(x['latest']['depth'])):
-                                                
+                                                if (depth <= 0) or (depth >= 3000) or np.isnan(depth):
                                                     text('-')
-                                                
+                                                elif (depth < 100):
+                                                    text('{:.1f}'.format(depth))
                                                 else:
-                                                    
-                                                    text('{:.1f}'.format(x['latest']['depth']))
+                                                    text('{:.0f}'.format(depth))
                                                 
                                             with tag('td'): # cycle duration
                                             
@@ -477,11 +572,18 @@ def WriteSummaryFile(dpath):
                               
                         # Create footer
                         
-                        with tag('div', klass='footer'):        
-                            with tag('i'):
-                                text('Page last updated ' + datetime.datetime.utcnow().isoformat()[:16] + 'Z' + ' - version ' + JSON_VERSION)
-                                # text('Page last updated ' + datetime.datetime.utcnow().isoformat()[:16] + 'Z' + ' - v' + JSON_VERSION + ' - Float Group, Department of Physical Oceanography, Woods Hole Oceanographic Institution, Woods Hole, MA, USA')
-                            
+                        with tag('div', id='foot'):
+                            with tag('div', id='lfoot'): 
+                                dt_now = datetime.datetime.now(datetime.UTC)
+                                line('i', 'Page last updated ' + dt_now.isoformat()[:16] + 'Z ' )
+                                line('i', '', id='pue', epoch='{}'.format(round(dt_now.timestamp())))
+                                # doc.stag('br')
+                                line('i', ' - version ' + JSON_VERSION)
+                                # text('Page last updated ' + datetime.datetime.now(datetime.UTC).isoformat()[:16] + 'Z' + ' - v' + JSON_VERSION + ' - Float Group, Department of Physical Oceanography, Woods Hole Oceanographic Institution, Woods Hole, MA, USA')
+                            with tag('div', id='rfoot'): 
+                                with tag('label', ( 'for', 'autorefresh')):
+                                    text('Auto Refresh ')
+                                    doc.input(name = 'autorefresh', type = 'checkbox', id = 'autorefresh', value = 'no', onclick="toggleAutoRefresh(this);")
             
         # Write Summary file:
         
@@ -645,7 +747,7 @@ def WriteSummaryPlots(dpath):
                 if not gps.is_valid():
                     continue
                 
-                time_since_last = (datetime.datetime.utcnow().timestamp() - x['latest']['sbd'].dt_epoch) /86400
+                time_since_last = (datetime.datetime.now(datetime.UTC).timestamp() - x['latest']['sbd'].dt_epoch) /86400
 
                 color = 'rbg(0,0,0)'
 

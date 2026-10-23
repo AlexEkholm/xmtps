@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 """
 Created on Tue Sep 21 15:11:38 2021
@@ -177,7 +178,7 @@ class Position(DateTime):
         self.cep_km = cep_km
         
     def pos_from_iso6709_str(self, string):
-        (self.lat, self.lon) = re.search('([+-][\d.]+)([+-][\d.]+)', string).groups()
+        (self.lat, self.lon) = re.search('([+-][\\d.]+)([+-][\\d.]+)', string).groups()
         self.lat = float(self.lat)
         self.lon = float(self.lon)
         
@@ -233,6 +234,7 @@ class PresTimeSeries:
         self.dt_str           = []
         self.pres             = []
         self.rate             = []
+        self.phase_code       = []
         
     def PostProcess(self):
         if not len(self.dt):
@@ -254,6 +256,7 @@ class PresTimeSeries:
             new_pres             = np.empty(new_len)
             new_dt_ref_delta_sec = np.empty(new_len)
             new_rate             = np.empty(new_len)
+            new_phase_code       = np.empty(new_len, dtype='int')
         
             for i in range(0,old_len-1):
                 
@@ -278,14 +281,40 @@ class PresTimeSeries:
                 else:
                     new_rate[2*i+1] = new_rate[2*i]
                 
+                # Generate new phase codes
+                
+                new_phase_code[2*i] = self.phase_code[i]
+                
+                if self.phase_code[i] == 1:
+                    new_phase_code[2*i+1] = 10
+                elif self.phase_code[i] == 2:
+                    new_phase_code[2*i+1] = 10
+                elif self.phase_code[i] == 3:
+                    new_phase_code[2*i+1] = 10
+                elif self.phase_code[i] == 6:
+                    new_phase_code[2*i+1] = 12
+                elif self.phase_code[i] == 7:
+                    new_phase_code[2*i+1] = 13
+                elif self.phase_code[i] == 10:
+                    new_phase_code[2*i+1] = 10
+                elif self.phase_code[i] == 12:
+                    new_phase_code[2*i+1] = 12
+                elif self.phase_code[i] == 13:
+                    new_phase_code[2*i+1] = 13
+                else:
+                    new_phase_code[2*i+1] = -1  
+                
+                
             new_pres[2*(old_len-1)] = self.pres[old_len-1]
             new_dt_ref_delta_sec[2*(old_len-1)] = self.dt_ref_delta_sec[old_len-1]
             new_rate[2*(old_len-1)] = None
+            new_phase_code[2*(old_len-1)] = self.phase_code[old_len-1]
             
             self.dt_ref_delta_sec = new_dt_ref_delta_sec.tolist()
             self.pres = new_pres.tolist()
             self.rate = new_rate.tolist()
             self.n = new_len
+            self.phase_code = new_phase_code.tolist()
                 
             # Create date/time array
             
@@ -576,6 +605,26 @@ class Wave:
         # self.freq           = np.empty(flen)
         # self.freq[:]        = np.nan
         
+        
+        # raw spectra
+        
+        self.raw_freq           = np.array([ x*self.fsam/self.slen for x in range(1, flen + 1) ])
+        
+        self.raw_Szz_g          = np.empty(flen, dtype=np.double)
+        self.raw_Szz_g[:]       = np.nan
+        self.raw_Syy_g          = np.empty(flen, dtype=np.double)
+        self.raw_Syy_g[:]       = np.nan
+        self.raw_Sxx_g          = np.empty(flen, dtype=np.double)
+        self.raw_Sxx_g[:]       = np.nan
+        self.raw_Cxy_g          = np.empty(flen, dtype=np.double)
+        self.raw_Cxy_g[:]       = np.nan
+        self.raw_Qzx_g          = np.empty(flen, dtype=np.double)
+        self.raw_Qzx_g[:]       = np.nan
+        self.raw_Qzy_g          = np.empty(flen, dtype=np.double)
+        self.raw_Qzy_g[:]       = np.nan
+        
+        # processes spectra
+        
         self.freq           = np.array([ x*self.fsam/self.slen for x in range(1, flen + 1) ])
         
         self.Szz_g          = np.empty(flen, dtype=np.double)
@@ -645,26 +694,59 @@ class Wave:
         self.period_avg     = np.nan            # Average period
         self.period_zero    = np.nan            # Zero-crossing
         
-    def PostProcess(self, freq_min: float = 0.03, interpolate = True, rolling_average: int = 3):
+    def PostProcess(self, freq_min: float = 0.0625, interpolate = True, rolling_average: int = 3):
     
         g = 9.80665 # m s^-2
         pi = math.pi
         
-        taper_freq_rng = [ 0.04, 0.08 ] 
-    
-        peak_zz = 0
-        peak_idx = -1
-    
+        # range checking
         
+        zero_below_freq_min = False
+        spectra_max   = 300 # m^2/Hz
+        spectra_max_g = 0.3 # g^2/Hz
+        
+        # interpolation frequencies
+        
+        F_INTER_MIN  = 0.030 # Hz
+        F_INTER_STEP = 0.005 # Hz
+        F_INTER_MAX  = 1.250 # Hz
+        
+        # linear correction
+        # ccoef = [0, 0]
+        
+        # based on adwsd data
+        # ccoef = [2.10504466, -0.10535845] # 2.10504466 * (f - 0.10535845) 
     
+        # based on ndbc data
+        # ccoef = [2.0866, -0.0898]
+        # ccoef = [1.7331, -0.0934]
+        
+        # nonlinear correction
+        # ccoef = [0,0,0]
+        # ccoef = [2.40313, 0.05753, 0.03259]
+        # ccoef = [2.69515, 0.04346, 0.04976]
+        # ccoef = [2.64497, 0.05012, 0.01105, 0.04055]
+        ccoef = [2.41526, 0.05278, 0.00797, 0.04280]
+    
+        # spectra peak
+        peak_zz  = 0
+        peak_idx = -1
         
         try: 
         
             if self.slen < 1:
                 return
+            
+            # copy raw spectra
                 
+            self.raw_Szz_g          = self.Szz_g 
+            self.raw_Syy_g          = self.Syy_g 
+            self.raw_Sxx_g          = self.Sxx_g 
+            self.raw_Cxy_g          = self.Cxy_g 
+            self.raw_Qzx_g          = self.Qzx_g  
+            self.raw_Qzy_g          = self.Qzy_g
                 
-            # TODO interpolate acceleration spectra    
+            # interpolate acceleration spectra    
             
             if(interpolate):
             
@@ -694,7 +776,11 @@ class Wave:
                 
                 # Do interpolation
             
-                new_freq = np.array([ x*self.fsam/self.slen/2 for x in range(1, self.slen + 1)])
+                # new_freq = np.array([ x*self.fsam/self.slen/2 for x in range(1, self.slen + 1)])
+                new_freq = np.arange(
+                    F_INTER_MIN, 
+                    F_INTER_MAX + F_INTER_STEP, 
+                    F_INTER_STEP)
                     
                 f = interp1d(self.freq, self.Szz_g, bounds_error = False, assume_sorted=True)
                 self.Szz_g = f(new_freq) 
@@ -718,161 +804,172 @@ class Wave:
                 self.Qzx_g = np.where(np.isnan(self.Qzx_g), 0, self.Qzx_g)
                 self.Qzy_g = np.where(np.isnan(self.Qzy_g), 0, self.Qzy_g)
             
-            # TODO apply rolling average to acceleration spectra
+            Szz_g = self.Szz_g 
             
-            if rolling_average > 1:
-            
-                self.Szz_g = RollingAverage(self.Szz_g, rolling_average)
-                self.Syy_g = RollingAverage(self.Syy_g, rolling_average)
-                self.Sxx_g = RollingAverage(self.Sxx_g, rolling_average)
-                self.Cxy_g = RollingAverage(self.Cxy_g, rolling_average)
-                self.Qzx_g = RollingAverage(self.Qzx_g, rolling_average)
-                self.Qzy_g = RollingAverage(self.Qzy_g, rolling_average)
+            # Zero acceleration spectra below minimum sensitivity
 
+            Szz_g = np.where(Szz_g < 0.0005, 0, self.Szz_g)                
             
-                
-            # TODO Apply taper to acceleration spectra    
-                
-            # for idx in range(0, int(self.slen/2)):
+            # apply nonlinear correction
             
-                # if self.freq[idx] > taper_freq_rng[1]:
-                    # break
-
-                # if self.freq[idx] < taper_freq_rng[0]:
-                    # self.Szz_g[idx] = 0
-                    # self.Syy_g[idx] = 0
-                    # self.Sxx_g[idx] = 0
-                    # self.Cxy_g[idx] = 0
-                    # self.Qzx_g[idx] = 0
-                    # self.Qzy_g[idx] = 0
-                    # continue
-                    
-                # if np.isnan(self.Szz[idx]):
-                    # self.Szz[:] = np.nan
-                    # return
-                 
-                # self.Szz_g[idx] = self.Szz_g[idx] * ( ((self.freq[idx] - taper_freq_rng[0]) / ( taper_freq_rng[1] - taper_freq_rng[0] )) ** 2)    
-                # self.Sxx_g[idx] = self.Sxx_g[idx] * ( ((self.freq[idx] - taper_freq_rng[0]) / ( taper_freq_rng[1] - taper_freq_rng[0] )) ** 2)    
-                # self.Syy_g[idx] = self.Syy_g[idx] * ( ((self.freq[idx] - taper_freq_rng[0]) / ( taper_freq_rng[1] - taper_freq_rng[0] )) ** 2)    
-                # self.Cxy_g[idx] = self.Cxy_g[idx] * ( ((self.freq[idx] - taper_freq_rng[0]) / ( taper_freq_rng[1] - taper_freq_rng[0] )) ** 2)    
-                # self.Qzx_g[idx] = self.Qzx_g[idx] * ( ((self.freq[idx] - taper_freq_rng[0]) / ( taper_freq_rng[1] - taper_freq_rng[0] )) ** 2)    
-                # self.Qzy_g[idx] = self.Qzy_g[idx] * ( ((self.freq[idx] - taper_freq_rng[0]) / ( taper_freq_rng[1] - taper_freq_rng[0] )) ** 2)    
+            if (ccoef[0] != 0) and (ccoef[2] != 0) and (ccoef[3] != 0):
                 
-            # TODO Convert acceleration spectra to displacement spectra
+                x = self.freq
+                a, b, c, d = ccoef[0], ccoef[1], ccoef[2], ccoef[3]
+                
+                y = np.zeros([len(x)])
+                y = np.where((x - b < 0), -1, y)
+                y = np.where((x - b >= 0) & (x - b <= c), (a+1) * (np.sin(math.pi * (x - b)/(2*c)) ** 2) - 1, y)
+                y = np.where((x - b >= c) & (x - b <= c + d), a * (np.cos(math.pi * (x - b - c)/(2*d)) ** 2), y)
+                
+                correction = y
+                
+                Szz_g = Szz_g * (1 + correction)
+                
+            # convert acceleration spectra to displacement spectra
 
             factor = g**2 / ((2*pi*self.freq)**4)
 
-            self.Szz = factor * self.Szz_g 
+            self.Szz = factor * Szz_g
             self.Sxx = factor * self.Sxx_g 
             self.Syy = factor * self.Syy_g 
             self.Cxy = factor * self.Cxy_g 
             self.Qzx = factor * self.Qzx_g 
             self.Qzy = factor * self.Qzy_g 
             
-            self.Szz = np.where(self.Szz > 500, np.nan, self.Szz)
-            self.Sxx = np.where(self.Sxx > 500, np.nan, self.Sxx)
-            self.Syy = np.where(self.Syy > 500, np.nan, self.Syy)
-            self.Cxy = np.where(np.abs(self.Cxy) > 500, np.nan, self.Cxy)
-            self.Qzx = np.where(np.abs(self.Qzx) > 500, np.nan, self.Qzx)
-            self.Qzy = np.where(np.abs(self.Qzy) > 500, np.nan, self.Qzy)
-                
-                
-            # Estimate wavenumber
+            # estimate wavenumber
             
-            self.wavenumber = (2 * math.pi * self.freq[:]) ** 2 / g       
-                
-            # TODO Apply taper to displacement spectra
+            self.wavenumber = (2 * math.pi * self.freq) ** 2 / g
             
-            for idx in range(0, len(self.freq)):
+            # zero spectra below cutoff
             
-                if self.freq[idx] > taper_freq_rng[1]:
-                    break
-
-                if self.freq[idx] < taper_freq_rng[0]:
-                    self.Sxx[idx] = 0
-                    self.Syy[idx] = 0
-                    self.Szz[idx] = 0
-                    self.Cxy[idx] = 0
-                    self.Qzy[idx] = 0
-                    self.Qzx[idx] = 0
-                    continue
+            if zero_below_freq_min:
+                for idx in range(0, len(self.freq)):
+                    if self.freq[idx] < freq_min:
+                        self.Sxx[idx] = 0
+                        self.Syy[idx] = 0
+                        self.Szz[idx] = 0
+                        self.Cxy[idx] = 0
+                        self.Qzy[idx] = 0
+                        self.Qzx[idx] = 0
+                    else: 
+                        break;
                     
-                if np.isnan(self.Szz[idx]):# or np.isnan(self.Syy[idx]) or np.isnan(self.Sxx[idx]) or np.isnan(self.Cxy[idx]) or np.isnan(self.Qzx[idx]) or np.isnan(self.Qzy[idx]):
+            # apply rolling average to displacemnt spectra
+            
+            if rolling_average > 1:
+            
+                self.Szz = RollingAverage(self.Szz, rolling_average)
+                self.Syy = RollingAverage(self.Syy, rolling_average)
+                self.Sxx = RollingAverage(self.Sxx, rolling_average)
+                self.Cxy = RollingAverage(self.Cxy, rolling_average)
+                self.Qzx = RollingAverage(self.Qzx, rolling_average)
+                self.Qzy = RollingAverage(self.Qzy, rolling_average)
+                    
+            # Remove spectra with vert LF accel noise
+            
+            spectra_max_lf_g = 0.09
+            spectra_lf_cutoff_f = 0.05
+            for idx in range(0, len(self.freq)):
+                if self.freq[idx] > spectra_lf_cutoff_f:
+                    break    
+                if self.Szz_g[idx] > spectra_max_lf_g or self.Sxx_g[idx] > spectra_max_lf_g or self.Syy_g[idx] > spectra_max_lf_g:
+                # if self.Szz_g[idx] > 0.1:
                     self.Szz[:] = np.nan
                     self.Syy[:] = np.nan
                     self.Sxx[:] = np.nan
                     self.Cxy[:] = np.nan
                     self.Qzx[:] = np.nan
                     self.Qzy[:] = np.nan
-                    return
-                    
-                taper = (((self.freq[idx] - taper_freq_rng[0]) / ( taper_freq_rng[1] - taper_freq_rng[0] )) ** 2)
-                 
-                self.Szz[idx] = self.Szz[idx] * taper
-                self.Syy[idx] = self.Syy[idx] * taper
-                self.Sxx[idx] = self.Sxx[idx] * taper
-                self.Cxy[idx] = self.Cxy[idx] * taper
-                self.Qzy[idx] = self.Qzy[idx] * taper
-                self.Qzx[idx] = self.Qzx[idx] * taper
+                    break
                 
-            # TODO apply rolling average
+            # 
+                
+                
+            # Remove spectra with peaks above maximum
             
-            # N=3 
+            if spectra_max_g > 0:
+                for idx in range(0, len(self.freq)):
+                    if self.Szz_g[idx] > spectra_max_g or self.Sxx_g[idx] > spectra_max_g or self.Syy_g[idx] > spectra_max_g:
+                    # if self.Szz_g[idx] > spectra_max_g:
+                        self.Szz[:] = np.nan
+                        self.Syy[:] = np.nan
+                        self.Sxx[:] = np.nan
+                        self.Cxy[:] = np.nan
+                        self.Qzx[:] = np.nan
+                        self.Qzy[:] = np.nan
+                        break
             
-            # self.Szz = np.cumsum(np.pad(self.Szz,(N//2,N//2),'constant'))
-            
-            # self.Szz[N:] = self.Szz[N:] - self.Szz[:-N]
-            # self.Szz = self.Szz[N-1:] / N
-            # self.Szz = np.round(self.Szz, 4)
+            if spectra_max > 0:
+                for idx in range(0, len(self.freq)):
+                    if self.freq[idx] < freq_min:
+                        continue
+                    if self.Szz[idx] > spectra_max or self.Sxx[idx] > spectra_max or self.Syy[idx] > spectra_max or np.isnan(self.Szz[idx]):
+                        self.Szz[:] = np.nan
+                        self.Syy[:] = np.nan
+                        self.Sxx[:] = np.nan
+                        self.Cxy[:] = np.nan
+                        self.Qzx[:] = np.nan
+                        self.Qzy[:] = np.nan
+                        break
         
-
+            
         
             # Calculate derived fields
-            
+        
             self.moment[:]  = 0          
             
             for idx in range(0, len(self.freq)):
-            
-                if self.freq[idx] < freq_min: # exclude frequencies below cutoff
-                    continue
+                
+                # if self.freq[idx] < freq_min:   # exclude frequencies below cutoff
+                #     continue
                     
                 if np.isnan(self.Szz[idx]):     # check if spectra is bad
-                    
                     break;
                     
                 # Calculate moments    
                     
+                fstep = self.freq[1] - self.freq[0]
                 for i in range(0,3):
-                    self.moment[i] = self.moment[i] + (self.freq[idx]**i * self.Szz[idx] * self.freq[0])
+                    self.moment[i] = self.moment[i] + (self.freq[idx]**i * self.Szz[idx] * fstep)
+                    
+            for idx in range(0, len(self.freq)):
                     
                 # Caclulate peak
                 
-                if self.freq[idx] < 0.06: # exclude frequencies below cutoff
-                    continue
+                # if self.freq[idx] < freq_min: # exclude frequencies below cutoff
+                #     continue
 
                 if self.Szz[idx] > peak_zz:
                     peak_zz     = self.Szz[idx]
-                    peak_idx    = idx
-                    
+                    peak_idx    = idx    
             
             # Calculate directional spreading coeffs
             
-            self.a0 = self.Szz / ((2*math.pi*self.freq) ** 4 * math.pi)
-            self.a0 = np.where(self.a0 == 0, np.nan, self.a0)
-            self.a1 = self.Qzx / ((2*math.pi*self.freq) ** 2 * self.wavenumber * math.pi)
-            self.b1 = self.Qzy / ((2*math.pi*self.freq) ** 2 * self.wavenumber * math.pi)      
-            self.a2 = ( self.Sxx - self.Syy ) / ( self.wavenumber ** 2 * math.pi )
-            self.b2 = ( 2 * self.Cxy ) / ( self.wavenumber ** 2 * math.pi )
+            self.a0 = self.Szz / math.pi
+            self.a1 = self.Qzx / (self.wavenumber * math.pi)
+            self.b1 = self.Qzy / (self.wavenumber * math.pi)
             
-            self.r1 = np.sqrt((self.a1 ** 2) + (self.b1 ** 2)) / self.a0
-            self.r2 = np.sqrt((self.a2 ** 2) + (self.b2 ** 2)) / self.a0
-            self.theta1 = np.arctan2(self.b1, self.a1)
-            self.theta2 = np.arctan2(self.b2, self.a2)
+            mag = np.sqrt((self.a1 ** 2) + (self.b1 ** 2))
             
-
+            self.a1 = self.a1 / np.where(mag > 0, mag, np.nan)
+            self.b1 = self.b1 / np.where(mag > 0, mag, np.nan)
             
-
-
+            self.a2 = ( self.Sxx - self.Syy ) / ( (self.wavenumber ** 2) * math.pi )
+            self.b2 = ( 2 * self.Cxy ) / ( (self.wavenumber ** 2) * math.pi )
+            
+            mag = np.sqrt((self.a2 ** 2) + (self.b2 ** 2))
+            
+            self.a2 = self.a2 / np.where(mag > 0, mag, np.nan)
+            self.b2 = self.b2 / np.where(mag > 0, mag, np.nan)
+            
+            self.r1 = np.sqrt((self.a1 ** 2) + (self.b1 ** 2)) / np.where(self.a0 == 0, np.nan, self.a0)
+            self.r2 = np.sqrt((self.a1 ** 2) + (self.b1 ** 2)) / np.where(self.a0 == 0, np.nan, self.a0)
+            
+            self.theta1 = np.arctan2(self.a1, self.b1)
+            self.theta1 = np.where(np.isnan(self.theta1), 0, self.theta1)
+            self.theta2 = np.arctan2(self.a2, self.b2)
+            self.theta2 = np.where(np.isnan(self.theta2), 0, self.theta2)
             
             # Check that we have good spectra
             
@@ -884,18 +981,14 @@ class Wave:
                 self.period_avg  = self.moment[0] / self.moment[1]
                 self.period_zero = math.sqrt(self.moment[0] / self.moment[2])
                 
-                
-                # TODO Compute mean wave direction weighted average:
-                
-                
-                
+                # Compute mean wave direction weighted average:
                 
                 sum_x = 0
                 sum_y = 0
 
                 for idx in range(0, len(self.freq)):
                 
-                    if self.freq[idx] < 0.06: # exclude frequencies below cutoff
+                    if self.freq[idx] < freq_min: # exclude frequencies below cutoff
                         continue
                         
                     if self.freq[idx] > 0.6: # exclude high freq
@@ -915,8 +1008,6 @@ class Wave:
                 self.theta1         = self.theta1 * 180 / math.pi
                 self.theta2         = self.theta2 * 180 / math.pi
                 
-                
-                
                 # self.theta1         = np.round(self.theta1/15, 0)
                 # self.theta1         = self.theta1 * 15
                 
@@ -930,7 +1021,7 @@ class Wave:
                   
             else:
             
-                self.freq[:]        = np.nan
+                # self.freq[:]        = np.nan
                 self.Szz[:]         = np.nan
                 self.Syy[:]         = np.nan
                 self.Sxx[:]         = np.nan
@@ -944,10 +1035,13 @@ class Wave:
                 self.b1[:]          = np.nan
                 self.b2[:]          = np.nan
                 
+                self.wavenumber[:]  = np.nan
+                
                 self.r1[:]          = np.nan
                 self.r2[:]          = np.nan
-                self.theta1[:]      = np.nan
-                self.theta2[:]      = np.nan
+                self.theta1[:]      = 0
+                self.theta2[:]      = 0
+                self.mwd            = 0
             
                 self.moment[:]      = np.nan
                 
@@ -956,19 +1050,23 @@ class Wave:
                 self.period_peak    = np.nan            # Dominant period         
                 self.period_avg     = np.nan            # Average period
                 self.period_zero    = np.nan            # Zero-crossing
-
-            
-
-
+                
             # Convert arrays to lists
         
-            self.freq           = self.freq.tolist()
-            self.Szz_g          = self.Szz_g.tolist()
-            self.Syy_g          = self.Syy_g.tolist()
-            self.Sxx_g          = self.Sxx_g.tolist()
-            self.Cxy_g          = self.Cxy_g.tolist()
-            self.Qzx_g          = self.Qzx_g.tolist()
-            self.Qzy_g          = self.Qzy_g.tolist()
+            self.raw_freq       = np.round(self.raw_freq, 3).tolist()
+            self.raw_Szz_g      = np.round(self.raw_Szz_g, 4).tolist()
+            self.raw_Syy_g      = np.round(self.raw_Syy_g, 4).tolist()
+            self.raw_Sxx_g      = np.round(self.raw_Sxx_g, 4).tolist()
+            self.raw_Cxy_g      = np.round(self.raw_Cxy_g, 4).tolist()
+            self.raw_Qzx_g      = np.round(self.raw_Qzx_g, 4).tolist()
+            self.raw_Qzy_g      = np.round(self.raw_Qzy_g, 4).tolist()
+            self.freq           = np.round(self.freq, 3).tolist()
+            self.Szz_g          = np.round(self.Szz_g, 4).tolist()
+            self.Syy_g          = np.round(self.Syy_g, 4).tolist()
+            self.Sxx_g          = np.round(self.Sxx_g, 4).tolist()
+            self.Cxy_g          = np.round(self.Cxy_g, 4).tolist()
+            self.Qzx_g          = np.round(self.Qzx_g, 4).tolist()
+            self.Qzy_g          = np.round(self.Qzy_g, 4).tolist()
             self.Szz            = np.round(self.Szz, 3).tolist()
             self.Syy            = np.round(self.Syy, 3).tolist()
             self.Sxx            = np.round(self.Sxx, 3).tolist()
@@ -976,13 +1074,13 @@ class Wave:
             self.Qzx            = np.round(self.Qzx, 3).tolist()
             self.Qzy            = np.round(self.Qzy, 3).tolist()
             
-            self.wavenumber     = np.round(self.wavenumber, 6).tolist()
+            self.wavenumber     = np.round(self.wavenumber, 5).tolist()
             
-            self.a0             = self.a0.tolist()
-            self.a1             = self.a1.tolist()
-            self.a2             = self.a2.tolist()
-            self.b1             = self.b1.tolist()
-            self.b2             = self.b2.tolist()
+            self.a0             = np.round(self.a0, 4).tolist()
+            self.a1             = np.round(self.a1, 4).tolist()
+            self.a2             = np.round(self.a2, 4).tolist()
+            self.b1             = np.round(self.b1, 4).tolist()
+            self.b2             = np.round(self.b2, 4).tolist()
             
             self.r1             = np.round(self.r1, 3).tolist()
             self.r2             = np.round(self.r2, 3).tolist()
@@ -990,13 +1088,14 @@ class Wave:
             self.theta2         = np.round(self.theta2, 0).astype(int).tolist()
             self.mwd            = np.round(self.mwd, 0).astype(int).tolist()
         
-            self.moment         = np.round(self.moment, 6).tolist()
+            self.moment         = np.round(self.moment, 5).tolist()
             
             self.swh            = np.round(self.swh, 2).tolist()
             
-            self.period_peak    = float(np.round(self.period_peak, 2)) # Dominant period         
-            self.period_avg     = float(np.round(self.period_avg, 2))  # Average period
-            self.period_zero    = float(np.round(self.period_zero, 2)) # Zero-crossing
+            self.period_peak    = float(np.round(self.period_peak, 1)) # Dominant period         
+            self.period_avg     = float(np.round(self.period_avg, 1))  # Average period
+            self.period_zero    = float(np.round(self.period_zero, 1)) # Zero-crossing
+            
             
         except: 
         
