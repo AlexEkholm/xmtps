@@ -32,6 +32,11 @@
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
+// system libraries
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+
 /* Definitions */
 
 #if !defined(BUILD_NUMBER)
@@ -350,8 +355,15 @@ public:
             // Create lock file directory, if necessary.
             GetDirectoryPathFromString(pid_file_path_.parent_path().string(), true);
 
-            // Check if lock file already exists.
-            if(exists(pid_file_path_)) {
+            /* Create the lock file exclusively, so two instances starting at the same time cannot
+             * both acquire the lock. */
+            int fd = ::open(pid_file_path_.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0644);
+            if(fd < 0) {
+
+                if(errno != EEXIST)
+                    EXC_THROW("Failed to create PID file: " + pid_file_path_.string() + ": "
+                              + strerror(errno));
+
                 // Get PID of previous lock.
                 ifstream ifs(pid_file_path_);
                 ifs >> pid;
@@ -362,12 +374,17 @@ public:
                 oss << "PID file already exists: " << pid_file_path_ << endl;
                 oss << "\tPID: " << pid;
                 EXC_THROW(oss.str());
-            } else {
-                // Write PID to lock file.
-                ofstream ofs(pid_file_path_);
-                ofs << (pid = getpid());
-                ofs.flush();
-                ofs.close();
+            }
+
+            // Write PID to lock file.
+            ostringstream oss_pid;
+            oss_pid << (pid = getpid());
+            const string pid_str = oss_pid.str();
+            ssize_t num_written = ::write(fd, pid_str.data(), pid_str.size());
+            ::close(fd);
+            if(num_written != (ssize_t) pid_str.size()) {
+                ::unlink(pid_file_path_.c_str());
+                EXC_THROW("Failed to write PID file: " + pid_file_path_.string() + "!");
             }
 
             // Check the lock.
@@ -426,8 +443,18 @@ public:
         try {
             lout() << "Releasing run-time lock...";
 
-            // Delete run-time lock file.
+            // Delete run-time lock file, but only if it belongs to this process.
             if(exists(pid_file_path_)) {
+                __pid_t pid = 0;
+                ifstream ifs(pid_file_path_);
+                ifs >> pid;
+                ifs.close();
+                if(pid != getpid()) {
+                    lwrn() << "Not removing PID file owned by another process (PID " << pid
+                           << "): " << pid_file_path_;
+                    return;
+                }
+
                 ldbg() << "Removing PID file: " << pid_file_path_ << " ...";
                 remove(pid_file_path_);
                 if(exists(pid_file_path_))
