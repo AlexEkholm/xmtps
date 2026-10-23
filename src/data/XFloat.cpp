@@ -1926,16 +1926,28 @@ int XFloatDiveData::DecodeMailMessageData(shared_ptr<XFloatMailMessage>& msg) {
     }
 
     // Assign the mail message.
-    if(AssignMailMessage(msg))
+    switch(AssignMailMessage(msg)) {
 
-      // Ignore duplicate mail messages.
-      return 0;
+      case 1:
 
-    // Decode the message data.
-    DecodeXMsgData(msg->sbd_data(), xmsg_id_types);
+        // Ignore duplicate mail messages.
+        return 0;
 
-    // Assign the xmsg_id_types.
-    msg->set_xmsg_id_types(xmsg_id_types);
+      case 2:
+
+        // Do not decode the SBD data of a retransmitted message again.
+        break;
+
+      default:
+
+        // Decode the message data.
+        DecodeXMsgData(msg->sbd_data(), xmsg_id_types);
+
+        // Assign the xmsg_id_types.
+        msg->set_xmsg_id_types(xmsg_id_types);
+
+        break;
+    }
 
     // Ensure IMEI is correct.
     if(parent_instrument()->id_imei() != msg->id_imei())

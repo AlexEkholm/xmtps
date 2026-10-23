@@ -321,10 +321,14 @@ vector<int> XFloatDiveData::GenerateOrderedMomsnList() const {
  *
  *  @param[in]  x       The mail message to assign.
  *
- *  @return     0 on successful assignment of the mail message to this dive data object or 1 if
- *              a duplicate mail message UID is encountered.
+ *  @return     0 on successful assignment of the mail message to this dive data object, 1 if
+ *              a duplicate mail message UID is encountered, or 2 if the mail message was assigned
+ *              but is a retransmission of an already assigned message (identical SBD data), so
+ *              its SBD data should not be decoded again.
  */
 int XFloatDiveData::AssignMailMessage(const shared_ptr<XFloatMailMessage>& x) {
+
+    int status = 0;
 
     try {
 
@@ -335,17 +339,31 @@ int XFloatDiveData::AssignMailMessage(const shared_ptr<XFloatMailMessage>& x) {
         if(!x)
             EXC_THROW("NULL pointer to mail message object.");
 
+        const vector<uint8_t> sbd_data(x->sbd_data());
+
         // Iterate to emplacement position.
         auto it = mail_messages_.begin();
-        for(; it < mail_messages_.end(); ++it)
+        for(auto dup = mail_messages_.begin(); dup < mail_messages_.end(); ++dup)
 
             // Check for duplicate message IDs.
-            if(x->id_msg() == (*it)->id_msg()) {
+            if(x->id_msg() == (*dup)->id_msg()) {
 
                 ldbg() << "Ignoring mail message with duplicate ID: " << x->id_msg();
                 return 1;
 
-            } else if(x->id_sbd_momsn() < (*it)->id_sbd_momsn())
+            /* Floats sometimes resend a packet unchanged under a new MOMSN. The copy is still
+             * assigned (it carries its own Iridium position), but decoding its SBD data again
+             * would fail with duplicate X-Message indices. */
+            } else if(!status && !sbd_data.empty() && sbd_data == (*dup)->sbd_data()) {
+
+                ldbg() << "Mail message is a retransmission (MOMSN " << x->id_sbd_momsn()
+                       << ", identical SBD data to MOMSN " << (*dup)->id_sbd_momsn() << ").";
+                status = 2;
+
+            }
+
+        for(; it < mail_messages_.end(); ++it)
+            if(x->id_sbd_momsn() < (*it)->id_sbd_momsn())
 
                 // Emplacement position found.
                 break;
@@ -367,7 +385,7 @@ int XFloatDiveData::AssignMailMessage(const shared_ptr<XFloatMailMessage>& x) {
 
     }CATCH_BLOCK("Failed to assign mail message to dive data object!")
 
-    return 0;
+    return status;
 }
 
 
