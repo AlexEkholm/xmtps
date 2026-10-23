@@ -2073,7 +2073,7 @@ def WriteHtmlFile(float_id):
                     with tag('a', href='#prof'):
                         text('Profile Data')
                     doc.stag('br') 
-                    if 'wave' in float_aggregate_data and len(float_aggregate_data['wave']) > 1:
+                    if 'wave' in float_aggregate_data and len(float_aggregate_data['wave']) > 0:
                         with tag('a', href='#wave'):
                             text('Wave Data')
                         doc.stag('br') 
@@ -2177,8 +2177,8 @@ def WriteHtmlFile(float_id):
                                     
                         # Wave data plots
                         
-                        if 'wave' in float_aggregate_data and len(float_aggregate_data['wave']) > 1:
-                        
+                        if 'wave' in float_aggregate_data and len(float_aggregate_data['wave']) > 0:
+
                             with tag('h2', id='wave'):
                                 text('Wave Data')
                                 
@@ -6876,7 +6876,7 @@ def WritePlotFiles():
                             drift_sigma0_avg = go.Figure(
                                 layout=dict(
                                     showlegend = False,
-                                    title = dict(text='{}: Average Drift In-Situ Density'.format(float_id)),
+                                    title = dict(text='{}: Average Drift Potential Density'.format(float_id)),
                                     xaxis=dict(
                                         title='Dive',
                                         # autorange=False,
@@ -11869,7 +11869,7 @@ def WritePlotImageFiles(
             
             # Generate path
                 
-            dpath_float = os.path.join(args.dpath_out, '{}'.format(float_id))
+            dpath_float = os.path.join(args.plot_output, '{}'.format(float_id))
             dpath_float = re.sub('\\\\', '/', dpath_float)
             
             if not os.path.isdir(dpath_float):
@@ -12269,7 +12269,7 @@ try:
     
     if hasattr(args, 'plot_output') and args.plot_output is not None and len(args.plot_output):
         if not os.path.isdir(args.plot_output):
-            logger.error('Invalid plot output directory: ' + args.output)
+            logger.error('Invalid plot output directory: ' + args.plot_output)
         else: 
             WritePlotFiles()
 
