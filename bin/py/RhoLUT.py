@@ -20,7 +20,7 @@ MAX_SALN = S[len(S)-1]
 
 MIN_SALN = S[0]
 
-MAX_TEMP = T[len(S)-1]
+MAX_TEMP = T[len(T)-1]
 
 MIN_TEMP = T[0]
 
@@ -3809,7 +3809,7 @@ def GetRhoFromLut(saln, temp, pres):
     if pres > MAX_PRES or np.isnan(pres):
         return None
     if pres < MIN_PRES:
-        pres = 0
+        pres = MIN_PRES
 
     return round(_GetRhoFromLut([saln, temp, pres])[0], 3)
     
@@ -3823,7 +3823,7 @@ def GetSigma0FromLut(saln, temp, pres):
     if pres > MAX_PRES or np.isnan(pres):
         return None
     if pres < MIN_PRES:
-        pres = 0
+        pres = MIN_PRES
 
     return round(_GetSigma0FromLut([saln, temp, pres])[0], 3)
     
