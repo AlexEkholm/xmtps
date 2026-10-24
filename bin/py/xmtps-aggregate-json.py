@@ -240,7 +240,7 @@ def AggregateDiveData():
                                                  'cep_km', 
                                                  'num_pos', ]) ,                   
                     'profile':  
-                        pd.DataFrame(columns = [ 'dive', 'pres', 'temp', 'tcnd', 'saln', 'dens', 'sigma0', ]), 
+                        pd.DataFrame(columns = [ 'dive', 'pres', 'temp', 'tcnd', 'saln', 'saln_corr', 'dens', 'sigma0', ]),
                     'profile_position': 
                         pd.DataFrame(columns = [ 'dive', 'dt_epoch', 'dt_str', 'lat', 'lon', 'cep_km', 'src' ]),
                     'pump':      
@@ -712,6 +712,7 @@ def AggregateDiveData():
                                 'temp':   np.array(profile_data.temp, dtype='float'),
                                 'tcnd':   np.array(profile_data.tcnd, dtype='float'),
                                 'saln':   np.array(profile_data.saln, dtype='float'),
+                                'saln_corr': np.array(getattr(profile_data, 'saln_corr', [np.nan] * profile_data.n), dtype='float'),
                                 'dens':   np.array(profile_data.dens, dtype='float'),
                                 'sigma0': np.array(profile_data.sigma0, dtype='float'),
                             }

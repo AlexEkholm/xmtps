@@ -168,8 +168,8 @@ public:
         ostringstream os;
 
         try {
-            static const format fmt("%10.2f %10d %10.2f %10.3f %10.2f %10.2f");
-            os << format(fmt) % PressureValue(pg, po, pres_corr) % pump_duration_sec_ % pump_voltage_v() % pump_current_a()
+            static const format fmt("%10s %10d %10.2f %10.3f %10.2f %10.2f");
+            os << format(fmt) % XMsgFormatPressure(PressureValue(pg, po, pres_corr)) % pump_duration_sec_ % pump_voltage_v() % pump_current_a()
             % case_vac_before_pumping_inhg() % case_vac_after_pumping_inhg();
         }CATCH_BLOCK("Failed to generate listing string for pump counts object!")
 

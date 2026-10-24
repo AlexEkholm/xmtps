@@ -297,11 +297,11 @@ string XFloatDiveData::GeneratePressureCorrectionListingString() const {
        const format fmt("PRC %5d %4d %4s "
            "%4d %5d "
            "%5d "
-           "%15.3f");
+           "%15s");
        os << format(fmt) % id_instrument() % id_dive() % midx++ //
            % pres_offs_num_samples() % pres_offs_num_dives() //
            % (int) is_pres_offs_valid() //
-           % pres_offs();
+           % XMsgFormatPressure(pres_offs());
      }
 
    }CATCH_BLOCK("Failed to generate pressure correction listing string!")

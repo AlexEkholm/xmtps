@@ -877,7 +877,7 @@ public:
                 static const format fmt18("#   %5s %4s %4s "
                         "%15s");
                 static const format fmt19("E0A %05d %4d %4d "
-                        "%15.3f");
+                        "%15s");
                 os << format(fmt17) % "SN" % "dive" % "midx" //
                            % "presOffset" //
                    << endl;
@@ -885,7 +885,7 @@ public:
                            % "(dBar)"
                    << endl;
                 os << format(fmt19) % id_instrument() % id_dive() % 4 // midx
-                        % GetDecodedBitPressureOffset() //
+                        % XMsgFormatPressure(GetDecodedBitPressureOffset()) //
                    << endl;
 
                 // Minor Index 5.
@@ -992,7 +992,7 @@ public:
                 static const format fmt18("#   %5s %4s %4s "
                         "%15s");
                 static const format fmt19("E0A %05d %4d %4d "
-                        "%15.3f");
+                        "%15s");
                 os << format(fmt17) % "SN" % "dive" % "midx" //
                            % "presOffset" //
                    << endl;
@@ -1000,7 +1000,7 @@ public:
                            % "(dBar)"
                    << endl;
                 os << format(fmt19) % id_instrument() % id_dive() % midx++ // midx
-                        % GetDecodedBitPressureOffset() //
+                        % XMsgFormatPressure(GetDecodedBitPressureOffset()) //
                    << endl;
 
                 {   os << "# --- Profile - First Sample ------------------------------------------"
@@ -1018,7 +1018,7 @@ public:
                         "%12s %12s");
                     static const format fmt3(
                         "E0A %05d %4d %4d "
-                        "   %12.3f %12d "
+                        "   %12s %12d "
                         "%12.3f %12d "
                         "%12.3f %12d");
                     os << format(fmt1)
@@ -1035,7 +1035,7 @@ public:
                         << endl;
                     os << format(fmt3)
                         % id_instrument() % id_dive() % midx++
-                        % prof_raw_sample_first_pres_dbar(pg, po) % prof_raw_sample_first_pres_counts()
+                        % XMsgFormatPressure(prof_raw_sample_first_pres_dbar(pg, po)) % prof_raw_sample_first_pres_counts()
                         % prof_raw_sample_first_temp_degc(tg, to) % prof_raw_sample_first_temp_counts()
                         % prof_raw_sample_first_saln_psu(sg, so)  % prof_raw_sample_first_saln_counts()
                         << endl;
@@ -1056,7 +1056,7 @@ public:
                         << endl;
                     os << format(fmt3)
                         % id_instrument() % id_dive() % midx++
-                        % prof_raw_sample_last_pres_dbar(pg, po) % prof_raw_sample_last_pres_counts()
+                        % XMsgFormatPressure(prof_raw_sample_last_pres_dbar(pg, po)) % prof_raw_sample_last_pres_counts()
                         % prof_raw_sample_last_temp_degc(tg, to) % prof_raw_sample_last_temp_counts()
                         % prof_raw_sample_last_saln_psu(sg, so)  % prof_raw_sample_last_saln_counts()
                         << endl;
@@ -1211,7 +1211,7 @@ public:
                 static const format fmt18("#   %5s %4s %4s "
                         "%15s");
                 static const format fmt19("E0A %05d %4d %4d "
-                        "%15.3f");
+                        "%15s");
                 os << format(fmt17) % "SN" % "dive" % "midx" //
                            % "presOffset" //
                    << endl;
@@ -1219,7 +1219,7 @@ public:
                            % "(dBar)"
                    << endl;
                 os << format(fmt19) % id_instrument() % id_dive() % midx++ // midx
-                        % GetDecodedBitPressureOffset() //
+                        % XMsgFormatPressure(GetDecodedBitPressureOffset()) //
                    << endl;
 
                 {   os << "# --- Profile - First Sample ------------------------------------------"
@@ -1237,7 +1237,7 @@ public:
                         "%12s %12s");
                     static const format fmt3(
                         "E0A %05d %4d %4d "
-                        "   %12.3f %12d "
+                        "   %12s %12d "
                         "%12.3f %12d "
                         "%12.3f %12d");
                     os << format(fmt1)
@@ -1254,7 +1254,7 @@ public:
                         << endl;
                     os << format(fmt3)
                         % id_instrument() % id_dive() % midx++
-                        % prof_raw_sample_first_pres_dbar(pg, po) % prof_raw_sample_first_pres_counts()
+                        % XMsgFormatPressure(prof_raw_sample_first_pres_dbar(pg, po)) % prof_raw_sample_first_pres_counts()
                         % prof_raw_sample_first_temp_degc(tg, to) % prof_raw_sample_first_temp_counts()
                         % prof_raw_sample_first_saln_psu(sg, so)  % prof_raw_sample_first_saln_counts()
                         << endl;
@@ -1275,7 +1275,7 @@ public:
                         << endl;
                     os << format(fmt3)
                         % id_instrument() % id_dive() % midx++
-                        % prof_raw_sample_last_pres_dbar(pg, po) % prof_raw_sample_last_pres_counts()
+                        % XMsgFormatPressure(prof_raw_sample_last_pres_dbar(pg, po)) % prof_raw_sample_last_pres_counts()
                         % prof_raw_sample_last_temp_degc(tg, to) % prof_raw_sample_last_temp_counts()
                         % prof_raw_sample_last_saln_psu(sg, so)  % prof_raw_sample_last_saln_counts()
                         << endl;

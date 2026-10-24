@@ -1075,7 +1075,7 @@ class XAlamoBit2:
                 "%13s %13s %13s %13s %13s");
             static const format fmt3(
                 "E0%c %5d %4d %4d %6d "
-                "   0x%08X    0x%08X %13.3f %13.3f %13.3f");
+                "   0x%08X    0x%08X %13s %13s %13s");
             os << format(fmt1)
                 % "SN" % "dive" % "midx" % "BITVer"
                 % "errors" % "status" % "presPreCal" % "presOffset" % "presPostCal"
@@ -1086,8 +1086,8 @@ class XAlamoBit2:
                << endl;
             os << format(fmt3)
                 % (bit_passed() ? '5' : '6') % whoi % dive % midx++ % (int) bit_version()
-                % ctd_errors() %ctd_status()  % pres_before_cal() % pres_offset()
-                % pres_after_cal()
+                % ctd_errors() %ctd_status()  % XMsgFormatPressure(pres_before_cal())
+                % XMsgFormatPressure(pres_offset()) % XMsgFormatPressure(pres_after_cal())
                << endl;
           }
 

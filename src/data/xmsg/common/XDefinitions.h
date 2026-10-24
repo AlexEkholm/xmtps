@@ -167,6 +167,24 @@
 /** The default/bad/invalid pressure sensor fill value. */
 #define XMSG_SENS_BAD_PRES                      (-9.999)
 
+/** Format a pressure for listing files.
+ *
+ *  Pressures are listed with two decimal places. The fill value is still listed as -9.999, so it
+ *  stays distinguishable from a measured value.
+ *
+ *  @param[in]  p       The pressure, in dBar.
+ *
+ *  @return     The formatted pressure (without padding; use a %Ns field for the column width).
+ */
+inline std::string XMsgFormatPressure(double p) {
+    std::ostringstream os;
+    if(p > XMSG_SENS_BAD_PRES - 0.0005 && p < XMSG_SENS_BAD_PRES + 0.0005)
+        os << "-9.999";
+    else
+        os << std::fixed << std::setprecision(2) << p;
+    return os.str();
+}
+
 /** The default/bad/invalid salinity sensor fill value. */
 #define XMSG_SENS_BAD_SALN                      (-9.999)
 

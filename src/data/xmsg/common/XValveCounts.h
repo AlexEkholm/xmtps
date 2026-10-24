@@ -160,10 +160,10 @@ public:
 
         try {
 
-            static const format fmt("%10.2f "
+            static const format fmt("%10s "
                     "%10d "
                     "%10.2f %10.2f");
-            os << format(fmt) % PressureValue(pg, po, pres_correction) //
+            os << format(fmt) % XMsgFormatPressure(PressureValue(pg, po, pres_correction)) //
                     % valve_duration_sec() //
                     % case_vac_before_pumping_inhg() % case_vac_after_pumping_inhg();
 

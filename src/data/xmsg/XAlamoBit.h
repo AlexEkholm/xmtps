@@ -558,7 +558,7 @@ public:
             // Minor index 1.
             static const format fmt3("#   %5s %4s %4s %7s   %8s %8s   %7s %8s   %7s %8s");
             static const format fmt4("#   %5s %4s %4s %7s   %8s %9s   %7s %8s   %7s %8s");
-            static const format fmt5("E0%c %5d %4d %4d %7d   %8.3f %8d   %7.3f %8d   %7.3f %8d");
+            static const format fmt5("E0%c %5d %4d %4d %7d   %8s %8d   %7.3f %8d   %7.3f %8d");
             os << "# --------------------------------------------------------------------------------------------------"
                << endl;
             os << format(fmt3) % "SN" % "dive" % "midx" % "BITTime" % "pres" % "pres" % "temp"
@@ -568,7 +568,7 @@ public:
                        % "(counts)" % "(PSU)" % "(counts)"
                << endl;
             os << format(fmt5) % (is_bit_passed() ? '5' : '6') % whoi % dive % 1 % bit_duration()
-                       % GetDecodedBitPressure(pg, po) % bit_pressure()
+                       % XMsgFormatPressure(GetDecodedBitPressure(pg, po)) % bit_pressure()
                        % GetDecodedBitTemperature(tg, to) % bit_temperature()
                        % GetDecodedBitSalinity(sg, so) % bit_salinity()
                << endl;
@@ -714,8 +714,8 @@ public:
                     "%15s"
                     );
             static const format fmt26("E0%c %5d %4d %4d "
-                    "%15.3f %15d "
-                    "%15.3f %15d "
+                    "%15s %15d "
+                    "%15s %15d "
                     "%15.3d"
                     );
             os << "# --------------------------------------------------------------------------------------------------"
@@ -732,8 +732,8 @@ public:
                << endl;
             os << format(fmt26) % (is_bit_passed() ? '5' : '6') % whoi % dive
                        % 2 // midx
-                       % GetDecodedBitPressureAfterOffset(pg, po) % pres_counts_after_offset_reset() //
-                       % GetDecodedBitPressureBeforeOffset(pg, po) % pres_counts_before_offset_reset() //
+                       % XMsgFormatPressure(GetDecodedBitPressureAfterOffset(pg, po)) % pres_counts_after_offset_reset() //
+                       % XMsgFormatPressure(GetDecodedBitPressureBeforeOffset(pg, po)) % pres_counts_before_offset_reset() //
                        % GetDecodedBitPressureOffset() //
                << endl;
 

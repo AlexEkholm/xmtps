@@ -255,12 +255,12 @@ public:
           }
           { // Minor index 1.
             static const format fmt1("#   %5s %4s %4s %20s %9s");
-            static const format fmt2("#   %5s %4s %4s %20s %9.2f");
+            static const format fmt2("#   %5s %4s %4s %20s %9s");
             static const format fmt3("E09 %5d %4d %4d %20s %9s");
             os << format(fmt1) % "SN" % "dive" % "midx" % "start-of-fall" % "fallP" << endl;
             os << format(fmt2) % "" % "" % "" % "" % "(dBar)" << endl;
             os << format(fmt3) % id_instrument() % id_dive() % 1
-                % GenerateIso8601String(fall_start_time()) % fall_start_pres_dbar(pg, po);
+                % GenerateIso8601String(fall_start_time()) % XMsgFormatPressure(fall_start_pres_dbar(pg, po));
           }
 
         }

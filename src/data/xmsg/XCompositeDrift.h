@@ -27,6 +27,7 @@
 
 // local
 #include "AbstractXSensorDataComposite.h"
+#include "../../utility/DateUtils.h"
 
 namespace util {
 namespace xmsg {
@@ -129,64 +130,25 @@ public:
         return t;
     }
 
-    /** Generate the drift sample time listing (DTM/dtm lines).
+    /** Do the drift sample times line up with the drift samples?
      *
-     *  @param[in]  id_inst     The instrument serial number.
-     *  @param[in]  id_dive     The dive number.
-     *  @param[in]  drift_start The drift state start time, or not_a_date_time if unknown.
-     *
-     *  @throw      util::log::MessageException if an error occurs.
-     *
-     *  @return     The listing string.
+     *  @return     TRUE if there is one time per drift sample and the time message indices are
+     *              contiguous.
      */
-    const string GenerateTimeListingString(int id_inst, int id_dive, const ptime& drift_start) const {
-        ostringstream os;
+    bool IsTimeDataComplete() const {
 
-        try {
+        // Get an exclusive lock.
+        lock_guard<recursive_mutex> guard(mutex_);
 
-            // Get an exclusive lock.
-            lock_guard<recursive_mutex> guard(mutex_);
+        if(time_messages_.empty() || SampleTimes().size() != max_num_samples())
+            return false;
 
-            const vector<int32_t> t = SampleTimes();
+        int idx = time_messages_.front()->xmsg_index();
+        for(const auto& msg : time_messages_)
+            if(msg->xmsg_index() != idx++)
+                return false;
 
-            static const format fmt1("DTM %5d %4d %11d");
-            os << "#      SN dive  numSamples"
-               << endl
-               << format(fmt1) % id_inst % id_dive % t.size();
-
-            // The times must line up with the drift samples, and the indices must be contiguous.
-            bool complete = !t.empty() && t.size() == max_num_samples();
-            int idx = time_messages_.empty() ? 0 : time_messages_.front()->xmsg_index();
-            for(const auto& msg : time_messages_)
-                complete = complete && msg->xmsg_index() == idx++;
-
-            if(!complete) {
-                os << endl << "#   (Incomplete Drift Time Data)";
-                return os.str();
-            }
-
-            static const format fmt2("dtm %5d %4d %11d %11d %20s");
-            for(size_t i = 0; i < t.size(); i++) {
-                if(i % 50 == 0) {
-                    os << endl
-                       << "#---------------------------------------------------------------------------------------------------"
-                       << endl
-                       << "#      SN dive   sampleIdx     elapsed            date/time"
-                       << endl
-                       << "#                                (sec)"
-                       ;
-                }
-
-                string datetime = "-";
-                if(!drift_start.is_special())
-                    datetime = bpt::to_iso_extended_string(drift_start + bpt::seconds(t.at(i))) + "Z";
-
-                os << endl << format(fmt2) % id_inst % id_dive % i % t.at(i) % datetime;
-            }
-
-        }CATCH_BLOCK("Failed to generate listing string for drift time data!")
-
-        return os.str();
+        return true;
     }
 
     /** Generate a listing string representation of the this composite sensor data object.
@@ -201,6 +163,8 @@ public:
      *  @param[in]  to      The temperature sensor offset, in degC.
      *  @param[in]  pc      The pressure correction, in dBar, to be subtracted computed pressure
      *                      value.
+     *  @param[in]  drift_start The drift state start time, printed on the D line when the float
+     *                      sends drift sample times, or not_a_date_time if unknown.
      *
      *  @throw      log::MessageException if an error occurs while generating the listing string.
      *
@@ -210,7 +174,10 @@ public:
      *              object by any other thread. Any thread that does attempt to access or modify
      *              this object will block until the lock is released.
      *
-     *  @return     A listing string representation of this composite sensor data object.
+     *  @return     A listing string representation of this composite sensor data object. When the
+     *              drift sample times are complete, the section uses the fall/rise layout: the D
+     *              line gives the drift start time, and each d line has the time (+seconds since
+     *              the drift start) before the sensor values.
      */
     const string GenerateListingString(
             int id_inst,
@@ -221,13 +188,50 @@ public:
             uint16_t so,
             uint16_t tg,
             uint16_t to,
-            float pc) const {
+            float pc,
+            const ptime& drift_start) const {
         ostringstream os;
 
         try {
 
             // Get an exclusive lock.
             lock_guard<recursive_mutex> guard(mutex_);
+
+            // Add the sample times when the float sends them and they line up with the samples.
+            const bool times = IsTimeDataComplete();
+            const vector<int32_t> t = times ? SampleTimes() : vector<int32_t>();
+
+            if(times) {
+
+                /* With sample times, use the fall/rise layout: one header, a D line with the
+                 * drift start time, and d lines with the time (+seconds since the drift start)
+                 * before the sensor values. */
+
+                static const format fmt0("#   %5s %4s %4s %20s %9s %7s %7s");
+                static const format fmt1("D   %5d %4d %4d %20s");
+                static const format fmt2("d   %5d %4d %4d %+20d %9s %7.3f %7.3f");
+
+                os << format(fmt0) % "SN" % "dive" % "nSam" % "time" % "pres" % "temp" % "saln"
+                   << endl
+                   << format(fmt0) % "" % "" % "" % "(UTC/+sec)" % "(dBar)" % "(degC)" % "(PSU)"
+                   << endl
+                   << format(fmt1) % id_inst % id_dive % max_num_samples()
+                       % util::date::DateUtils::GenerateIso8601String(drift_start);
+
+                if(!IsDataComplete()) {
+                    os << endl
+                       << "#   (Incomplete Drift Data)";
+                    return os.str();
+                }
+
+                for(size_t i = 0; i < max_num_samples(); i++)
+                    os << endl
+                       << format(fmt2) % id_inst % id_dive % i % t.at(i)
+                           % XMsgFormatPressure(SamplePresAsFloat(i, pg, po, pc))
+                           % SampleTempAsFloat(i, tg, to) % SampleSalnAsFloat(i, sg, so);
+
+                return os.str();
+            }
 
             // Print the header line.
 //            static const format fmt1("#   %5s %4s %11s");
@@ -244,10 +248,14 @@ public:
                 return os.str();
             }
 
+            if(HasTimeData())
+                os << endl
+                   << "#   (Incomplete Drift Time Data)";
+
             {
 //              static const format fmt1("#   %5s %4s %11s %11s %11s %11s");
 //              static const format fmt2("#    %5s %4s %11s %11s %12s %11s");
-              static const format fmt3("d   %5d %4d %11d %11.3f %11.3f %11.3f");
+              static const format fmt3("d   %5d %4d %11d %11s %11.3f %11.3f");
 
               // Iterate over the sensor data samples.
               for(size_t i = 0; i < max_num_samples(); i++) {
@@ -263,7 +271,7 @@ public:
                 }
 
                 os << endl
-                   << format(fmt3) % id_inst % id_dive % i % SamplePresAsFloat(i, pg, po, pc)
+                   << format(fmt3) % id_inst % id_dive % i % XMsgFormatPressure(SamplePresAsFloat(i, pg, po, pc))
                        % SampleTempAsFloat(i, tg, to) % SampleSalnAsFloat(i, sg, so);
               }
             }
@@ -271,6 +279,26 @@ public:
         }CATCH_BLOCK("Failed to generate listing string for composite profile data (binned)!")
 
         return os.str();
+    }
+
+    /** Generate a listing string representation of this composite drift data object, without
+     *  sample date/times.
+     *
+     *  @see        GenerateListingString(int, int, uint16_t, uint16_t, uint16_t, uint16_t,
+     *              uint16_t, uint16_t, float, const ptime&) const
+     */
+    const string GenerateListingString(
+            int id_inst,
+            int id_dive,
+            uint16_t pg,
+            uint16_t po,
+            uint16_t sg,
+            uint16_t so,
+            uint16_t tg,
+            uint16_t to,
+            float pc) const {
+        return GenerateListingString(id_inst, id_dive, pg, po, sg, so, tg, to, pc,
+                                     ptime(not_a_date_time));
     }
 
     /** Generate a PHY entry string from this composite drift data object.

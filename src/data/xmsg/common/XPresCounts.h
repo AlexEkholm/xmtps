@@ -98,9 +98,9 @@ public:
     const string GenerateListingString(uint16_t pg, uint16_t po, float pc) const {
         ostringstream os;
         try {
-            const format fmt("%+20d %8.3f");
+            const format fmt("%+20d %8s");
             os << format(fmt) % (int) elapsed_seconds_since_reference_time_
-                    % PressureValue(pg, po, pc);
+                    % XMsgFormatPressure(PressureValue(pg, po, pc));
         }CATCH_BLOCK("Failed to generate listing string for pressure-counts object!")
         return os.str();
     }

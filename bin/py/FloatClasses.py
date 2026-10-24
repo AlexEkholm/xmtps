@@ -525,6 +525,7 @@ class Profile:
         self.tcnd[:]   = np.nan
         self.saln      = np.empty(num_bins)
         self.saln[:]   = np.nan
+        self.saln_corr = np.full(num_bins, np.nan)   # dynamically corrected salinity, if sent
         self.dens      = np.empty(num_bins)
         self.dens[:]   = np.nan
         self.sigma0    = np.empty(num_bins)
@@ -537,9 +538,10 @@ class Profile:
         self.temp   = self.temp.tolist()
         self.tcnd   = self.tcnd.tolist()
         self.saln   = self.saln.tolist()
+        self.saln_corr = self.saln_corr.tolist()
         self.dens   = self.dens.tolist()
         self.sigma0 = self.sigma0.tolist()
-        
+
 class Pump:
     
     def __init__(self):

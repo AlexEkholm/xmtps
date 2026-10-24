@@ -224,8 +224,20 @@ def ProcessDirectory(dpath):
         
     # logger.debug('Processed directory: ' + dpath + ' ')
 
+def ColumnValues(columns, x):
+    """Map the fields of a pro/d data line onto the latest column header.
+
+    columns: the names from the last '#      SN dive   sampleIdx ...' (or fall/rise-style
+             '#      SN dive idx nSam ...', or drift '#      SN dive nSam ...') header line.
+    x:       the split data line, whose first field is the line prefix.
+    Returns a dict of name -> string, or None if the line does not match the header.
+    """
+    if not columns or len(columns) + 1 != len(x):
+        return None
+    return { name: x[i + 1] for i, name in enumerate(columns) }
+
 def ProcessListingFile(fpath_list):
-    
+
     #global float_map
 
     # fpath_list = re.sub('\\\\', '/', fpath_list)
@@ -294,8 +306,11 @@ def ProcessListingFile(fpath_list):
             
             raise Exception('Failed to read file:' + fpath_list)
            
-        # Parse file line by line: 
-           
+        # Parse file line by line:
+
+        columns = []    # column names of the latest data-table header
+        drift_ref = None    # drift start time from the D line (floats that send drift times)
+
         for line in lines:
             
             try: 
@@ -313,6 +328,12 @@ def ProcessListingFile(fpath_list):
                     
                 if re.match('^#', line):
                     # logger.debug('Ignoring comment line: \'' + line + '\'')
+
+                    # Remember the column names of data-table headers; the pro and d columns
+                    # depend on the float (aux temperature, corrected salinity, drift times).
+                    if re.match(r'^#\s+SN\s+dive\s+(sampleIdx|idx\s+nSam|nSam)\s', line):
+                        columns = line[1:].split()
+
                     continue
 
                 # Argo data message:
@@ -326,7 +347,11 @@ def ProcessListingFile(fpath_list):
                     x = line.split()
                     
                     dive_data.drift = Drift(num_samples = int(x[3]))
-                    
+
+                    # Floats that send drift times: D SN dive nSam driftStart, and the d-line
+                    # times are relative to driftStart.
+                    drift_ref = DateTime(dt_str = x[4]) if len(x) > 4 else None
+
                     del x
                     
                     continue
@@ -334,11 +359,22 @@ def ProcessListingFile(fpath_list):
                 if re.match('^d ', line):
                     x = line.split()
                     
-                    idx = int(x[3])
-                    dive_data.drift.pres[idx] = float(x[4])
-                    dive_data.drift.temp[idx] = float(x[5]) if float(x[5]) > MIN_TEMP else np.nan
-                    dive_data.drift.saln[idx] = float(x[6]) if float(x[6]) > MIN_SALN else np.nan
-                    
+                    col = ColumnValues(columns, x)
+                    if col is None:
+                        col = { 'pres': x[4], 'temp': x[5], 'saln': x[6] }
+
+                    # The sample index is nSam in the drift-times layout, otherwise the 4th field.
+                    idx = int(col['nSam']) if 'nSam' in col else int(x[3])
+
+                    dive_data.drift.pres[idx] = float(col['pres'])
+                    dive_data.drift.temp[idx] = float(col['temp']) if float(col['temp']) > MIN_TEMP else np.nan
+                    dive_data.drift.saln[idx] = float(col['saln']) if float(col['saln']) > MIN_SALN else np.nan
+
+                    # Measured sample time (floats that send drift times): the time column is
+                    # +seconds since the drift start on the D line.
+                    if 'time' in col and drift_ref is not None and drift_ref.dt_epoch > 0:
+                        dive_data.drift.dt_epoch[idx] = drift_ref.dt_epoch + int(col['time'])
+
                     del x
                     
                     # Lookup density:
@@ -355,24 +391,6 @@ def ProcessListingFile(fpath_list):
 
                     continue
 
-                # Drift sample times (floats that report them):
-
-                if re.match('^DTM ', line):
-                    continue
-
-                if re.match('^dtm ', line):
-                    x = line.split()
-
-                    idx = int(x[3])
-                    if idx < dive_data.drift.n and x[5] != '-':
-                        dt = DateTime(dt_str = x[5])
-                        if dt.dt_epoch > 0:
-                            dive_data.drift.dt_epoch[idx] = dt.dt_epoch
-
-                    del x
-
-                    continue
-                
                 # Engineering data - descent
                 
                 if re.match('^E07 ', line):
@@ -609,21 +627,31 @@ def ProcessListingFile(fpath_list):
                     
                     continue
                 
+                # Profile column descriptions (documentation only):
+
+                if re.match('^(PRD|prd) ', line):
+                    continue
+
                 if re.match('^pro ', line):
                     
                     x = line.split();
                     idx = int(x[3])
-                    if len(x) == 7:
-                        dive_data.profile.pres[idx] = float(x[4]) 
-                        dive_data.profile.temp[idx] = float(x[5]) if float(x[5]) > MIN_TEMP else np.nan
-                        dive_data.profile.tcnd[idx] = np.nan  # TODO handle no tcnd better
-                        dive_data.profile.saln[idx] = float(x[6]) if float(x[6]) > MIN_SALN else np.nan
-                    elif len(x) == 8:
-                        dive_data.profile.pres[idx] = float(x[4])
-                        dive_data.profile.temp[idx] = float(x[5]) if float(x[5]) > MIN_TEMP else np.nan
-                        dive_data.profile.tcnd[idx] = float(x[6]) if float(x[6]) > MIN_TEMP else np.nan
-                        dive_data.profile.saln[idx] = float(x[7]) if float(x[7]) > MIN_SALN else np.nan
-                    else: 
+                    col = ColumnValues(columns, x)
+                    if col is None:
+                        # No matching header: fall back to the field count.
+                        if len(x) == 7:
+                            col = { 'pres': x[4], 'temp': x[5], 'saln': x[6] }
+                        elif len(x) == 8:
+                            col = { 'pres': x[4], 'temp1': x[5], 'temp2': x[6], 'saln': x[7] }
+
+                    if col is not None and 'pres' in col and 'saln' in col:
+                        temp = col.get('temp', col.get('temp1'))
+                        dive_data.profile.pres[idx] = float(col['pres'])
+                        dive_data.profile.temp[idx] = float(temp) if float(temp) > MIN_TEMP else np.nan
+                        dive_data.profile.tcnd[idx] = float(col['temp2']) if 'temp2' in col and float(col['temp2']) > MIN_TEMP else np.nan
+                        dive_data.profile.saln[idx] = float(col['saln']) if float(col['saln']) > MIN_SALN else np.nan
+                        dive_data.profile.saln_corr[idx] = float(col['salnCorr']) if 'salnCorr' in col and float(col['salnCorr']) > MIN_SALN else np.nan
+                    else:
                         logger.error('Unsupported profile line format: \'' + line + '\'')
                         
                     del x

@@ -2923,24 +2923,24 @@ string XFloatDiveData::GenerateListingString() const {
                    so,
                    tg,
                    to,
-                   pres_correction)
+                   pres_correction,
+                   xmsg_argo_data_ ? xmsg_argo_data_->drift_state_start_time() : ptime(not_a_date_time))
                << endl;
 
           }CATCH_NOTHROW("Failed to generate drift data listing entry!")
 
-        if(xmsg_composite_drift_data_.HasTimeData())
+        if(HasBinnedProfileData())
 
           try {
 
-            // Print drift sample times.
-            XMSG_SECTION("Drift Sample Times");
-            os << xmsg_composite_drift_data_.GenerateTimeListingString(
+            // Describe the profile sensor columns.
+            XMSG_SECTION("Profile Data (Binned) - Sensor Columns");
+            os << xmsg_composite_profile_binned_.GenerateColumnDescriptionString(
                    id_instrument(),
-                   id_dive(),
-                   xmsg_argo_data_ ? xmsg_argo_data_->drift_state_start_time() : ptime(not_a_date_time))
+                   id_dive())
                << endl;
 
-          }CATCH_NOTHROW("Failed to generate drift time listing entry!")
+          }CATCH_NOTHROW("Failed to generate profile column description entry!")
 
         if(HasBinnedProfileData())
 
@@ -2961,24 +2961,6 @@ string XFloatDiveData::GenerateListingString() const {
                << endl;
 
           }CATCH_NOTHROW("Failed to generate profile data listing entry!")
-
-        if(xmsg_composite_profile_binned_.HasCorrectedSalnData())
-
-          try {
-
-            // Print dynamically corrected salinity.
-            XMSG_SECTION("Profile Data (Binned) - Dynamically Corrected Salinity");
-            os << xmsg_composite_profile_binned_.GenerateCorrectedSalinityListingString(
-                   id_instrument(),
-                   id_dive(),
-                   pg,
-                   po,
-                   sg,
-                   so,
-                   pres_correction)
-               << endl;
-
-          }CATCH_NOTHROW("Failed to generate corrected salinity listing entry!")
 
         if(HasUnbinnedProfileData())
 

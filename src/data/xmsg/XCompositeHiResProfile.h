@@ -119,7 +119,7 @@ class XCompositeHiResProfile:
         {
           static const format fmt1("#   %5s %4s %11s %11s %11s %11s");
           static const format fmt2("#    %5s %4s %11s %11s %12s %11s");
-          static const format fmt3("pru %5d %4d %11d %11.3f %11.3f %11.3f");
+          static const format fmt3("pru %5d %4d %11d %11s %11.3f %11.3f");
 
           // Iterate over the sensor data samples.
           for(size_t i = 0; i < max_num_samples(); i++) {
@@ -139,7 +139,7 @@ class XCompositeHiResProfile:
             }
 
             os << endl
-               << format(fmt3) % id_inst % id_dive % i % SamplePresAsFloat(i, pg, po, pc)
+               << format(fmt3) % id_inst % id_dive % i % XMsgFormatPressure(SamplePresAsFloat(i, pg, po, pc))
                    % SampleTempAsFloat(i, tg, to) % SampleSalnAsFloat(i, sg, so);
           }
         }

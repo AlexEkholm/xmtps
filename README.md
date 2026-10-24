@@ -467,12 +467,21 @@ Decoder daemon:
   3234–3287 printed them as xx, xy, yy, zz under that header.
 - New: dynamically corrected salinity (X-message 0xDC), sent by floats with dynamic CTD
   correction enabled (PPE = 2), is decoded as a second binned-profile salinity channel and listed
-  as `PCS`/`pcs` lines (pressure, salinity, corrected salinity). The format was inferred from
-  production packets: a salinity message with four extra bytes (0x00, part index, 0x01, 0x00)
-  after the size field.
-- New: drift sample times (X-messages 0x78–0x7F) are decoded and listed as `DTM`/`dtm` lines:
-  seconds since the drift state start and the resulting date/time. The format (inferred) matches
-  the drift pressure/temperature/salinity messages.
+  as an extra `salnCorr` column on the `pro` lines. The format was inferred from production
+  packets: a salinity message with four extra bytes (0x00, part index, 0x01, 0x00) after the size
+  field.
+- New: drift sample times (X-messages 0x78–0x7F) are decoded. For floats that send them, the
+  drift section uses the fall/rise layout: `D SN dive nSam driftStart`, then `d` lines with the
+  time (`+seconds` since the drift start, `(UTC/+sec)`) before pressure, temperature and
+  salinity. The format (inferred) matches the drift pressure/temperature/salinity messages.
+- New listing section "Profile Data (Binned) - Sensor Columns", before the binned profile, lists
+  each profile column present for the dive as a `PRD`/`prd` table (column name and units, with
+  the description after `#`, wrapped to keep lines under 100 characters).
+- Pressures are listed with two decimal places (previously three) in every section; the fill
+  value is still `-9.999`, and column widths are unchanged. The surface pressure variance keeps
+  three decimals.
+- Apart from pressure decimals, listings for floats that send neither 0xDC nor 0x78 are
+  unchanged.
 - Mission configuration message 1 for 10.8.0.4/10.12.0.x accepts 88 bytes (with CTD correction
   parameters) as well as 71.
 - Fixed mission configuration offsets: `ddt` in five firmware layouts, `descend_start_time` for
@@ -487,9 +496,13 @@ Decoder daemon:
 
 Python tools:
 
-- `xmtps-list2json.py` uses the measured drift sample times from `dtm` lines when a listing has
-  them; otherwise drift times are still estimated between the end of descent and the start of
-  ascent.
+- `xmtps-list2json.py` reads `pro` and `d` lines by the column names in their header, so it
+  handles the new `salnCorr`, `elapsed` and `date/time` columns as well as the aux-temperature
+  format.
+- Measured drift sample times are used when a listing has them; otherwise drift times are still
+  estimated between the end of descent and the start of ascent.
+- Profiles carry `saln_corr` (dynamically corrected salinity) in the dive JSON and the aggregated
+  profile table; it is NaN for floats that don't send it.
 
 Operations:
 

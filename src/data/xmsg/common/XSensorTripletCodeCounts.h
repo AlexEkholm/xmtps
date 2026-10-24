@@ -119,10 +119,10 @@ public:
         ostringstream os;
 
         try {
-            const format fmt("%+20d %9.3f %7.3f %7.3f %9d # %s");
+            const format fmt("%+20d %9s %7.3f %7.3f %9d # %s");
             os
                     << format(fmt) % (int) elapsed_seconds_since_reference_time()
-                            % PressureValue(pg, po, pc) % TemperatureValue(tg, to)
+                            % XMsgFormatPressure(PressureValue(pg, po, pc)) % TemperatureValue(tg, to)
                             % SalinityValue(sg, so) % (int) phase_code()
                             % phase_code_name();
         }CATCH_BLOCK("Failed to generate listing string for sensor triplet object!")

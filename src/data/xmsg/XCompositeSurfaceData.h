@@ -446,16 +446,15 @@ public:
             {
                 const format fmt("SFD %4d %4d %4d "
                         "%4d %12d "
-                        "%15.3f %15.3f %15.3f "
+                        "%15s %15s %15s "
                         "%15.3f");
                 os << format(fmt) //
                 % (int) messages().at(0)->id_instrument() % (int) messages().at(0)->id_dive()
                         % midx++ //
                         % pres_num_samples() % (int) is_aggregated_data_valid() //
-                        % PresMinAsFloat(pg, po,
-                                pres_correction) % PresMeanAsFloat(pg, po,
-                                        pres_correction) % PresMaxAsFloat(pg, po,
-                                                pres_correction) //
+                        % XMsgFormatPressure(PresMinAsFloat(pg, po, pres_correction))
+                        % XMsgFormatPressure(PresMeanAsFloat(pg, po, pres_correction))
+                        % XMsgFormatPressure(PresMaxAsFloat(pg, po, pres_correction)) //
                         % PresVarAsFloat(pg);
             }
 

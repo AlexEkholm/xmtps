@@ -380,7 +380,7 @@ public:
                 static const format fmt8("#   %5s %4s %4s "
                         "%15s %16s %15s");
                 static const format fmt9("E0C %05d %4d %4d "
-                        "%15.3f %15.3d %15.3d");
+                        "%15s %15.3d %15.3d");
                 os << format(fmt7) % "SN" % "dive" % "midx" //
                            % "minPres" % "testTemp" % "testSalinity"
                    << endl;
@@ -389,7 +389,7 @@ public:
                    << endl;
                 os << format(fmt9) % id_instrument() % id_dive()
                         % 2 // midx
-                        % GetDecodedPresMin(pg, po) % temp_threshold_test()
+                        % XMsgFormatPressure(GetDecodedPresMin(pg, po)) % temp_threshold_test()
                         % GetDecodedSalnSurfaceTest(sg, so);
             }
 
@@ -444,7 +444,7 @@ public:
               static const format fmt8("#   %5s %4s %4s "
                       "%15s %16s %15s");
               static const format fmt9("E0C %05d %4d %4d "
-                      "%15.3f %15.3d %15.3d");
+                      "%15s %15.3d %15.3d");
               os << format(fmt7) % "SN" % "dive" % "midx" //
                          % "minPres" % "testTemp" % "testSalinity"
                  << endl;
@@ -453,7 +453,7 @@ public:
                  << endl;
               os << format(fmt9) % id_instrument() % id_dive()
                       % 2 // midx
-                      % GetDecodedPresMin(pg, po) % temp_threshold_test()
+                      % XMsgFormatPressure(GetDecodedPresMin(pg, po)) % temp_threshold_test()
                       % GetDecodedSalnSurfaceTest(sg, so) << endl;
 
               // Minor Index 3.

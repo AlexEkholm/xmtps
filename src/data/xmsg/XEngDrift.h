@@ -298,17 +298,17 @@ public:
                 // Minor Index 0.
                 static const format fmt1("#   %5s %4s %4s %6s %20s %7s %7s %20s %7s");
                 static const format fmt2("#   %5s %4s %4s %6s %20s %7s %8s %20s %7s");
-                static const format fmt3("E08 %05d %4d %4d   0x%-02X %20s %7.2f %7.3f %20s %7.2f");
+                static const format fmt3("E08 %05d %4d %4d   0x%-02X %20s %7s %7.3f %20s %7s");
                 os << format(fmt1) % "SN" % "dive" % "midx" % "engVer" % "start-of-drift" % "meanP"
                            % "meanT" % "start-of-fall" % "fallP"
                    << endl;
                 os << format(fmt2) % "" % "" % "" % "" % "" % "(dBar)" % "(degC)" % "" % "(dBar)"
                    << endl;
                 os << format(fmt3) % id_instrument() % id_dive() % 0 % (int) engineering_version()
-                        % GenerateIso8601String(start_time()) % average_drift_pressure_dbar(pg, po)
+                        % GenerateIso8601String(start_time()) % XMsgFormatPressure(average_drift_pressure_dbar(pg, po))
                         % average_drift_temperature_c(tg, to)
                         % GenerateIso8601String(start_of_fall_to_profile_pressure_time_)
-                        % start_of_fall_to_profile_pressure_dbar(pg, po);
+                        % XMsgFormatPressure(start_of_fall_to_profile_pressure_dbar(pg, po));
 
             }
                 break;
@@ -337,7 +337,7 @@ public:
                 // Minor Index 1.
                 static const format fmt4("#   %5s %4s %4s    %12s %12s %12s %12s %12s %12s");
                 static const format fmt5("#   %5s %4s %4s    %12s %13s %12s %12s %12s %12s");
-                static const format fmt6("E08 %05d %4d %4d    %12.3f %12d %12.3f %12d %12.3f %12d");
+                static const format fmt6("E08 %05d %4d %4d    %12s %12d %12.3f %12d %12.3f %12d");
                 os << format(fmt4) % "SN" % "dive" % "midx" % "pres" % "pres" % "temp" % "temp"
                            % "saln" % "saln"
                    << endl;
@@ -345,7 +345,7 @@ public:
                            % "(PSU)" % "(counts)"
                    << endl;
                 os << format(fmt6) % id_instrument() % id_dive() % 1
-                        % average_drift_pressure_dbar(pg, po) % average_drift_pressure_counts()
+                        % XMsgFormatPressure(average_drift_pressure_dbar(pg, po)) % average_drift_pressure_counts()
                         % average_drift_temperature_c(tg, to) % average_drift_temperature_counts()
                         % average_drift_salinity_psu(sg, so) % average_drift_salinity_counts();
             }
@@ -375,7 +375,7 @@ public:
               // Minor Index 1.
               static const format fmt4("#   %5s %4s %4s    %12s %12s %12s %12s %12s %12s");
               static const format fmt5("#   %5s %4s %4s    %12s %13s %12s %12s %12s %12s");
-              static const format fmt6("E08 %05d %4d %4d    %12.3f %12d %12.3f %12d %12.3f %12d");
+              static const format fmt6("E08 %05d %4d %4d    %12s %12d %12.3f %12d %12.3f %12d");
               os << format(fmt4) % "SN" % "dive" % "midx" % "pres" % "pres" % "temp" % "temp"
                          % "saln" % "saln"
                  << endl;
@@ -383,7 +383,7 @@ public:
                          % "(PSU)" % "(counts)"
                  << endl;
               os << format(fmt6) % id_instrument() % id_dive() % 1
-                      % average_drift_pressure_dbar(pg, po) % average_drift_pressure_counts()
+                      % XMsgFormatPressure(average_drift_pressure_dbar(pg, po)) % average_drift_pressure_counts()
                       % average_drift_temperature_c(tg, to) % average_drift_temperature_counts()
                       % average_drift_salinity_psu(sg, so) % average_drift_salinity_counts();
             }
