@@ -457,7 +457,7 @@ public:
               set_pres_counts_before_offset_reset(u16(d, 14));
               set_pres_offset(u16(d, 16));
               set_pres_counts_after_offset_reset(u16(d, 18));
-              set_bit_temperature(u16(d, 22));
+              set_bit_temperature(u16(d, 20));
               set_bit_salinity(u16(d, 22));
               set_ctd_status(u32(d, 24));
               set_vac_at_start_of_bit(u16(d, 28));
@@ -465,7 +465,7 @@ public:
               set_battery_voltage_at_start_of_bit(u16(d, 32));
               set_battery_voltage_at_end_of_bit(u16(d, 34));
               set_air_valve_open_position(u16(d, 36));
-              set_air_valve_open_cal_position(u16(d, 48));
+              set_air_valve_open_cal_position(u16(d, 38));
               set_air_valve_closed_position(u16(d, 40));
               set_air_valve_closed_cal_position(u16(d, 42));
               set_air_valve_middle_position(u16(d, 44));

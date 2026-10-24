@@ -242,6 +242,9 @@ void XMfaMissionCfg::AssignMessage(const vector<uint8_t>& data) {
 
         case 0:
 
+          if(data.size() < 8)
+            EXC_THROW("Message too short to contain the firmware version.");
+
           set_fw_version(u32(data, 4));
 
           DecodeXMsgData(fw_version(), 0, msg_data_[0]);
@@ -502,7 +505,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icf(u08(d, 141));
           set_icw(u08(d, 145));
 
-          set_descend_start_time(s2000(d, 9 + 50));
+          set_descend_start_time(s2000(d, 99 + 50));
           set_dns(u16(d, 103 + 50));
           set_dra(u16(d, 105 + 50));
           set_dsd(u16(d, 107 + 50));
@@ -511,7 +514,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_ddc(u16(d, 113 + 50));
           set_dsi(u32(d, 115 + 50));
           set_ddd(u16(d, 119 + 50));
-          set_ddt(u16(d, 121));
+          set_ddt(u16(d, 121 + 50));
           set_dft(u16(d, 123 + 50));
           set_dcm(u08(d, 125 + 50));
           set_dal(u08(d, 126 + 50));
@@ -678,7 +681,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_ddc(u16(d, 113 + 59));
           set_dsi(u32(d, 115 + 59));
           set_ddd(u16(d, 119 + 59));
-          set_ddt(u16(d, 121));
+          set_ddt(u16(d, 121 + 59));
           set_dft(u16(d, 123 + 59));
           set_dcm(u08(d, 125 + 59));
           set_dal(u08(d, 126 + 59));
@@ -845,7 +848,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_ddc(u16(d, 113 + 60));
           set_dsi(u32(d, 115 + 60));
           set_ddd(u16(d, 119 + 60));
-          set_ddt(u16(d, 121));
+          set_ddt(u16(d, 121 + 60));
           set_dft(u16(d, 123 + 60));
           set_dcm(u08(d, 125 + 60));
           set_dal(u08(d, 126 + 60));
@@ -1013,7 +1016,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_ddc(u16(d, 113 + 61));
           set_dsi(u32(d, 115 + 61));
           set_ddd(u16(d, 119 + 61));
-          set_ddt(u16(d, 121));
+          set_ddt(u16(d, 121 + 61));
           set_dft(u16(d, 123 + 61));
           set_dcm(u08(d, 125 + 61));
           set_dal(u08(d, 126 + 61));
@@ -1183,7 +1186,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_ddc(u16(d, 113 + 61));
           set_dsi(u32(d, 115 + 61));
           set_ddd(u16(d, 119 + 61));
-          set_ddt(u16(d, 121));
+          set_ddt(u16(d, 121 + 61));
           set_dft(u16(d, 123 + 61));
           set_dcm(u08(d, 125 + 61));
           set_dal(u08(d, 126 + 61));
@@ -2025,6 +2028,10 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
 
         } else if(msg_idx == 1) {
 
+          if(data.size() < 12)
+            EXC_THROW("Invalid X-Message: Expected at least 12 bytes, but received "
+                      + lexical_cast<string>(data.size()) + " bytes!");
+
           set_sao(u16(d, 3));
           set_sap(u16(d, 5));
           set_spt(u16(d, 7));
@@ -2223,7 +2230,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_sam(u08(d, 308 + 14));
           set_sax(u16(d, 309 + 14));
           set_san(u16(d, 311 + 14));
-          set_sao(u16(d, 313 + 14));
+//        set_sao(u16(d, 313 + 14));  // Byte 327 is the terminator.
 //                set_sap(u16(d, 315 + 14));
 //                set_spt(u16(d, 317 + 14));
 //                set_ssp(u16(d, 319 + 14));
@@ -2334,7 +2341,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -2565,7 +2572,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164-4));
           set_icg0(u08(d, 168-4));
           set_icg1(u08(d, 169-4));
-          set_isa( u08(d, 171-4));
+          set_isa( u08(d, 170-4));
           set_isd( u16(d, 171-4));
           set_iat( u16(d, 173-4));
           set_isv( u16(d, 175-4));
@@ -2804,7 +2811,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -3051,7 +3058,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -3298,7 +3305,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -3545,7 +3552,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -3793,7 +3800,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -4036,7 +4043,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -4282,7 +4289,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+3));
           set_icg0(u08(d, 168+3));
           set_icg1(u08(d, 169+3));
-          set_isa( u08(d, 171+3));
+          set_isa( u08(d, 170+3));
           set_isd( u16(d, 171+3));
           set_iat( u16(d, 173+3));
           set_isv( u16(d, 175+3));
@@ -4533,7 +4540,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -4786,7 +4793,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -5039,7 +5046,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -5298,7 +5305,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -5546,7 +5553,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -5806,7 +5813,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164+1));
           set_icg0(u08(d, 168+1));
           set_icg1(u08(d, 169+1));
-          set_isa( u08(d, 171+1));
+          set_isa( u08(d, 170+1));
           set_isd( u16(d, 171+1));
           set_iat( u16(d, 173+1));
           set_isv( u16(d, 175+1));
@@ -6054,7 +6061,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164-5));
           set_icg0(u08(d, 168-5));
           set_icg1(u08(d, 169-5));
-          set_isa( u08(d, 171-5));
+          set_isa( u08(d, 170-5));
           set_isd( u16(d, 171-5));
           set_iat( u16(d, 173-5));
           set_isv( u16(d, 175-5));
@@ -6313,7 +6320,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164-5));
           set_icg0(u08(d, 168-5));
           set_icg1(u08(d, 169-5));
-          set_isa( u08(d, 171-5));
+          set_isa( u08(d, 170-5));
           set_isd( u16(d, 171-5));
           set_iat( u16(d, 173-5));
           set_isv( u16(d, 175-5));
@@ -6394,12 +6401,17 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
 
         } else if(msg_idx == 1) {
 
+          /* Message 1 is 71 bytes without the CTD correction parameters, and 88 bytes with them
+           * (10.12.0.1 floats send 88). */
           static const unsigned int EXPECTED_SIZE = 71;
+          static const unsigned int EXPECTED_SIZE_PPC = 88;
 
-          if(data.size() != EXPECTED_SIZE) {
+          if(data.size() != EXPECTED_SIZE && data.size() != EXPECTED_SIZE_PPC) {
             ostringstream os;
             os << "Invalid X-Message: Expected "
                << EXPECTED_SIZE
+               << " or "
+               << EXPECTED_SIZE_PPC
                << " bytes, but received "
                << data.size()
                << " bytes!";
@@ -6448,12 +6460,14 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_sao( u16(d,           64));
           set_spt( u16(d,           66));
           set_ssp( u16(d,           68));
-          set_wmt(u16(d,            70));
-          set_ppc_tau(f32(d,        72));
-          set_ppc_alpha(f32(d,      76));
-          set_ppc_tdelay(f32(d,     80));
-          set_ppc_ctccoeff(f32(d,   84));
-          set_ppe(u08(d,            88));
+          // No WIMS, so no wmt: the CTD correction parameters follow ssp directly.
+          if(data.size() == EXPECTED_SIZE_PPC) {
+            set_ppc_tau(f32(d,        70));
+            set_ppc_alpha(f32(d,      74));
+            set_ppc_tdelay(f32(d,     78));
+            set_ppc_ctccoeff(f32(d,   82));
+            set_ppe(u08(d,            86));
+          }
 
         }
         break;
@@ -6572,7 +6586,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
           set_icr1(u32(d, 164-5));
           set_icg0(u08(d, 168-5));
           set_icg1(u08(d, 169-5));
-          set_isa( u08(d, 171-5));
+          set_isa( u08(d, 170-5));
           set_isd( u16(d, 171-5));
           set_iat( u16(d, 173-5));
           set_isv( u16(d, 175-5));

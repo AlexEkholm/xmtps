@@ -351,9 +351,20 @@ public:
                     oil_valve_closed_position_at_end_mv_(XMSG_BAD_U16),
                     oil_valve_open_cal_position_mv_(XMSG_BAD_U16),
                     oil_valve_open_position_during_air_assist_mv_(XMSG_BAD_U16),
+                    pressure_offset_reading_(XMSG_BAD_I16),
                     surface_sampling_end_time_(not_a_date_time),
                     surface_sampling_start_time_(not_a_date_time),
-                    system_current_ma_(XMSG_BAD_U16) {
+                    system_current_ma_(XMSG_BAD_U16),
+                    gps_rtc_time_delta_(XMSG_BAD_I16),
+                    prof_raw_sample_first_pres_(XMSG_BAD_U16),
+                    prof_raw_sample_first_temp_(XMSG_BAD_U16),
+                    prof_raw_sample_first_saln_(XMSG_BAD_U16),
+                    prof_raw_sample_last_pres_(XMSG_BAD_U16),
+                    prof_raw_sample_last_temp_(XMSG_BAD_U16),
+                    prof_raw_sample_last_saln_(XMSG_BAD_U16),
+                    prof_num_bins_(XMSG_BAD_U16),
+                    prof_num_bins_empty_(XMSG_BAD_U16),
+                    prof_num_raw_samples_(XMSG_BAD_U16) {
 
         // Decode message.
         DecodeXMsgData(data);
@@ -409,7 +420,7 @@ public:
               set_num_errors(u08(d, 46));
 
               // Parse the error codes.
-              for(size_t i = 0; 4 * i + 48 < xmsg_size_bytes(); i++)
+              for(size_t i = 0; 4 * i + 51 < xmsg_size_bytes(); i++)
                   error_codes_.push_back(
                           make_shared<XEngErrorCode>(not_a_date_time, u32(d, (4 * i) + 47)));
 
@@ -463,7 +474,7 @@ public:
 
             case 0x12: { // Engineering (Surface) message version 0x12.
 
-              static const unsigned int MIN_SIZE = 48;
+              static const unsigned int MIN_SIZE = 50;
 
               if(data.size() < MIN_SIZE) {
                   ostringstream os;

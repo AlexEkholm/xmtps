@@ -134,7 +134,7 @@ namespace util {
 
                     // Parse sub-block header.
                     scale = *it++;
-                    raw_sensor_data_.push_back(x0 = (*it++ << 8) | *it++);
+                    x0 = *it++ << 8; x0 |= *it++; raw_sensor_data_.push_back(x0);
                     size_t isub = XMSG_SENS_MAX_SUB;
 
                     // Iterate over sub-block data.

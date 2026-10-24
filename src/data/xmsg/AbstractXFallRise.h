@@ -196,8 +196,8 @@ protected:
 
                     for(vector<uint8_t>::const_iterator it = data.begin() + 7; it < data.end() - 4;
                             ) {
-                        sec = ((*it++) << 8) | (*it++);
-                        pres_counts = ((*it++) << 8) | (*it++);
+                        sec = *it++ << 8; sec |= *it++;
+                        pres_counts = *it++ << 8; pres_counts |= *it++;
                         sensor_data_.push_back(
                                 XSensorTripletCodeCounts(
                                         sec,
@@ -212,9 +212,9 @@ protected:
 
                     for(vector<uint8_t>::const_iterator it = data.begin() + 7; it < data.end() - 5;
                             ) {
-                        sec = ((*it++) << 8) | (*it++);
+                        sec = *it++ << 8; sec |= *it++;
                         phase_code = (XPhaseCode_t) (*it >> 4);
-                        pres_counts = ((*it++ & 0x0F) << 16) | ((*it++) << 8) | (*it++);
+                        pres_counts = (*it++ & 0x0F) << 16; pres_counts |= *it++ << 8; pres_counts |= *it++;
                         sensor_data_.push_back(
                                 XSensorTripletCodeCounts(
                                         sec,
@@ -229,11 +229,11 @@ protected:
 
                     for(vector<uint8_t>::const_iterator it = data.begin() + 7; it < data.end() - 9;
                             ) {
-                        sec = ((*it++) << 8) | (*it++);
+                        sec = *it++ << 8; sec |= *it++;
                         phase_code = (XPhaseCode_t) (*it >> 4);
-                        pres_counts = ((*it++ & 0x0F) << 16) | ((*it++) << 8) | (*it++);
-                        temp_counts = ((*it++) << 8) | (*it++);
-                        saln_counts = ((*it++) << 8) | (*it++);
+                        pres_counts = (*it++ & 0x0F) << 16; pres_counts |= *it++ << 8; pres_counts |= *it++;
+                        temp_counts = *it++ << 8; temp_counts |= *it++;
+                        saln_counts = *it++ << 8; saln_counts |= *it++;
                         sensor_data_.push_back(
                                 XSensorTripletCodeCounts(
                                         sec,

@@ -489,7 +489,7 @@ public:
 
         if(gain) {
 
-            val = ((T) pres_var() / (T) gain
+            val = ((T) pres_var() / ((T) gain * (T) gain)
                     / (T) ((int64_t) 1 << (derived_fields_static_gain_exp() * 2)));
 
 //            if(val < XMSG_SENS_MIN_PRES || val > XMSG_SENS_MAX_PRES)

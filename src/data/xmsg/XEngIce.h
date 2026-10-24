@@ -529,8 +529,8 @@ public:
 
         val = (T) temp_threshold_test() / (T) gain - (T) offs;
 
-        if(val < XMSG_SENS_MIN_TEMP || val > XMSG_SENS_MIN_TEMP)
-            return XMSG_SENS_BAD_PRES;
+        if(val < XMSG_SENS_MIN_TEMP || val > XMSG_SENS_MAX_TEMP)
+            return XMSG_SENS_BAD_TEMP;
 
         return val;
     }
@@ -540,8 +540,8 @@ public:
 
         val = (T) saln_surface_test() / (T) gain - (T) offs;
 
-        if(val < XMSG_SENS_MIN_SALN || val > XMSG_SENS_MIN_SALN)
-            return XMSG_SENS_MIN_SALN;
+        if(val < XMSG_SENS_MIN_SALN || val > XMSG_SENS_MAX_SALN)
+            return XMSG_SENS_BAD_SALN;
 
         return val;
     }

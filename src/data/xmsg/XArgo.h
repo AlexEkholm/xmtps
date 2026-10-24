@@ -663,7 +663,7 @@ public:
                         set_gain_temperature_surface(gain_temperature());
                         set_offset_temperature_surface(offset_temperature());
                         set_gain_salinity_surface(gain_salinity());
-                        set_offset_salinity_surface(offset_salinity_surface());
+                        set_offset_salinity_surface(offset_salinity());
                     }
 
                     break;

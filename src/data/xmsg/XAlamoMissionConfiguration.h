@@ -883,6 +883,9 @@ public:
         try {
             const uint8_t* d = data.data();
 
+            if(data.size() < 8)
+                EXC_THROW("Message too short to contain the firmware version.");
+
             set_fw_version(u32(d, 4));
 
             /* Mission Configuration */
@@ -1114,7 +1117,7 @@ public:
                 set_icf(u8(d, 141));
                 set_icw(u8(d, 145));
 
-                set_descend_start_time(s2000(d, 9 + 50));
+                set_descend_start_time(s2000(d, 99 + 50));
                 set_dns(u16(d, 103 + 50));
                 set_dra(u16(d, 105 + 50));
                 set_dsd(u16(d, 107 + 50));
@@ -1123,7 +1126,7 @@ public:
                 set_ddc(u16(d, 113 + 50));
                 set_dsi(u32(d, 115 + 50));
                 set_ddd(u16(d, 119 + 50));
-                set_ddt(u16(d, 121));
+                set_ddt(u16(d, 121 + 50));
                 set_dft(u16(d, 123 + 50));
                 set_dcm(u8(d, 125 + 50));
                 set_dal(u8(d, 126 + 50));
@@ -1300,7 +1303,7 @@ public:
                 set_ddc(u16(d, 113 + 59));
                 set_dsi(u32(d, 115 + 59));
                 set_ddd(u16(d, 119 + 59));
-                set_ddt(u16(d, 121));
+                set_ddt(u16(d, 121 + 59));
                 set_dft(u16(d, 123 + 59));
                 set_dcm(u8(d, 125 + 59));
                 set_dal(u8(d, 126 + 59));
@@ -1474,7 +1477,7 @@ public:
                 set_ddc(u16(d, 113 + 60));
                 set_dsi(u32(d, 115 + 60));
                 set_ddd(u16(d, 119 + 60));
-                set_ddt(u16(d, 121));
+                set_ddt(u16(d, 121 + 60));
                 set_dft(u16(d, 123 + 60));
                 set_dcm(u8(d, 125 + 60));
                 set_dal(u8(d, 126 + 60));
@@ -1645,7 +1648,7 @@ public:
                 set_ddc(u16(d, 113 + 61));
                 set_dsi(u32(d, 115 + 61));
                 set_ddd(u16(d, 119 + 61));
-                set_ddt(u16(d, 121));
+                set_ddt(u16(d, 121 + 61));
                 set_dft(u16(d, 123 + 61));
                 set_dcm(u8(d, 125 + 61));
                 set_dal(u8(d, 126 + 61));
@@ -1816,7 +1819,7 @@ public:
                 set_ddc(u16(d, 113 + 61));
                 set_dsi(u32(d, 115 + 61));
                 set_ddd(u16(d, 119 + 61));
-                set_ddt(u16(d, 121));
+                set_ddt(u16(d, 121 + 61));
                 set_dft(u16(d, 123 + 61));
                 set_dcm(u8(d, 125 + 61));
                 set_dal(u8(d, 126 + 61));
@@ -2658,7 +2661,7 @@ public:
                 set_sam(u8(d, 308 + 14));
                 set_sax(u16(d, 309 + 14));
                 set_san(u16(d, 311 + 14));
-                set_sao(u16(d, 313 + 14));
+//              set_sao(u16(d, 313 + 14));  // Byte 327 is the terminator.
 //                set_sap(u16(d, 315 + 14));
 //                set_spt(u16(d, 317 + 14));
 //                set_ssp(u16(d, 319 + 14));
@@ -2855,7 +2858,7 @@ public:
                 set_sam(u8(d, 308 + 14));
                 set_sax(u16(d, 309 + 14));
                 set_san(u16(d, 311 + 14));
-                set_sao(u16(d, 313 + 14));
+//              set_sao(u16(d, 313 + 14));  // Byte 327 is the terminator.
 //                set_sap(u16(d, 315 + 14));
 //                set_spt(u16(d, 317 + 14));
 //                set_ssp(u16(d, 319 + 14));
@@ -3052,7 +3055,7 @@ public:
               set_sam(u8(d, 308 + 14));
               set_sax(u16(d, 309 + 14));
               set_san(u16(d, 311 + 14));
-              set_sao(u16(d, 313 + 14));
+//            set_sao(u16(d, 313 + 14));  // Byte 327 is the terminator.
 
               break;
 

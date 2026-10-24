@@ -163,10 +163,10 @@ public:
                 if(pump_packing_format_ == XPUMP_PACK_LEGACY)
                     for(vector<uint8_t>::const_iterator it = data.begin() + 3; it < data.end() - 10;
                             ) {
-                        presCounts = ((*it++) << 8) | (*it++);
-                        pumpSecs = ((*it++) << 8) | (*it++);
-                        voltage = ((*it++) << 8) | (*it++);
-                        current = ((*it++) << 8) | (*it++);
+                        presCounts = *it++ << 8; presCounts |= *it++;
+                        pumpSecs = *it++ << 8; pumpSecs |= *it++;
+                        voltage = *it++ << 8; voltage |= *it++;
+                        current = *it++ << 8; current |= *it++;
                         vac0 = *it++;
                         vac1 = *it++;
                         AppendElement(
@@ -183,10 +183,10 @@ public:
                     for(vector<uint8_t>::const_iterator it = data.begin() + 3; it < data.end() - 11;
                             ) {
                         XPhaseCode_t phaseCode = (XPhaseCode_t) (*it >> 4);
-                        presCounts = (((*it++ & 0x0F) << 16)) | ((*it++) << 8) | (*it++);
-                        pumpSecs = ((*it++) << 8) | (*it++);
-                        voltage = ((*it++) << 8) | (*it++);
-                        current = ((*it++) << 8) | (*it++);
+                        presCounts = (*it++ & 0x0F) << 16; presCounts |= *it++ << 8; presCounts |= *it++;
+                        pumpSecs = *it++ << 8; pumpSecs |= *it++;
+                        voltage = *it++ << 8; voltage |= *it++;
+                        current = *it++ << 8; current |= *it++;
                         vac0 = *it++;
                         vac1 = *it++;
                         AppendElement(
@@ -203,11 +203,11 @@ public:
                     for(vector<uint8_t>::const_iterator it = data.begin() + 3; it < data.end() - 11;
                             ) {
                         XPhaseCode_t phaseCode = (XPhaseCode_t) (*it >> 4);
-                        presCounts = (((*it++ & 0x0F) << 16)) | ((*it++) << 8) | (*it++);
-                        pumpSecs = ((*it++) << 8) | (*it++);
-                        voltage = ((*it++) << 8) | (*it++);
-                        current = ((*it++) << 8) | (*it++);
-                        vac1 = ((*it++) << 8) | (*it++);
+                        presCounts = (*it++ & 0x0F) << 16; presCounts |= *it++ << 8; presCounts |= *it++;
+                        pumpSecs = *it++ << 8; pumpSecs |= *it++;
+                        voltage = *it++ << 8; voltage |= *it++;
+                        current = *it++ << 8; current |= *it++;
+                        vac1 = *it++ << 8; vac1 |= *it++;
                         AppendElement(
                                 XPumpCounts(
                                         phaseCode,

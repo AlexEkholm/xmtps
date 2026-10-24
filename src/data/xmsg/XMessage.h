@@ -436,8 +436,16 @@ namespace util {
 
             if(parseSize) {
               // Check message size.
+              if(data.size() < 3)
+                EXC_THROW("Invalid XMessage: too short to contain the size field!");
               set_xmsg_size_bytes(0x0FFF & u16(d, 1));
-              if(xmsg_size_bytes() > data.size()) {
+              if(xmsg_size_bytes() < 4) {
+                ostringstream msg;
+                msg << "Invalid XMessage size: message specifies "
+                    << xmsg_size_bytes()
+                    << " bytes, but at least 4 bytes are required.";
+                EXC_THROW(msg.str());
+              } else if(xmsg_size_bytes() > data.size()) {
                 ostringstream msg;
                 msg << "Invalid XMessage size: message specifies at least "
                     << xmsg_size_bytes()

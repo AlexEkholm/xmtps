@@ -549,7 +549,7 @@ class XAcousticPosition:
         try {
 
             // Check message.
-            const uint8_t* d = CheckXMsgData(data, XMSG_TYPE_ID_MIZ_ACOUSTIC, -1);
+            const uint8_t* d = CheckXMsgData(data, XMSG_TYPE_ID_MIZ_ACOUSTIC, 4);
 
             /* Decode message based on subtype: */
 

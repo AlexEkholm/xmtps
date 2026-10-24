@@ -204,7 +204,7 @@ public:
 
         try {
 
-            if(code > 14)
+            if(code > 15)
                 EXC_THROW("Unsupported phase code: " + lexical_cast<string>((int)code) + "!");
 
             return phase_code_names_[code];

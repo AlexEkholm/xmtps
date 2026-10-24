@@ -345,6 +345,7 @@ namespace util {
               os << "Message too short! Expected at least 5 bytes, but only received "
                  << data.size()
                  << " bytes!";
+              EXC_THROW(os.str());
             }
 
             // Set the message type & index.
@@ -377,7 +378,7 @@ namespace util {
 
                     // Parse sub-block header.
                     scale = *it++;
-                    raw_sensor_data_.push_back(x0 = (*it++ << 8) | *it++);
+                    x0 = *it++ << 8; x0 |= *it++; raw_sensor_data_.push_back(x0);
                     size_t isub = XMSG_SENS_MAX_SUB;
 
                     // Iterate over sub-block data.
@@ -484,6 +485,9 @@ namespace util {
 
                   /* Parse the message header: */
 
+                  if(data.size() < 12)
+                    EXC_THROW("Curvature message too short for its header!");
+
                   // Get the first sensor value.
                   const int32_t first_sensor_value = i24(data, 6);
 
@@ -550,6 +554,9 @@ namespace util {
 
                   /* Get the 32 3-bit packing factors from the 12-byte field: */
 
+                  if(data.size() < 24)
+                    EXC_THROW("Curvature message too short for its packing factors!");
+
                   // Iterate over the four 3-byte blocks.
                   for(size_t i = 0; i < 4; ++i)
 
@@ -594,6 +601,9 @@ namespace util {
                   while(num_remaining_values > 0 && data_iterator < data.end() - 1) {
 
                     try {
+
+                      if(sub_block_index >= 32)
+                        EXC_THROW("Curvature data exceeds the 32 sub-blocks!");
 
                       // Get the data packing factor for this sub-block.
                       uint8_t data_packing_factor = data_packing_factors[sub_block_index];

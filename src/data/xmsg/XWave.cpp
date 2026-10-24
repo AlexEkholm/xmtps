@@ -155,7 +155,7 @@ const string XWave::GenerateListingString() const {
              os << endl
                  << "#---------------------------------------------------------------------------------------------------"
                  << endl
-                 << "#      SN dive  idx     freq         Szz         Syy         Sxx         Cxy         Qzx         Qzy"
+                 << "#      SN dive  idx     freq         Sxx         Cxy         Syy         Szz         Qzx         Qzy"
                  << endl
                  << "#                       (Hz)    (m^2/Hz)    (m^2/Hz)    (m^2/Hz)    (m^2/Hz)    (m^2/Hz)    (m^2/Hz)";
 
@@ -274,7 +274,7 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
           }
 
           wave_data_spectral_.at(i+first_sample_idx).freq_
-              = sample_rate_effective_*(i+1)/segment_len();
+              = sample_rate_effective_*(i+first_sample_idx+1)/segment_len();
 
           switch(type) {
             case XWAVE_SPECTRAL_TYPE_UNDEFINED:
@@ -429,6 +429,9 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
              uint16_t first_sample_idx;
              int32_t sample;
 
+             if(xmsg_size_bytes() < 19)
+               EXC_THROW("Spectral wave message too short for its header!");
+
              axis = static_cast<XWaveSpectralAxis_t>(d[6]);
              type = static_cast<XWaveSpectralType_t>(d[7]);
              set_segment_len_pow(u08(d,8));
@@ -463,13 +466,13 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
 
              for(unsigned int i = 0; i < (unsigned int)(segment_len() >> 1); ++i) {
 
-               if((unsigned int)(i*2+17) >= (unsigned int)xmsg_size_bytes()) {
+               if((unsigned int)(i*2+20) >= (unsigned int)xmsg_size_bytes()) {
                  lerr() << "wave sample index exceeds message size";
                  break;
                }
 
                wave_data_spectral_.at(i+first_sample_idx).freq_
-                   = sample_rate_effective_*(i+1)/segment_len();
+                   = sample_rate_effective_*(i+first_sample_idx+1)/segment_len();
 
                switch(type) {
                  case XWAVE_SPECTRAL_TYPE_UNDEFINED:

@@ -919,10 +919,8 @@ public:
 
     }
 
-    /** Remove the assigned pressure, temperature and salinity messages and their aggregated data.
-     *
-     *  @warning    The auxiliary temperature messages and aggregated auxiliary temperature data are
-     *              not cleared, so re-assigning them after a reset fails with a duplicate index.
+    /** Remove the assigned pressure, temperature, salinity and auxiliary temperature messages and
+     *  their aggregated data.
      *
      *  @throw      util::log::MessageException if an error occurs.
      */
@@ -937,9 +935,11 @@ public:
             aggregated_pres_data_.clear();
             aggregated_saln_data_.clear();
             aggregated_temp_data_.clear();
+            aggregated_aux_temp_data_.clear();
             pres_messages_.clear();
             saln_messages_.clear();
             temp_messages_.clear();
+            aux_temp_messages_.clear();
 
         }CATCH_BLOCK("Failed to reset sensor data object!")
 

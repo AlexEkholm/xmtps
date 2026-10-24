@@ -88,7 +88,7 @@ public:
 
         try {
 
-            const uint8_t* d = CheckXMsgData(data, 0xEB, 3, false);
+            const uint8_t* d = CheckXMsgData(data, 0xEB, 4, false);
 
             //  TODO Get the message packing format.
 
@@ -132,9 +132,9 @@ public:
                 XPhaseCode_t phaseCode;
                 for(vector<uint8_t>::const_iterator it = data.begin() + 4; it < data.end() - 7;) {
                     phaseCode = (XPhaseCode_t) (*it >> 4);
-                    presCounts = ((*it++ & 0x0F) << 16) | ((*it++) << 8) | (*it++);
-                    valveSecs = ((*it++) << 8) | (*it++);
-                    vac1 = ((*it++) << 8) | (*it++);
+                    presCounts = (*it++ & 0x0F) << 16; presCounts |= *it++ << 8; presCounts |= *it++;
+                    valveSecs = *it++ << 8; valveSecs |= *it++;
+                    vac1 = *it++ << 8; vac1 |= *it++;
                     AppendElement(XValveCounts(phaseCode, presCounts, valveSecs, vac0, vac1));
                 }
             }
