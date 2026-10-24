@@ -10,7 +10,7 @@ Restart=always
 RestartSec=30
 StandardOutput=null
 StandardError=null
-ExecStart=/data1/alamo/bin/xmtps --config /data1/alamo/etc/xmtps.cfg --daemon --pid-file /data1/alamo/var/lock/xmtps.pid --debug
+ExecStart=/data1/alamo/bin/xmtps -v --config /data1/alamo/etc/xmtps.cfg --daemon --pid-file /data1/alamo/var/lock/xmtps.pid
 
 [Install]
 WantedBy=multi-user.target

@@ -365,9 +365,11 @@ The `bin/*.service` files are systemd units:
 - `xmtps-alamo.service` runs the decoder daemon with `Restart=always` and `RestartSec=30`, so a
   startup failure (for example MySQL being unavailable) keeps retrying without hitting systemd's
   start limit.
-- `xmtps-alamo-plot.service` runs `bin/py/update-plots-service.sh`.
+- `xmtps-alamo-plot.service` runs `bin/py/update-plots-service.sh`, also with `Restart=always` and
+  `RestartSec=30`.
 
-After installing or changing a unit file, run `sudo systemctl daemon-reload`.
+The installed copies live in `/etc/systemd/system/`. After installing or changing a unit file, run
+`sudo systemctl daemon-reload`.
 
 ## Python tools (`bin/py`)
 
@@ -454,7 +456,35 @@ xmtps-generate-summary-page.py -i "/data1/alamo/data/json/[0-9]+/[0-9]+_summary.
 
 ### 2026-10-24
 
-- Added this README.
+Decoder daemon:
+
+- Wave: the v2 spectral decoder no longer reads a sample past the last bin (the `;` terminator
+  plus one byte beyond the message). For floats sending 51-sample packets (9287, 9291) this
+  spurious bin failed the 0.3 g²/Hz check, so no wave products were produced; 128-sample packets
+  decode as before.
+- Wave: bin frequencies now include the packet's first-sample index, and the `wvm` header matches
+  its column order (xx, xy, yy, zz, zx, zy).
+- Mission configuration message 1 for 10.8.0.4/10.12.0.x accepts 88 bytes (with CTD correction
+  parameters) as well as 71.
+- Fixed mission configuration offsets: `ddt` in five firmware layouts, `descend_start_time` for
+  2.0.69–2.5.62, `isa` overlapping `isd` from 5.0.61 on, and `sao` read across the message
+  terminator.
+- Fixed BIT v8 temperature and air-valve calibration offsets, ice engineering test
+  salinity/temperature range checks (salinity always read 2.000), surface engineering v0x10/v0x12
+  bounds, and the XArgo v2.1 surface salinity offset.
+- Surface pressure variance is now divided by gain² (it was 1/gain too large).
+- Added length checks for short or malformed X-messages, bounded curvature sub-blocks, accepted
+  phase code 15, and cleared auxiliary temperature data on dive reset.
+
+Operations:
+
+- Both systemd units restart after 30 s (`RestartSec=30`); the repository copies now match the
+  installed units (decoder runs with `-v`; plot PID file name).
+
+Documentation:
+
+- Added this README, documented all command-line, configuration and Python tool options and the
+  SQL schema, fixed stale Doxygen comments, and added the Doxygen PDF manual.
 
 ### 2026-10-23
 
@@ -473,9 +503,10 @@ Decoder daemon:
   password are percent-encoded in the server URL.
 - Status files now follow `gen.stat` instead of `gen.kml`; archived floats go into the KML
   "archive" folder; floats with a single GPS fix get a latest-position marker.
-- Metadata: launch times at hour or minute 0 are accepted, a bad field no longer stops parsing of
-  the rest of the file, launch positions accept any whitespace, and DAC ID 9999 placeholders are
-  ignored.
+- Metadata: launch times at hour or minute 0 are accepted and hour 24 is rejected, a bad field no
+  longer stops parsing of the rest of the file, launch positions accept any whitespace, and DAC ID
+  9999 placeholders are ignored.
+- Added mission configuration support for firmware 10.12.1.31 (WIMS).
 - The run-time PID lock is created exclusively and removed only by its owner.
 - The post-processing thread keeps going when one float's KML or status file fails.
 - A float's record is saved before its dives (fixes foreign-key failures for new floats), and the
@@ -487,8 +518,10 @@ Decoder daemon:
 
 Python tools:
 
-- Updated to JSON version 0.11.
-- Fixed the RhoLUT maximum temperature (39 °C, was 34 °C).
+- Updated to JSON version 0.11: descent/ascent phase codes in `xmtps-list2json.py`, shared logger
+  setup, and a reworked summary page (elapsed time, page-update stamp, auto refresh).
+- Fixed the RhoLUT maximum temperature (39 °C, was 34 °C); pressures below the table now use its
+  minimum pressure instead of 0.
 - Fixed drift fill values, a crash on 0 V pump records, and `.lastprocessed` being written before
   output succeeded.
 - Wave directional coefficients now use the displacement formulation; `r1` and `r2` are distinct

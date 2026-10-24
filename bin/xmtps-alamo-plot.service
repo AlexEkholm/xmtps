@@ -3,10 +3,11 @@ Description=XMTPS Decoder Plot Generation Service
 
 [Service]
 Type=simple
-PIDFile=/data1/alamo/var/lock/xmtpsi-plot.pid
+PIDFile=/data1/alamo/var/lock/xmtps-plot.pid
 User=aekholm
 Group=floatgroup
 Restart=always
+RestartSec=30
 ExecStart=/data1/alamo/bin/py/update-plots-service.sh
 
 [Install]
