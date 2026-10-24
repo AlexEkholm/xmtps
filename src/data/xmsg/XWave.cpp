@@ -155,7 +155,7 @@ const string XWave::GenerateListingString() const {
              os << endl
                  << "#---------------------------------------------------------------------------------------------------"
                  << endl
-                 << "#      SN dive  idx     freq         Sxx         Cxy         Syy         Szz         Qzx         Qzy"
+                 << "#      SN dive  idx     freq         Szz         Syy         Sxx         Cxy         Qzx         Qzy"
                  << endl
                  << "#                       (Hz)    (m^2/Hz)    (m^2/Hz)    (m^2/Hz)    (m^2/Hz)    (m^2/Hz)    (m^2/Hz)";
 
@@ -173,10 +173,10 @@ const string XWave::GenerateListingString() const {
                    " %+11.4f %+11.4f %+11.4f %+11.4f %+11.4f %+11.4f");
                  os << endl << format(fmt)
                     % id_instrument()  % id_dive() % idx++ % it->freq_
+                    % it->c_zz_m2hz((double)essf, (double)it->freq_)
+                    % it->c_yy_m2hz((double)essf, (double)it->freq_)
                     % it->c_xx_m2hz((double)essf, (double)it->freq_)
                     % it->c_xy_m2hz((double)essf, (double)it->freq_)
-                    % it->c_yy_m2hz((double)essf, (double)it->freq_)
-                    % it->c_zz_m2hz((double)essf, (double)it->freq_)
                     % it->q_zx_m2hz((double)essf, (double)it->freq_)
                     % it->q_zy_m2hz((double)essf, (double)it->freq_);
              }

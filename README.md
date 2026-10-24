@@ -462,8 +462,9 @@ Decoder daemon:
   plus one byte beyond the message). For floats sending 51-sample packets (9287, 9291) this
   spurious bin failed the 0.3 g²/Hz check, so no wave products were produced; 128-sample packets
   decode as before.
-- Wave: bin frequencies now include the packet's first-sample index, and the `wvm` header matches
-  its column order (xx, xy, yy, zz, zx, zy).
+- Wave: bin frequencies now include the packet's first-sample index, and `wvm` (m²/Hz) columns
+  use the same order as `wvs` again (zz, yy, xx, xy, zx, zy), matching their header. Builds
+  3234–3289 printed them as xx, xy, yy, zz under that header.
 - Mission configuration message 1 for 10.8.0.4/10.12.0.x accepts 88 bytes (with CTD correction
   parameters) as well as 71.
 - Fixed mission configuration offsets: `ddt` in five firmware layouts, `descend_start_time` for
