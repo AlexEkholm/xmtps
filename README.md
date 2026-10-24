@@ -263,13 +263,74 @@ Requires Python 3 with `numpy`, `scipy`, `pandas`, `plotly` (plus `kaleido` for 
 | `xmtps-generate-summary-page.py` | Builds the fleet summary page from the per-float `_summary.json` files. |
 | `update-plots-service.sh` | Loop used by the plot service: regenerates JSON and plots for floats with recent listings, then the summary page. |
 
-All three scripts share JSON version `0.11`. They skip inputs that haven't changed since the last
-run (`.lastprocessed` per dives directory, which is written only after all output succeeds). Use
-`-f` to force regeneration, for example after changing `RhoLUT.py` or `FloatClasses.py`.
+All three scripts share JSON version `0.11`; JSON files with a different version are ignored.
 
-Wave directional coefficients use the displacement (heave/north/east) formulation:
-`a1 = Qzx/√(Szz·(Sxx+Syy))`, `b1 = Qzy/√(Szz·(Sxx+Syy))`, `a2 = (Sxx−Syy)/(Sxx+Syy)`,
-`b2 = 2·Cxy/(Sxx+Syy)`, with `r1 = √(a1²+b1²)` and `r2 = √(a2²+b2²)`.
+### Command-line options
+
+Each script takes one or more input paths (directories and/or files) as positional arguments.
+Paths matching an include pattern are tested with a regular-expression search on the full path
+(using `/` separators), so a pattern only needs to match part of it.
+
+Options common to all three scripts:
+
+| Option | Default | Description |
+|---|---|---|
+| `-d`, `--debug` | | Print debug output. |
+| `-v`, `--verbose` | | Print informational output (used if `-d` is not given). |
+| `-q`, `--quiet` | | Print only errors (used if neither `-d` nor `-v` is given). |
+| `-H`, `--halt-on-error` | off | Stop at the first error instead of logging it and continuing. |
+| `-i`, `--include REGEX` | all files | Process only files whose path matches `REGEX`. Repeatable; a file is processed if it matches any pattern. |
+| `-o`, `--output DIR` | `.` | Output directory (see each script). |
+
+With no logging option, only warnings and errors are printed.
+
+`xmtps-list2json.py [options] PATH ...` — converts listing files (`PATH` may be listing files or
+directories containing them) into per-dive JSON files in `<output>/<serial>/dives/`:
+
+| Option | Default | Description |
+|---|---|---|
+| `-r`, `--recursive` | off | Descend into subdirectories of the input directories. |
+| `-x`, `--exclude REGEX` | none | Skip directories and files whose path matches `REGEX`. Repeatable. |
+| `-f`, `--force` | off | Rewrite every dive JSON file, even if it is newer than its listing file. |
+| `-s`, `--skip` | off | Skip listing files whose dive JSON already exists, even if the listing is newer. |
+| `-S`, `--strip-path REGEX` | `.*/alamo/` | Remove the matching part of the listing file path before storing it in the JSON. |
+
+Without `-f` or `-s`, a listing file is converted only if its dive JSON doesn't exist yet or is
+older than the listing file.
+
+`xmtps-aggregate-json.py [options] PATH ...` — reads dive JSON files (`PATH` is usually a float's
+`dives` directory) and writes the per-float aggregate JSON files to `<output>/<serial>/`:
+
+| Option | Default | Description |
+|---|---|---|
+| `-p`, `--plots DIR` | none | Also write the plot images, plot HTML files and the float's `index.html` page to `DIR/<serial>/`. `DIR` must exist. |
+| `-r`, `--recursive` | off | Descend into subdirectories of the input directories. |
+| `-x`, `--exclude REGEX` | none | Skip subdirectories whose path matches `REGEX` (applies to directories only). Repeatable. |
+| `-f`, `--force` | off | Process every directory, ignoring its `.lastprocessed` file. |
+| `-S`, `--strip-path REGEX` | `.*/alamo/` | Remove the matching part of file paths before storing them in the JSON and the plot pages. |
+| `-D`, `--display-figures` | off | Also open each figure in a web browser as it is generated (interactive use). |
+| `-s`, `--skip` | | Accepted but has no effect in this script. |
+
+Without `-f`, a directory is skipped when none of its included files is newer than the time in its
+`.lastprocessed` file. That file is written only after all aggregate JSON and plot output has been
+written, so a failed or interrupted run is retried next time. Use `-f` after changing `RhoLUT.py`
+or `FloatClasses.py`.
+
+`xmtps-generate-summary-page.py [options] PATH ...` — reads the per-float `<serial>_summary.json`
+files (searching input directories recursively) and writes the fleet summary page to
+`<output>/index.html`. `DIR` for `-o` must exist. It takes only the common options above, and
+always rebuilds the page from all matching summary files.
+
+Example (as run by `update-plots-service.sh` for one float):
+
+```
+xmtps-list2json.py -i "/data1/alamo/data/list/[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" \
+    -x "/\..*" -o /data1/alamo/data/json /data1/alamo/data/list/9308
+xmtps-aggregate-json.py -i "/data1/alamo/data/json/[0-9]+/dives/[0-9]+_-?[0-9]+.json" \
+    -o /data1/alamo/data/json -p /data1/alamo/data/plots2 /data1/alamo/data/json/9308/dives
+xmtps-generate-summary-page.py -i "/data1/alamo/data/json/[0-9]+/[0-9]+_summary.json" \
+    -o /data1/alamo/data/plots2 /data1/alamo/data/json
+```
 
 ## Changelog
 
