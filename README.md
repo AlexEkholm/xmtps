@@ -56,19 +56,120 @@ The code uses POSIX APIs (`open`/`O_EXCL`, `getpid`, signals), so it builds on L
 
 ## Configuration
 
-Options can be given on the command line or in a config file (`--config PATH`). Config-file
-options are grouped into sections; run `xmtps --help` for the full list with defaults.
+### How options are read
 
-| Section | Options |
-|---|---|
-| (general) | `maxFetch`, `msgStartIdx`, `nProcThrd`, `nDecoThrd`, `pid-file` |
-| `[dir]` | `kml`, `lis`, `log`, `meta`, `phy`, `raw`, `mail`, `mail.processed`, `sbd`, `stat` |
-| `[gen]` | `kml`, `lis`, `phy`, `raw`, `raw.format`, `sbd`, `stat` — which output files to write |
-| `[poc]` | `lis`, `phy` — apply the surface pressure offset correction in listing / PHY files |
-| `[mail]` | `host`, `protocol`, `user`, `password`, `folder`, `fetchMode` (0 = IMAP server, 1 = file system), `moveMessages`, `xDlyS` (seconds between mail checks), `validSenderRegex`, `validSubjectRegex`, `validSbdFilenameRegex` |
-| `[sql]` | `host`, `port`, `protocol`, `schema`, `user`, `password` |
+- Every option can be given on the command line. The options in the "Configuration file
+  options" tables below can also be set in the configuration file.
+- The configuration file (`-c PATH`, default `../cfg/options.cfg`, relative to the working
+  directory) must exist; the program stops if it is missing or contains an unknown option.
+- Command-line values take precedence: the configuration file is read after the command line and
+  only fills in options that were not given there.
+- In the configuration file, options in a table's section are written as `name = value` under a
+  `[section]` header (for example `host` under `[mail]`); on the command line they are written
+  with the section as a prefix (for example `--mail.host maila.whoi.edu`).
+- Boolean values are written as `0`/`1` or `false`/`true`, except the switches `-D` and `-R`,
+  which take no value.
+- `xmtps --help` prints all options with their defaults and exits.
 
-Example (credentials omitted):
+### Command-line only options
+
+| Option | Default | Description |
+|---|---|---|
+| `-c`, `--config PATH` | `../cfg/options.cfg` | Path to the configuration file. |
+| `-D`, `--daemon` | off | Run as a daemon: keep running until a termination signal or until the run-time lock is lost. Without it, the program starts the pipeline, waits briefly, and exits. |
+| `-h`, `--help` | | Print all options with their defaults, then exit. |
+| `-V`, `--version` | | Print the version banner, then exit. |
+| `-d`, `--debug` | | Log at debug level. |
+| `-v`, `--verbose` | | Log informational messages as well (used if `-d` is not given). |
+| `-q`, `--quiet` | | Log only warnings and errors (used if neither `-d` nor `-v` is given). |
+| `-r`, `--reprocess ID ...` | none | Reprocess all stored mail messages for the given instrument serial numbers before normal operation: their dive data is deleted and rebuilt from the database. Repeatable, and accepts several IDs. |
+| `-R`, `--reprocess-all` | off | Reprocess the stored mail messages of every cached instrument at startup. |
+| `-A`, `--reprocess-active 0\|1` | `1` | Reprocess every instrument that reported in the last 90 days at startup. **On by default.** |
+| `--phy-enable ID` | none | Enable PHY file generation for an instrument (repeatable). The instrument is also reprocessed at startup. |
+| `--phy-disable ID` | none | Disable PHY file generation for an instrument (repeatable). |
+
+With no logging option, the normal log level is used: operational messages, warnings and errors.
+
+### Configuration file options
+
+General:
+
+| Option | Default | Description |
+|---|---|---|
+| `-m`, `maxFetch N` | `127` | Maximum number of mail messages fetched from the server, or files read from `dir.mail`, per batch. |
+| `-M`, `msgStartIdx N` | `1` | Index of the first message on the mail server to fetch (server mode only). |
+| `-n`, `nProcThrd N` | `1` | Number of mail processing threads. |
+| `-N`, `nDecoThrd N` | `1` | Number of telemetry decoder threads. |
+| `-p`, `pid-file PATH` | `/var/lock/xmtps/lock.pid` | Run-time lock (PID) file. Only one instance can hold it. |
+
+`[dir]` — directories (relative paths are relative to the working directory):
+
+| Option | Default | Description |
+|---|---|---|
+| `dir.kml` | `kml` | KML files. |
+| `dir.lis` | `lis` | Intermediate listing files. |
+| `dir.log` | `log` | Log files. |
+| `dir.meta` | `meta` | Float metadata (`.meta`) files. |
+| `dir.phy` | `phy` | PHY listing files. |
+| `dir.raw` | `raw` | RAW mail message output files. |
+| `dir.mail` | `raw/incoming` | RAW mail input files (file-system fetch mode). |
+| `dir.mail.processed` | `raw/processed` | Processed RAW mail input files. Accepted but not currently used. |
+| `dir.sbd` | `sbd` | Binary SBD message files. |
+| `dir.stat` | `stat` | Status files. |
+
+`[gen]` — which output files to write:
+
+| Option | Default | Description |
+|---|---|---|
+| `gen.kml` | `1` | Google Earth KML files. |
+| `gen.lis` | `1` | Intermediate listing files. |
+| `gen.phy` | `1` | PHY listing files. |
+| `gen.raw` | `1` | RAW mail message files. |
+| `gen.raw.format` | `1` | RAW file format: `0` standard, `1` extended (adds headers, Iridium session details and an SBD hex dump). |
+| `gen.sbd` | `0` | Binary SBD message files. |
+| `gen.stat` | `0` | Status files. |
+
+`[poc]` — surface pressure offset correction (applied only for sensor types that need it; see
+[Float metadata](#float-metadata)):
+
+| Option | Default | Description |
+|---|---|---|
+| `poc.lis` | `1` | Apply the correction in listing files. |
+| `poc.phy` | `1` | Apply the correction in PHY files. |
+
+`[mail]` — mail server and message validation:
+
+| Option | Default | Description |
+|---|---|---|
+| `mail.host` | `maila.whoi.edu` | Mail server host name or IP address. |
+| `mail.protocol` | `imap` | Mail server protocol. |
+| `mail.user` | `alamo` | Mail account user name. |
+| `mail.password` | none | Mail account password. |
+| `mail.folder` | empty (server default) | Folder to read messages from, e.g. `INBOX`. |
+| `mail.fetchMode` | `0` | `0` fetch from the mail server; `1` read RAW mail files from `dir.mail` (renamed to `.err` if they can't be parsed). |
+| `mail.moveMessages` | `0` | After processing, move server messages to the folder `INBOX.<YYYYMM>` for their header date. |
+| `mail.xDlyS` | `60` | Seconds to wait before checking again when no new messages are found. |
+| `mail.validSenderRegex` | `(sbdservice@sbd.iridium.com\|service@sbd.pac.disa.mil)` | Senders whose messages are accepted. |
+| `mail.validSubjectRegex` | `SBD Msg From Unit: (\d+)` | Accepted subjects; the captured number is the IMEI. |
+| `mail.validSbdFilenameRegex` | `(\d+)_(\d{6})\.sbd` | Accepted SBD attachment file names. |
+
+The mail user and password may contain any characters; they are percent-encoded when the server
+URL is built.
+
+`[sql]` — MySQL server:
+
+| Option | Default | Description |
+|---|---|---|
+| `sql.host` | `127.0.0.1` | Server host name or IP address. |
+| `sql.port` | `3306` | Server port. |
+| `sql.protocol` | `tcp` | Connection protocol. |
+| `sql.schema` | `float_db` | Database schema name. |
+| `sql.user` | none | Account user name. |
+| `sql.password` | none | Account password. |
+
+### Example configuration file
+
+Credentials omitted:
 
 ```ini
 maxFetch                = 16
@@ -98,13 +199,8 @@ port                    = 3306
 schema                  = xmtps_alamo
 ```
 
-Notes:
-
-- `gen.stat` controls status files and defaults to `false`; enable it explicitly if you want them.
-- The mail user and password may contain any characters; they are percent-encoded when the server
-  URL is built.
-- Keep real configuration files, with their credentials, out of version control (`cfg/` is
-  ignored).
+Keep real configuration files, with their credentials, out of version control (`cfg/` is
+ignored).
 
 ### Float metadata
 
@@ -125,16 +221,8 @@ without one (866), and is skipped for SBE sensors (868, 876) and for 873.
 xmtps --config /data1/alamo/etc/xmtps.cfg --daemon --pid-file /data1/alamo/var/lock/xmtps.pid
 ```
 
-Useful command-line options:
-
-| Option | Effect |
-|---|---|
-| `-D`, `--daemon` | Run until a termination signal; otherwise process once and exit. |
-| `-r ID`, `--reprocess ID` | Reprocess all stored messages for an instrument at startup (repeatable). |
-| `-A 0\|1`, `--reprocess-active` | Reprocess floats that reported in the last 90 days. |
-| `-R`, `--reprocess-all` | Reprocess every stored message. |
-| `--phy-enable ID`, `--phy-disable ID` | Turn PHY generation on or off for an instrument. |
-| `-v`, `-q`, `-d` | Verbose, quiet or debug logging. |
+See [Configuration](#configuration) for every option. Note that `--reprocess-active` is on by
+default, so each start reprocesses the floats active in the last 90 days; pass `-A 0` to skip it.
 
 The PID file is created exclusively at startup, so only one instance can run at a time. It is
 removed on shutdown only by the process that owns it.
