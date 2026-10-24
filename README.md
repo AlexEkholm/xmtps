@@ -183,6 +183,69 @@ Wave directional coefficients use the displacement (heave/north/east) formulatio
 `a1 = Qzx/√(Szz·(Sxx+Syy))`, `b1 = Qzy/√(Szz·(Sxx+Syy))`, `a2 = (Sxx−Syy)/(Sxx+Syy)`,
 `b2 = 2·Cxy/(Sxx+Syy)`, with `r1 = √(a1²+b1²)` and `r2 = √(a2²+b2²)`.
 
+## Changelog
+
+### 2026-10-24
+
+- Added this README.
+
+### 2026-10-23
+
+Decoder daemon:
+
+- Fixed the mail retrieval thread busy-looping on an unparseable mail file (now renamed to
+  `.err`), and replaying a whole batch when one server message failed.
+- Worker threads now drain their queues on shutdown, and termination flags are atomic.
+- Fixed the latest Iridium position being compared against the GPS time instead of the Iridium
+  time.
+- Fixed composite Iridium positions: latitude/longitude were swapped in the variance calculation,
+  and longitudes are now averaged correctly across ±180°.
+- Mail parsing: "Message Size" is now parsed, the Date header timezone is converted to UTC
+  correctly, and SBD attachments must be at least 8 bytes.
+- The mail fetch limit is applied after filtering for `.raw`/`.txt` files, and the mail user and
+  password are percent-encoded in the server URL.
+- Status files now follow `gen.stat` instead of `gen.kml`; archived floats go into the KML
+  "archive" folder; floats with a single GPS fix get a latest-position marker.
+- Metadata: launch times at hour or minute 0 are accepted, a bad field no longer stops parsing of
+  the rest of the file, launch positions accept any whitespace, and DAC ID 9999 placeholders are
+  ignored.
+- The run-time PID lock is created exclusively and removed only by its owner.
+- The post-processing thread keeps going when one float's KML or status file fails.
+- A float's record is saved before its dives (fixes foreign-key failures for new floats), and the
+  shutdown save continues past a failing float.
+- Added ALTO WMO instrument types 873, 875 and 876.
+- Fixed ice engineering (v0x11) messages being rejected whenever they reported error codes.
+- Identical retransmitted SBD packets are no longer decoded twice.
+- Stopped tracking the Debug/Release binaries; build number 3287.
+
+Python tools:
+
+- Updated to JSON version 0.11.
+- Fixed the RhoLUT maximum temperature (39 °C, was 34 °C).
+- Fixed drift fill values, a crash on 0 V pump records, and `.lastprocessed` being written before
+  output succeeded.
+- Wave directional coefficients now use the displacement formulation; `r1` and `r2` are distinct
+  and lie in [0, 1].
+- Fixed the drift σ₀ average plot title, wave plots not being linked when a float has one wave
+  dive, and plot path handling.
+
+Operations:
+
+- The decoder service waits 30 s between restarts (`RestartSec=30`).
+
+### 2026-08-11
+
+- The post-processing thread closes its SQL connection after each pass, avoiding "lost connection
+  to MySQL server" errors.
+
+### 2026-08-06
+
+- Added mission parameter support for firmware 0x0A0C0001 (10.12.0.1, RBR).
+
+### 2026-08-05
+
+- Initial commit.
+
 ## Author and license
 
 Written and maintained by Alexander K. Ekholm, WHOI Float Group, Department of Physical
