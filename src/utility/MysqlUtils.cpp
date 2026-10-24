@@ -31,14 +31,14 @@ namespace mysql {
 /* Static Members */
 
 /** @var        util::mysql::MysqlUtils::sql_connection_
- *  @brief      Thread-specific MySQL connection, released by @ref MysqlUtils::CleanupSqlConnection()
+ *  @brief      Thread-specific MySQL connection, released by @c MysqlUtils::CleanupSqlConnection()
  *              when the thread exits.
  */
 thread_specific_ptr<Connection> MysqlUtils::sql_connection_(&CleanupSqlConnection);
 
 /** @var        util::mysql::MysqlUtils::sql_driver_
  *  @brief      Thread-specific reference to the MySQL driver. Its cleanup function,
- *              @ref MysqlUtils::CleanupSqlDriver(), does not delete the shared driver instance.
+ *              @c MysqlUtils::CleanupSqlDriver(), does not delete the shared driver instance.
  */
 thread_specific_ptr<MySQL_Driver> MysqlUtils::sql_driver_(&CleanupSqlDriver);
 

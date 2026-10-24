@@ -240,6 +240,124 @@ Logs are written to `<dir.log>/YYYY-MM-DD.log`, with warnings and errors also in
 
 Decoded data, messages, floats and dives are also stored in the MySQL schema set by `sql.schema`.
 
+## Database schema
+
+XMTPS stores its state in five InnoDB tables in the MySQL schema named by `sql.schema` (production:
+`xmtps_alamo`). Each table is mapped to one C++ class through a static
+`util::mysql::SqlTableDescription`. The description lists the column names and the getter and setter
+used to read and write each column, and generates the `SELECT`, `DELETE` and
+`INSERT ... ON DUPLICATE KEY UPDATE` statements. Saving an object therefore inserts a new row or
+overwrites the existing row with the same primary key.
+
+| Table | Class | Primary key | One row per | Written by |
+|---|---|---|---|---|
+| `XFloat` | `XFloat` | `id_instrument` | instrument | startup, stage 3 and shutdown |
+| `XFloatMetadata` | `XFloatMetadata` | `id_instrument` | instrument, from its `.meta` file | saved with `XFloat` |
+| `XFloatDive` | `XFloatDiveData` | `id_instrument`, `id_dive` | dive cycle | stage 3 |
+| `XGPS` | `XGPS` | `id_instrument`, `id_dive`, `datetime` | GPS fix | stage 3, saved with the dive |
+| `XFloatMail` | `XFloatMailMessage` | `id_dive`, `id_imei`, `id_sbd_momsn`, `id_sbd_packet`, `id_msg` | mail message (one SBD packet) | stage 2 |
+
+Relationships (foreign keys):
+
+```
+XFloat (id_instrument)
+ ├── XFloatMetadata.id_instrument               fk_XFloatMetadata_1
+ └── XFloatDive.id_instrument                   fk_XFloatDive_1
+      └── XGPS (id_instrument, id_dive)         fk_XGPS_1
+XFloatMail                                      no foreign key; linked by id_instrument / id_imei
+```
+
+Because of these keys a float's `XFloat` row must exist before its dives are saved, and a dive's row
+before its GPS fixes; `XFloatDiveData::SaveObjectToDatabase()` saves the parent float first.
+`XFloatMail` has no foreign key, so a message can be stored before its float is known (stage 2).
+
+Common identifier columns:
+
+| Column | Meaning |
+|---|---|
+| `id_instrument` | Float serial number (the instrument ID used throughout XMTPS). |
+| `id_imei` | IMEI of the float's Iridium modem. |
+| `id_wmo` | WMO platform number (`-1` if not assigned). |
+| `id_dac` | Argo data assembly center ID. |
+| `id_dive` | Dive (profile) number. |
+
+Unset values use sentinel defaults rather than `NULL`: `-1` for IDs, `1400-01-01 00:00:00` for
+dates, `99.99999`/`999.99999` for latitude/longitude, and `9999` for gains and offsets.
+
+### `XFloat`
+
+The current state of each float, reloaded at startup so that processing resumes where it left off.
+
+- Identifiers: `id_instrument`, `id_imei`, `id_wmo`, `id_dac`, and `argo_instrument_type` (Argo
+  instrument type code).
+- Calibration: `gain_*` and `offset_*` for pressure, salinity and temperature, with separate
+  `*_surface` values for the surface sample.
+- Latest positions: `latest_gps_position_*` and `latest_iridium_position_*` (date/time, dive number,
+  latitude, longitude, and Iridium CEP radius), used for the KML and status files.
+- Iridium sequence numbers: `latest_sbd_momsn` and `latest_sbd_mtmsn`, the most recent
+  mobile-originated and mobile-terminated message sequence numbers.
+- Output switches: `phy_file_generation_is_enabled` and `netcdf_file_generation_is_enabled`.
+- Mission: `start_of_mission_datetime`, and `xmsg_version_major`/`xmsg_version_minor` (the
+  X-Message format version the float reports).
+- `latest_iridium_startup_position_datetime` and `latest_iridium_startup_sbd_momsn` exist in the
+  production table but are not read or written by the current code.
+
+### `XFloatMetadata`
+
+Deployment metadata parsed from the float's `.meta` file (see [Float metadata](#float-metadata)).
+
+- Deployment: `deployment_datetime`, `deployment_latitude`/`deployment_longitude`,
+  `deployment_position_valid`, the `deployment_*_status` fields, `deployment_platform`,
+  `deployment_cruise_id` and `deployment_type`.
+- People: `deployer`, `deployer_address`, `principal_investigators`,
+  `principal_investigators_address`, `principal_investigators_originating_country`.
+- Instrument: `manufacturer`, `wmo_instrument_type` (for example 873, 875 or 876 for ALTO floats),
+  and `wmo_recorder_type`.
+- Other: `comment`, and `local_path`, the path of the `.meta` file.
+
+### `XFloatDive`
+
+One dive cycle, built from all the SBD messages received for it.
+
+- `complete`: the dive has a complete profile, known sensor gains and offsets, contiguous
+  message IDs and a valid position.
+- `num_sbd_msgs`: the number of SBD messages received for the dive.
+- `iridium_position_datetime_first`/`_last`: the first and last Iridium fix times for the dive.
+- `intermediate_listing_file_path` and `phy_file_path`: the output files written for the dive.
+- `surface_pres_*`: statistics of the surface pressure samples (min, max, mean, variance, valid).
+- `pres_offs*`: the pressure offset applied to the profile, with the number of dives and samples it
+  was computed from and whether it is valid.
+
+### `XGPS`
+
+One GPS fix reported in an X-Message.
+
+- `datetime`, `latitude`, `longitude` and `valid`.
+- `id_type`: the GPS message type.
+- Fix quality: `hdop`, `num_satellites`, `snr_min`, `snr_mean`, `snr_max`, and `time_to_fix`.
+
+### `XFloatMail`
+
+Every Iridium SBD mail message received, so that a float can be reprocessed from the database with
+`-r`/`--reprocess`.
+
+- Keys: `id_imei`, `id_sbd_momsn`, `id_sbd_packet` and `id_dive` identify the packet; `id_msg` is
+  the mail Message-ID; `id_msg_uid` is the IMAP UID; `id_sbd_mtmsn` is the MTMSN.
+- Mail: `msg_header_datetime`, `msg_header_from`, `msg_header_subject`, `msg_header_raw_text`,
+  `msg_body_text` and `msg_raw_text`, each with an `*_is_valid` flag, and `msg_is_valid` for the
+  whole message.
+- Iridium session: `iridium_position_*` (latitude, longitude, CEP radius, date/time, valid), and
+  `sbd_session_status_code`/`sbd_session_status_string`.
+- Attachment: `sbd_data` (the raw SBD bytes), `sbd_data_is_valid`, `sbd_file_name` and
+  `sbd_file_size_bytes`.
+- Files written: `sbd_file_local_path` and `raw_file_local_path`.
+- `id_dac` and `id_wmo` exist in the production table but are not written by the current code, so
+  they keep their default of `-1`.
+
+Reprocessing (`-r ID`) deletes the float's `XGPS` and `XFloatDive` rows and rebuilds them from its
+`XFloatMail` rows. The full `CREATE TABLE` statements are in the Doxygen documentation (the
+"Libraries and Database Schema" page in `doc/xmtps.pdf`).
+
 ## Deployment
 
 The `bin/*.service` files are systemd units:

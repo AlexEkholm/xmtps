@@ -826,7 +826,7 @@ class XFloatDiveData:
 
     /** Delete all dive data for an instrument from the SQL database.
      *
-     *  Deletes every GPS message row (see @ref x::XGPS::DeleteFromDatabase()) and every dive data
+     *  Deletes every GPS message row (see @ref util::xmsg::XGPS::DeleteFromDatabase(int)) and every dive data
      *  row for the instrument. This is used when an instrument's messages are reprocessed, so that
      *  the dives can be rebuilt from the stored mail messages. Stored mail messages are not
      *  deleted.
