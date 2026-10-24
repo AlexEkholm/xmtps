@@ -201,6 +201,21 @@ public:
         return dirs;
     }
 
+    /** Copy a file into a directory.
+     *
+     *  @warning    Despite its name, this function copies the file and does not remove the source.
+     *              If a file with the same name already exists in the destination directory, it is
+     *              left unchanged. It is not currently called.
+     *
+     *  @param[in]  file        The file to copy.
+     *  @param[in]  dir_dst     The destination directory.
+     *  @param[in]  create_dir  If TRUE, create the destination directory if it does not exist.
+     *
+     *  @throw      util::log::MessageException if the file does not exist, is not a regular file,
+     *              or cannot be copied.
+     *
+     *  @return     The path of the file in the destination directory.
+     */
     static path MoveFileToDirectory(const path& file, const path& dir_dst, bool create_dir = false) {
 
         path file_dst;

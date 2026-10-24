@@ -455,6 +455,16 @@ public:
 
     }
 
+    /** Assign an auxiliary-channel temperature message and re-aggregate the sensor data.
+     *
+     *  The message is inserted in order of message index, and the aggregated sensor data is
+     *  rebuilt.
+     *
+     *  @param[in]  x       The auxiliary-channel temperature message to assign.
+     *
+     *  @throw      util::log::MessageException if @p x is NULL or an auxiliary temperature message
+     *              with the same index has already been assigned.
+     */
     void AssignAuxTemperatureMessage(const TempMsgPtr_t& x) {
         typename TempMsgVector_t::iterator it;
 
@@ -909,6 +919,13 @@ public:
 
     }
 
+    /** Remove the assigned pressure, temperature and salinity messages and their aggregated data.
+     *
+     *  @warning    The auxiliary temperature messages and aggregated auxiliary temperature data are
+     *              not cleared, so re-assigning them after a reset fails with a duplicate index.
+     *
+     *  @throw      util::log::MessageException if an error occurs.
+     */
     void Reset() {
 
         try {

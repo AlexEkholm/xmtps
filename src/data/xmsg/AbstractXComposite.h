@@ -104,6 +104,13 @@ template<typename T> class AbstractXComposite {
 
     }
 
+    /** Assign an element to this composite object.
+     *
+     *  The default implementation appends the element; derived classes may override it to insert
+     *  elements in order or reject duplicates.
+     *
+     *  @param[in]  element     The element to assign.
+     */
     virtual void AssignElement(const Element_t& element) {
 
       // Default behavior: append element.

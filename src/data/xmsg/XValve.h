@@ -48,6 +48,14 @@ public:
 
     /* Public Member Functions: */
 
+    /** Parameterized constructor.
+     *
+     *  @param[in]  dive    The dive or cycle number of this message.
+     *  @param[in]  whoi    The unique WHOI instrument identifier.
+     *  @param[in]  data    The binary X-message data to decode.
+     *
+     *  @throw      util::log::MessageException if the message cannot be decoded.
+     */
     XValve(int16_t dive, uint16_t whoi, const vector<uint8_t>& data) :
                     XMessageIndexable(dive, whoi, data) {
 
@@ -63,6 +71,19 @@ public:
 
     }
 
+    /** Decode a valve data X-message (type 0xEB).
+     *
+     *  The low nibble of byte 3 is the message index. From byte 4, each valve operation is a
+     *  7-byte sample: a phase code (high nibble of the first byte), a 20-bit pressure count (low
+     *  nibble plus the next two bytes), the valve duration in seconds (2 bytes) and the case
+     *  vacuum after the operation (2 bytes). The case vacuum before the operation is not reported
+     *  and is set to @c XMSG_BAD_U16. Each sample is stored as an @ref XValveCounts element.
+     *
+     *  @param[in]  data    The binary X-message data to decode.
+     *
+     *  @throw      util::log::MessageException if the message is shorter than its size field or
+     *              the terminator is missing.
+     */
     void DecodeXMsgData(const vector<uint8_t>& data) {
 
         try {

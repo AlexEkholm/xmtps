@@ -52,6 +52,18 @@ class XCompositeAuxTemp:
       /* Do nothing. */
     }
 
+    /** Generate the listing file section for the auxiliary temperature data.
+     *
+     *  Writes an @c AXT header line, then one @c axt line per sample of each auxiliary
+     *  temperature message, with the raw counts and the temperature in degrees Celsius.
+     *
+     *  @param[in]  id_inst     The unique instrument identifier.
+     *  @param[in]  id_dive     The dive or cycle number.
+     *  @param[in]  tGain       The temperature gain used to convert counts.
+     *  @param[in]  tOff        The temperature offset used to convert counts.
+     *
+     *  @return     The listing file section.
+     */
     const string GenerateListingString(int id_inst, int id_dive, uint16_t tGain, uint16_t tOff) {
 
       int idx = 0;

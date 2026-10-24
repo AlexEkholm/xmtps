@@ -3442,6 +3442,30 @@ void XFloatDiveData::GetGainsAndOffsets(
   }
 }
 
+/** Compute this dive's surface pressure offset from the surface time-series data.
+ *
+ *  The offset is the mean of the surface pressure means (see
+ *  @ref UpdateDerivedSurfaceDataFields()) of this dive and up to @p max_num_dives preceding dives,
+ *  counting only dives whose surface pressure is valid. Each dive counts equally, regardless of its
+ *  number of samples. The result is stored in the pressure offset fields (@c pres_offs,
+ *  @c pres_offs_num_dives, @c pres_offs_num_samples, @c pres_offs_valid), which the listing and
+ *  PHY output use for the pressure offset correction.
+ *
+ *  The offset is only computed for instruments whose conductivity sensor needs the correction
+ *  (WMO instrument types 866, 867 and 875). For SBE sensors (868, 873, 876) and unknown types the
+ *  offset is left invalid; an unexpected type is logged as a warning. It is also left invalid if no
+ *  dive has valid surface pressure data.
+ *
+ *  @note       Preceding dives are loaded with @ref XFloat::GetDiveData(), which may read them from
+ *              the database.
+ *
+ *  @param[in]  max_num_dives   The maximum number of preceding dives to include (0 = none, and
+ *                              the offset is not computed).
+ *
+ *  @throw      util::log::MessageException if an error occurs.
+ *
+ *  @return     Always 0; read the result from the pressure offset fields.
+ */
 float XFloatDiveData::ComputePressureOffsetFromSurfaceTimeSeries(unsigned int max_num_dives) {
 
   shared_ptr<XFloatDiveData> dive;

@@ -151,6 +151,16 @@ public:
 
     }
 
+    /** Assign a time-series message to this composite and re-aggregate the time series.
+     *
+     *  The message is inserted in order of message index, and @c AggregateSensorData() is called
+     *  to rebuild the combined time series.
+     *
+     *  @param[in]  x       The time-series message to assign.
+     *
+     *  @throw      util::log::MessageException if @p x is NULL or a message with the same index
+     *              has already been assigned.
+     */
     virtual void AssignMessage(const MsgPtr_t& x) {
 
         MsgVectorIter_t it;
@@ -454,6 +464,13 @@ public:
         return pres_min_;
     }
 
+    /** Clear the aggregated time series and its derived pressure statistics.
+     *
+     *  The assigned messages are kept; the next call to @c AggregateSensorData() rebuilds the
+     *  aggregated data from them.
+     *
+     *  @throw      util::log::MessageException if an error occurs.
+     */
     void ResetAggregatedData() {
 
         try {
@@ -476,6 +493,10 @@ public:
 
     }
 
+    /** Remove all assigned messages and clear the aggregated data.
+     *
+     *  @throw      util::log::MessageException if an error occurs.
+     */
     void Reset() {
 
         try {
@@ -805,6 +826,22 @@ protected:
       return aggregated_temp_data_;
     }
 
+    /** Combine the assigned time-series messages into one aggregated time series.
+     *
+     *  Does nothing if the aggregated data is already valid. Otherwise the aggregated data is
+     *  cleared and rebuilt from the messages, in message-index order: the pressure counts and
+     *  phase codes, plus temperature and salinity counts for messages in the
+     *  @c XRISEFALL_FMT_STNDRD_WITH_TEMP_AND_SALN format. Salinity data is dropped if it contains
+     *  no valid samples (temperature-only instruments).
+     *
+     *  The pressure maximum, minimum and mean are computed from the valid samples (ignoring
+     *  @c XMSG_SENS_BAD and 0xFFFF), after applying the static gain
+     *  (@c derived_fields_static_gain_exp). The aggregated data is marked valid only if there is at
+     *  least one valid pressure sample.
+     *
+     *  @throw      util::log::MessageException if no messages are assigned or the message format
+     *              is unsupported.
+     */
     virtual void AggregateSensorData() {
 
         MsgPtr_t msg;

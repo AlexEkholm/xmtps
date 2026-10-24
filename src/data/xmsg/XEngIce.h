@@ -198,6 +198,20 @@ public:
 
     }
 
+    /** Decode an engineering (ice) X-message.
+     *
+     *  Byte 3 holds the message version. Versions 0x10 and 0x11 share the fields in bytes 4-19:
+     *  operation mode, ice detection status, urgency, number of surfacing attempts, number of
+     *  stored SBD messages, time since the last transmission, minimum pressure, temperature
+     *  threshold test and surface salinity test. Version 0x11 adds error codes; its layout is
+     *  described in the 0x11 case below.
+     *
+     *  @param[in]  data    The binary X-message data to decode.
+     *
+     *  @throw      util::log::MessageException if the message type, size or terminator is invalid,
+     *              the version is unsupported, or (version 0x11) the error count does not match the
+     *              number of error code entries.
+     */
     void DecodeXMsgData(const vector<uint8_t>& data) {
 
         try {

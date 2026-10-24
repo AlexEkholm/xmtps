@@ -40,6 +40,13 @@ using bpt::ptime;
 
 /* Class Definitions */
 
+/** An acoustic reception (CACST) record.
+ *
+ *  An instance of this class represents a single acoustic signal received by the instrument,
+ *  decoded from an acoustic position message (see @ref XAcousticPosition): its counter, time of
+ *  arrival (seconds and microseconds), source identifier, signal power, PSK error code, input
+ *  and output signal-to-noise ratios, and the index of the listening window it was received in.
+ */
 class XAcousticCacst {
 
     friend class XAcousticPosition;
@@ -264,6 +271,13 @@ class XAcousticCacst {
     }
 };
 
+/** An acoustic listening window.
+ *
+ *  An instance of this class represents a period during which the instrument listened for
+ *  acoustic signals, decoded from an acoustic position message (see @ref XAcousticPosition): its
+ *  start and end times, the pressure, temperature and salinity at the start and end, its index,
+ *  and the number of receptions (see @ref XAcousticCacst) that fall within it.
+ */
 class XAcousticWindow {
 
     friend class XAcousticPosition;
@@ -661,6 +675,15 @@ class XAcousticPosition:
 
   public:
 
+    /** Number the acoustic listening windows and assign each ping to its window.
+     *
+     *  Windows are numbered in order, starting at 0. Each ping (CACST record) whose time of
+     *  arrival falls within a window's start and end times is given that window's index, and the
+     *  window's receive count is incremented. A ping outside every window keeps its window index
+     *  unchanged.
+     *
+     *  @throw      util::log::MessageException if an error occurs.
+     */
     void AssignWindowIndices(void) {
 
       try {

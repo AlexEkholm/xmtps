@@ -841,6 +841,17 @@ class XFloatMailMessage:
       }CATCH_BLOCK("Failed to parse mail message attachment!")
     }
 
+    /** Select all mail message objects from the SQL database table.
+     *
+     *  @param[in]  groupBy     The SQL select statement "group-by expression" clause.
+     *  @param[in]  orderBy     The SQL select statement "order-by expression" clause.
+     *  @param[in]  limit       The SQL select statement result set row limit value (0 = no limit).
+     *  @param[in]  offset      The SQL select statement result set row offset value.
+     *
+     *  @throw      util::log::MessageException if the query fails.
+     *
+     *  @return     The mail message objects.
+     */
     static vector<shared_ptr<XFloatMailMessage> > SelectAllObjectsFromDatabase(
         const string& groupBy = "",
         const string& orderBy = "",
@@ -860,6 +871,17 @@ class XFloatMailMessage:
       return vector<shared_ptr<XFloatMailMessage> >();
     }
 
+    /** Select a single mail message object from the SQL database table.
+     *
+     *  @param[in]  where       The SQL select statement "where-condition" clause.
+     *  @param[in]  groupBy     The SQL select statement "group-by expression" clause.
+     *  @param[in]  orderBy     The SQL select statement "order-by expression" clause.
+     *  @param[in]  offset      The SQL select statement result set row offset value.
+     *
+     *  @throw      util::log::MessageException if the query fails.
+     *
+     *  @return     The first mail message object matching the query.
+     */
     static shared_ptr<XFloatMailMessage> SelectObjectFromDatabase(
         const string& where = "",
         const string& groupBy = "",

@@ -707,6 +707,20 @@ class XFloatDiveData:
 
     vector<int> GenerateOrderedMomsnList() const;
 
+    /** Update the derived surface pressure fields from the surface time-series data.
+     *
+     *  Computes the surface pressure maximum, mean, minimum, number of samples and variance from
+     *  the surface time series (see @ref xmsg_surface_time_series_), using the surface sensor
+     *  gains and offsets. These fields feed the surface pressure offset correction (see
+     *  @ref ComputePressureOffsetFromSurfaceTimeSeries()).
+     *
+     *  The fields are set to @ref XMSG_SENS_BAD_PRES and marked invalid if the sensor gains and
+     *  offsets are unknown, there is no surface data, or the mean surface pressure is outside
+     *  ±5 dbar. Otherwise they are set, and marked valid only if the surface time series is
+     *  complete and the dive has a valid GPS position.
+     *
+     *  @throw      util::log::MessageException if an error occurs.
+     */
     void UpdateDerivedSurfaceDataFields() {
 
       // Sensor gains & offsets for surface data.
@@ -810,6 +824,19 @@ class XFloatDiveData:
 
     /* Public SQL Database Member Functions: */
 
+    /** Delete all dive data for an instrument from the SQL database.
+     *
+     *  Deletes every GPS message row (see @ref x::XGPS::DeleteFromDatabase()) and every dive data
+     *  row for the instrument. This is used when an instrument's messages are reprocessed, so that
+     *  the dives can be rebuilt from the stored mail messages. Stored mail messages are not
+     *  deleted.
+     *
+     *  @warning    This permanently removes all of the instrument's dive and GPS rows.
+     *
+     *  @param[in]  id_instrument   The unique instrument identifier (serial number).
+     *
+     *  @throw      util::log::MessageException if a delete query fails.
+     */
     static void DeleteFromDatabase(int id_instrument) {
 
       ostringstream os;
@@ -827,6 +854,12 @@ class XFloatDiveData:
 
     }
 
+    /** Delete dive data rows from the SQL database table.
+     *
+     *  @param[in]  where       The SQL "where-condition" clause selecting the rows to delete.
+     *
+     *  @throw      util::log::MessageException if the delete query fails.
+     */
     static void DeleteObjectsFromDatabase(const string& where) {
 
       try {
@@ -837,6 +870,17 @@ class XFloatDiveData:
 
     }
 
+    /** Get this dive's stored mail messages from the SQL database.
+     *
+     *  Selects the valid mail messages (@c msg_is_valid = 1) for this instrument and dive.
+     *  Messages transmitted more than 15 minutes before the instrument's start-of-mission or
+     *  deployment date/time are excluded. Used to rebuild a dive object loaded from the database.
+     *
+     *  @throw      util::log::MessageException if the instrument or dive identifier is unknown, or
+     *              the query fails.
+     *
+     *  @return     The matching mail messages.
+     */
     vector<shared_ptr<XFloatMailMessage>> GetDiveDataMailMessagesFromDatabase();
 
     static shared_ptr<XFloatDiveData> GetDiveDataObjectFromDatabase(
@@ -850,6 +894,17 @@ class XFloatDiveData:
      */
     void SaveObjectToDatabase() const;
 
+    /** Select a single dive data object from the SQL database table.
+     *
+     *  @param[in]  where       The SQL select statement "where-condition" clause.
+     *  @param[in]  groupBy     The SQL select statement "group-by expression" clause.
+     *  @param[in]  orderBy     The SQL select statement "order-by expression" clause.
+     *  @param[in]  offset      The SQL select statement result set row offset value.
+     *
+     *  @throw      util::log::MessageException if the query fails.
+     *
+     *  @return     The first dive data object matching the query.
+     */
     static shared_ptr<XFloatDiveData> SelectObjectFromDatabase(
         const string& where = "",
         const string& groupBy = "",
@@ -865,6 +920,18 @@ class XFloatDiveData:
       return make_shared<XFloatDiveData>();
     }
 
+    /** Select dive data objects from the SQL database table.
+     *
+     *  @param[in]  where       The SQL select statement "where-condition" clause.
+     *  @param[in]  groupBy     The SQL select statement "group-by expression" clause.
+     *  @param[in]  orderBy     The SQL select statement "order-by expression" clause.
+     *  @param[in]  limit       The SQL select statement result set row limit value (0 = no limit).
+     *  @param[in]  offset      The SQL select statement result set row offset value.
+     *
+     *  @throw      util::log::MessageException if the query fails.
+     *
+     *  @return     The dive data objects matching the query.
+     */
     static vector<shared_ptr<XFloatDiveData> > SelectObjectsFromDatabase(
         const string& where = "",
         const string& groupBy = "",
@@ -886,6 +953,21 @@ class XFloatDiveData:
       return vector<shared_ptr<XFloatDiveData> >();
     }
 
+    /** Select a single value from the dive data SQL database table.
+     *
+     *  @tparam     TT          The type of the value to select.
+     *
+     *  @param[in]  what        The SQL select statement "what" clause (a single column or
+     *                          expression).
+     *  @param[in]  where       The SQL select statement "where-condition" clause.
+     *  @param[in]  groupBy     The SQL select statement "group-by expression" clause.
+     *  @param[in]  orderBy     The SQL select statement "order-by expression" clause.
+     *  @param[in]  offset      The SQL select statement result set row offset value.
+     *
+     *  @throw      util::log::MessageException if the query fails.
+     *
+     *  @return     The value from the first matching row.
+     */
     template<typename TT> static TT SelectValueFromDatabase(
         const string& what,
         const string& where = "",
@@ -1285,6 +1367,12 @@ class XFloatDiveData:
 
     }
 
+    /** Assign an engineering (ice) message to this dive data object.
+     *
+     *  Replaces any previously assigned engineering (ice) message.
+     *
+     *  @param[in]      x       A pointer to the engineering (ice) message to assign.
+     */
     void AssignEngineeringIce(const shared_ptr<x::XEngIce>& x) {
 
       // Get an exclusive lock.
@@ -1482,6 +1570,13 @@ class XFloatDiveData:
 
     }
 
+    /** Assign a binned auxiliary-channel profile temperature message to this dive data object.
+     *
+     *  @param[in]      x       A pointer to the auxiliary-channel profile temperature message.
+     *
+     *  @throw          util::log::MessageException if a message with the same index has already
+     *                  been assigned.
+     */
     void AssignAuxTemperatureBinned(const shared_ptr<x::XProfileTemperature>& x) {
 
       // Get an exclusive lock.
@@ -1606,6 +1701,15 @@ class XFloatDiveData:
 
     }
 
+    /** Assign a valve data message to this dive data object.
+     *
+     *  @note           The valve data messages are kept sorted by message index.
+     *
+     *  @param[in]      x       A pointer to the valve data message to assign.
+     *
+     *  @throw          util::log::MessageException if a message with the same index has already
+     *                  been assigned.
+     */
     void AssignValveData(const shared_ptr<x::XValve>& x) {
 
       // Get an exclusive lock.

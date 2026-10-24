@@ -345,6 +345,15 @@ public:
         return select;
     }
 
+    /** Generate an SQL DELETE statement.
+     *
+     *  @warning    Without a @p where clause, the statement deletes every row in the table.
+     *
+     *  @param[in]  from        The name of the table to delete from.
+     *  @param[in]  where       The SQL "where-condition" clause (empty = all rows).
+     *
+     *  @return     The SQL statement.
+     */
     static string GenerateSqlDeleteStr(
             const string& from,
             const string& where = "") {

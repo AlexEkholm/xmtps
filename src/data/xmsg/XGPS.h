@@ -119,6 +119,12 @@ private:
         time_to_acquire_fix_ = time_to_acquire_fix;
     }
 
+    /** Delete all GPS message rows for an instrument from the SQL database.
+     *
+     *  @param[in]  id_inst     The unique instrument identifier.
+     *
+     *  @throw      util::log::MessageException if the delete query fails.
+     */
     static void DeleteFromDatabase(int id_inst) {
 
         ostringstream os;
@@ -135,6 +141,16 @@ private:
         } CATCH_BLOCK("Failed to delete GPS objects from database!")
     }
 
+    /** Delete the GPS message rows for one dive of an instrument from the SQL database.
+     *
+     *  @warning    The generated condition uses @c == , which MySQL does not accept, so this query
+     *              would fail. It is not currently called.
+     *
+     *  @param[in]  id_inst     The unique instrument identifier.
+     *  @param[in]  id_dive     The dive or cycle number.
+     *
+     *  @throw      util::log::MessageException if the delete query fails.
+     */
     static void DeleteFromDatabase(int id_inst, int id_dive) {
 
         ostringstream os;
@@ -286,6 +302,12 @@ public:
         }CATCH_BLOCK("Failed to decode GPS X message!")
     }
 
+    /** Delete GPS message rows from the SQL database table.
+     *
+     *  @param[in]  where       The SQL "where-condition" clause selecting the rows to delete.
+     *
+     *  @throw      util::log::MessageException if the delete query fails.
+     */
     void static DeleteObjectsFromDatabase(const string& where)   {
 
         try {
@@ -396,6 +418,17 @@ public:
         }CATCH_BLOCK("Failed to save GPS object to database!")
     }
 
+    /** Select all GPS message objects from the SQL database table.
+     *
+     *  @param[in]  groupBy     The SQL select statement "group-by expression" clause.
+     *  @param[in]  orderBy     The SQL select statement "order-by expression" clause.
+     *  @param[in]  limit       The SQL select statement result set row limit value (0 = no limit).
+     *  @param[in]  offset      The SQL select statement result set row offset value.
+     *
+     *  @throw      util::log::MessageException if the query fails.
+     *
+     *  @return     The GPS message objects.
+     */
     static vector<shared_ptr<XGPS> > SelectAllObjectsFromDatabase(
             const string& groupBy = "",
             const string& orderBy = "",
@@ -415,6 +448,17 @@ public:
         return vector<shared_ptr<XGPS> >();
     }
 
+    /** Select a single GPS message object from the SQL database table.
+     *
+     *  @param[in]  where       The SQL select statement "where-condition" clause.
+     *  @param[in]  groupBy     The SQL select statement "group-by expression" clause.
+     *  @param[in]  orderBy     The SQL select statement "order-by expression" clause.
+     *  @param[in]  offset      The SQL select statement result set row offset value.
+     *
+     *  @throw      util::log::MessageException if the query fails.
+     *
+     *  @return     The first GPS message object matching the query.
+     */
     static shared_ptr<XGPS> SelectObjectFromDatabase(
             const string& where = "",
             const string& groupBy = "",

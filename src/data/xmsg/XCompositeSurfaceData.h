@@ -97,6 +97,21 @@ public:
 
     }
 
+    /** Aggregate the surface time series and compute outlier-filtered pressure statistics.
+     *
+     *  First aggregates the messages as in
+     *  @ref AbstractXTimeSeriesDataComposite::AggregateSensorData(), then refines the surface
+     *  pressure statistics in three passes over the valid samples (after the static gain):
+     *   -# compute the pressure variance about the mean;
+     *   -# discard samples more than two standard deviations from the mean, and recompute the
+     *      maximum, minimum and mean from the rest;
+     *   -# recompute the variance from the remaining samples.
+     *
+     *  These statistics drive the surface pressure offset correction (see
+     *  @c XFloatDiveData::UpdateDerivedSurfaceDataFields()).
+     *
+     *  @throw      util::log::MessageException if a pass finds no valid samples.
+     */
     void AggregateSensorData() {
 
         Sample_t pres;

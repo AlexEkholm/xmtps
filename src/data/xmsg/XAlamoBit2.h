@@ -26,6 +26,12 @@ typedef enum XAlamoBIT2Type {
 
 /* Class Definitions */
 
+/** The ALAMO Built-in-Test (BIT) message, version 2.
+ *
+ *  An instance of this class represents a decoded BIT message from ALAMO instruments with
+ *  firmware version 10.x or later (BIT formats 9, 10 and 11; see @ref XEngBIT). Earlier
+ *  instruments use @ref XAlamoBit.
+ */
 class XAlamoBit2:
     public util::date::DateUtils {
 

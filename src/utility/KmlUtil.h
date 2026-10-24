@@ -71,16 +71,28 @@ private:
     /* Private Data Members: */
 
 
+    /** The colour palette for instrument paths and placemarks, indexed by style index. */
     static const Color32 kml_default_path_colors_[KML_NUM_DFLT_PATH_COLORS];
 
+    /** The KML style IDs of the path (line) styles, one per palette colour. */
     static const string kml_default_path_style_ids_[KML_NUM_DFLT_PATH_COLORS];
 
+    /** The KML style IDs of the large placemark styles, one per palette colour. */
     static const string kml_default_placemark_style_ids_[KML_NUM_DFLT_PATH_COLORS];
 
+    /** The KML style IDs of the small placemark styles, one per palette colour. */
     static const string kml_small_placemark_style_ids_[KML_NUM_DFLT_PATH_COLORS];
 
+    /** The KML style IDs of the triangle placemark styles, one per palette colour. */
     static const string kml_triangle_placemark_style_ids_[KML_NUM_DFLT_PATH_COLORS];
 
+    /** The libkml factory used to create KML elements, held per thread.
+     *
+     *  @warning    This holds libkml's process-wide factory (@c KmlFactory::GetFactory()), and the
+     *              default cleanup deletes it when the owning thread exits or
+     *              @ref CloseKmlFactory() is called. Only the post-processing thread uses KML, so
+     *              this currently happens only at shutdown.
+     */
     static thread_specific_ptr<KmlFactory> kml_factory_;
 
 public:
@@ -96,6 +108,12 @@ public:
 
     /* Protected Member Functions: */
 
+    /** Get the libkml factory, initializing it for this thread if necessary.
+     *
+     *  @throw      util::log::MessageException if the factory cannot be obtained.
+     *
+     *  @return     The thread's KML factory pointer (see @ref kml_factory_).
+     */
     static thread_specific_ptr<KmlFactory>& GetKmlFactory() {
 
         try {
@@ -109,6 +127,15 @@ public:
         return kml_factory_;
     }
 
+    /** Add the four default styles for one palette colour to a KML document.
+     *
+     *  Adds a 5-pixel path (line) style, a large dot placemark style, a small dot placemark style
+     *  and a triangle placemark style, all in the colour @p style_idx (modulo the palette size).
+     *  The icons are loaded from @c http://argo.whoi.edu/kml/img/. Errors are logged, not thrown.
+     *
+     *  @param[in]  document    The KML document to add the styles to.
+     *  @param[in]  style_idx   The palette index of the colour.
+     */
     static void SetDefaultKmlStyle(const DocumentPtr& document, unsigned int style_idx) {
 
         try {
@@ -235,6 +262,12 @@ public:
 
     }
 
+    /** Add the default styles for every palette colour to a KML document.
+     *
+     *  @param[in]  document    The KML document to add the styles to.
+     *
+     *  @throw      util::log::MessageException if an error occurs.
+     */
     static void SetAllDefaultKmlSyles(const DocumentPtr& document) {
 
         try {
@@ -247,6 +280,13 @@ public:
 
     }
 
+    /** Release this thread's KML factory pointer.
+     *
+     *  @warning    This deletes libkml's shared factory (see @ref kml_factory_). It is not
+     *              currently called.
+     *
+     *  @throw      util::log::MessageException if an error occurs.
+     */
     static void CloseKmlFactory() {
 
         try {
@@ -258,22 +298,52 @@ public:
 
     }
 
+    /** Get the palette colour for an index (an instrument ID, for example), modulo the palette size.
+     *
+     *  @param[in]  id      The index.
+     *
+     *  @return     The colour.
+     */
     static const Color32& GetDefaltKmlPathColor(int id) {
         return kml_default_path_colors_[id % KML_NUM_DFLT_PATH_COLORS];
     }
 
+    /** Get the path (line) style ID for an index, modulo the palette size.
+     *
+     *  @param[in]  id      The index.
+     *
+     *  @return     The KML style ID.
+     */
     static const string& GetDefaltKmlPathStyleId(int id) {
         return kml_default_path_style_ids_[id % KML_NUM_DFLT_PATH_COLORS];
     }
 
+    /** Get the large placemark style ID for an index, modulo the palette size.
+     *
+     *  @param[in]  id      The index.
+     *
+     *  @return     The KML style ID.
+     */
     static const string& GetDefaltKmlPlacemarkStyleId(int id) {
         return kml_default_placemark_style_ids_[id % KML_NUM_DFLT_PATH_COLORS];
     }
 
+    /** Get the small placemark style ID for an index, modulo the palette size.
+     *
+     *  @param[in]  id      The index.
+     *
+     *  @return     The KML style ID.
+     */
     static const string& GetSmallKmlPlacemarkStyleId(int id) {
         return kml_small_placemark_style_ids_[id % KML_NUM_DFLT_PATH_COLORS];
     }
 
+    /** Get the triangle placemark style ID for an index, modulo the palette size.
+     *
+     *  @param[in]  id      The index.
+     *
+     *  @return     The KML style ID.
+     */
     static const string& GetTriangleKmlPlacemarkStyleId(int id) {
         return kml_triangle_placemark_style_ids_[id % KML_NUM_DFLT_PATH_COLORS];
     }

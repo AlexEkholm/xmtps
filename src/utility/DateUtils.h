@@ -65,6 +65,15 @@ public:
 
     /* Member Functions */
 
+    /** Convert a date/time to fractional days since a reference date/time.
+     *
+     *  @param[in]  dt          The date/time to convert.
+     *  @param[in]  ref_dt      The reference date/time (day 0).
+     *
+     *  @throw      util::log::MessageException if either date/time is not valid.
+     *
+     *  @return     The number of days (with millisecond resolution) from @p ref_dt to @p dt.
+     */
     static double GenerateJulianDay(const ptime& dt, const ptime& ref_dt) {
 
         double juld = 0;

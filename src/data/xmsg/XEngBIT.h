@@ -17,6 +17,12 @@
 namespace util {
 namespace xmsg {
 
+/** The ALAMO Built-in-Test (BIT) engineering message.
+ *
+ *  An instance of this class represents a BIT engineering X-message. Depending on the BIT
+ *  format in byte 3, the message is decoded as an @ref XAlamoBit (formats 6-8, firmware before
+ *  10.x) or an @ref XAlamoBit2 (formats 9-11, firmware 10.x and later).
+ */
 class XEngBIT:
     public XMessage {
 
