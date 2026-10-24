@@ -149,6 +149,14 @@ namespace util {
       XMSG_TYPE_ID_PUMPD = 0x6D,    //!< XMSG_TYPE_ID_PUMPD
       XMSG_TYPE_ID_PUMPE = 0x6E,    //!< XMSG_TYPE_ID_PUMPE
       XMSG_TYPE_ID_PUMPF = 0x6F,    //!< XMSG_TYPE_ID_PUMPF
+      XMSG_TYPE_ID_TIME_DRIFT8 = 0x78,    //!< Drift sample times (seconds since drift start)
+      XMSG_TYPE_ID_TIME_DRIFT9 = 0x79,    //!< XMSG_TYPE_ID_TIME_DRIFT9
+      XMSG_TYPE_ID_TIME_DRIFTA = 0x7A,    //!< XMSG_TYPE_ID_TIME_DRIFTA
+      XMSG_TYPE_ID_TIME_DRIFTB = 0x7B,    //!< XMSG_TYPE_ID_TIME_DRIFTB
+      XMSG_TYPE_ID_TIME_DRIFTC = 0x7C,    //!< XMSG_TYPE_ID_TIME_DRIFTC
+      XMSG_TYPE_ID_TIME_DRIFTD = 0x7D,    //!< XMSG_TYPE_ID_TIME_DRIFTD
+      XMSG_TYPE_ID_TIME_DRIFTE = 0x7E,    //!< XMSG_TYPE_ID_TIME_DRIFTE
+      XMSG_TYPE_ID_TIME_DRIFTF = 0x7F,    //!< XMSG_TYPE_ID_TIME_DRIFTF
       XMSG_TYPE_ID_PRES_SURF0 = 0x80,    //!< XMSG_TYPE_ID_PRES_SURF0
       XMSG_TYPE_ID_PRES_SURF1 = 0x81,    //!< XMSG_TYPE_ID_PRES_SURF1
       XMSG_TYPE_ID_PRES_SURF2 = 0x82,    //!< XMSG_TYPE_ID_PRES_SURF2
@@ -242,7 +250,7 @@ namespace util {
       // = 0xD9
       // = 0xDA
       // = 0xDB
-      // = 0xDC
+      XMSG_TYPE_ID_SALN_CORR = 0xDC,    //!< Dynamically corrected profile salinity
       // = 0xDD
       // = 0xDE
       // = 0xDF

@@ -29,11 +29,13 @@
 #include "XDriftPressure.h"
 #include "XDriftSalinity.h"
 #include "XDriftTemperature.h"
+#include "XDriftTime.h"
 #include "XHiResPressure.h"
 #include "XHiResSalinity.h"
 #include "XHiResTemperature.h"
 #include "XProfilePressure.h"
 #include "XProfileSalinity.h"
+#include "XProfileSalinityCorrected.h"
 #include "XProfileTemperature.h"
 
 /* Definitions: */
@@ -131,6 +133,9 @@ private:
 
     vector<int32_t> aggregated_aux_temp_data_;
 
+    /** A vector of the aggregated dynamically corrected salinity data samples, in raw counts. */
+    vector<int32_t> aggregated_corr_saln_data_;
+
     /** A static vector (of size MAX_MSGS) containing pointers the pressure sensor data messages
      *  assigned to this composite object.
      *
@@ -159,6 +164,12 @@ private:
     TempMsgVector_t temp_messages_;
 
     TempMsgVector_t aux_temp_messages_;
+
+    /** The dynamically corrected salinity messages (0xDC), in order of increasing message index.
+     *
+     *  This optional second salinity channel does not affect whether the data is complete.
+     */
+    SalnMsgVector_t corr_saln_messages_;
 
 protected:
 
@@ -208,6 +219,7 @@ protected:
             aggregated_saln_data_.clear();
             aggregated_temp_data_.clear();
             aggregated_aux_temp_data_.clear();
+            aggregated_corr_saln_data_.clear();
 
             // Reallocate storage if necessary.
             aggregated_pres_data_.reserve(num_pres_samples());
@@ -253,6 +265,17 @@ protected:
                         if(msg)
                         aggregated_aux_temp_data_.insert(
                             aggregated_aux_temp_data_.end(),
+                                msg->raw_sensor_data().begin(),
+                                msg->raw_sensor_data().end());
+                    });
+
+            for_each(
+                    corr_saln_messages_.begin(),
+                    corr_saln_messages_.end(),
+                    [&](const shared_ptr<SALN_CLASS>& msg) {
+                        if(msg)
+                        aggregated_corr_saln_data_.insert(
+                                aggregated_corr_saln_data_.end(),
                                 msg->raw_sensor_data().begin(),
                                 msg->raw_sensor_data().end());
                     });
@@ -496,6 +519,46 @@ public:
             AggregateSensorData();
 
         }CATCH_BLOCK("Failed to assign aux. temperature message!")
+
+    }
+
+    /** Assign a dynamically corrected salinity message and re-aggregate the sensor data.
+     *
+     *  The message is inserted in order of message index, and the aggregated sensor data is
+     *  rebuilt.
+     *
+     *  @param[in]  x       The corrected salinity message, decoded as a salinity message.
+     *
+     *  @throw      util::log::MessageException if @p x is NULL or a corrected salinity message
+     *              with the same index has already been assigned.
+     */
+    void AssignCorrectedSalinityMessage(const SalnMsgPtr_t& x) {
+        typename SalnMsgVector_t::iterator it;
+
+        try {
+
+            // Get an exclusive lock.
+            lock_guard<recursive_mutex> guard(mutex_);
+
+            if(!x)
+                EXC_THROW("Pointer to message object is NULL!");
+
+            // Iterate to emplacement position.
+            for(it = corr_saln_messages_.begin(); it < corr_saln_messages_.end(); it++) {
+                if(x->xmsg_index() == (*it)->xmsg_index()) {
+                    EXC_THROW("Duplicate XMessage index encountered!");
+                } else if(x->xmsg_index() < (*it)->xmsg_index())
+                    break;
+            }
+
+            // Emplace element at position.
+            set_aggregated_data_valid(false);
+            corr_saln_messages_.emplace(it, x);
+
+            // Aggregate the sensor data.
+            AggregateSensorData();
+
+        }CATCH_BLOCK("Failed to assign corrected salinity message!")
 
     }
 
@@ -758,6 +821,35 @@ public:
         return num_temp_samples;
     }
 
+    /** Get the number of dynamically corrected salinity samples.
+     *
+     *  @return     The number of corrected salinity samples.
+     */
+    size_t num_corr_saln_samples() const {
+        size_t num_saln_samples = 0;
+
+        try {
+
+            // Get an exclusive lock.
+            lock_guard<recursive_mutex> guard(mutex_);
+
+            //  If the aggregated data is valid, then return the size of the aggregated data.
+            if(is_aggregated_data_valid())
+                return aggregated_corr_saln_data_.size();
+
+            for_each(
+                corr_saln_messages_.begin(),
+                corr_saln_messages_.end(),
+                    [&](const shared_ptr<SALN_CLASS>& msg) {
+                        if(msg)
+                          num_saln_samples += msg->num_samples();
+                    });
+
+        }CATCH_BLOCK("Failed to get the number of corrected salinity samples!")
+
+        return num_saln_samples;
+    }
+
     /** Return the maximum of the number of pressure, temperature, or salinity sensor samples in
      *  the sensor data messages assigned to this composite sensor data object.
      *
@@ -842,6 +934,42 @@ public:
 
     bool HasAuxTempData() const {
       return !aux_temp_messages_.empty();
+    }
+
+    /** Does this composite hold dynamically corrected salinity (0xDC) messages?
+     *
+     *  @return     TRUE if at least one corrected salinity message is assigned.
+     */
+    bool HasCorrectedSalnData() const {
+      // Get an exclusive lock.
+      lock_guard<recursive_mutex> guard(mutex_);
+
+      return !corr_saln_messages_.empty();
+    }
+
+    /** Is the corrected salinity channel complete?
+     *
+     *  @return     TRUE if the corrected salinity messages have contiguous indices and as many
+     *              samples as the salinity channel.
+     */
+    bool IsCorrectedSalnDataComplete() const {
+
+        try {
+
+            // Get an exclusive lock.
+            lock_guard<recursive_mutex> guard(mutex_);
+
+            if(corr_saln_messages_.empty() || num_corr_saln_samples() != num_saln_samples())
+                return false;
+
+            int idx = corr_saln_messages_.at(0)->xmsg_index();
+            for(auto it = corr_saln_messages_.begin() + 1; it < corr_saln_messages_.end(); ++it)
+                if((*it)->xmsg_index() != ++idx)
+                    return false;
+
+        }CATCH_BLOCK("Failed to determine if corrected salinity data is complete!")
+
+        return true;
     }
 
     /** Is the aggregated data valid?
@@ -936,10 +1064,12 @@ public:
             aggregated_saln_data_.clear();
             aggregated_temp_data_.clear();
             aggregated_aux_temp_data_.clear();
+            aggregated_corr_saln_data_.clear();
             pres_messages_.clear();
             saln_messages_.clear();
             temp_messages_.clear();
             aux_temp_messages_.clear();
+            corr_saln_messages_.clear();
 
         }CATCH_BLOCK("Failed to reset sensor data object!")
 
@@ -1155,6 +1285,34 @@ public:
                 if(val < XMSG_SENS_MIN_TEMP || val > XMSG_SENS_MAX_TEMP)
                     val = XMSG_SENS_BAD_TEMP;
 
+            }
+        }CATCH_BLOCK("Failed to get sensor data value from raw sample counts!")
+
+        return val;
+    }
+
+    /** Get the @f$i^{th}@f$ dynamically corrected salinity value, in PSU.
+     *
+     *  @param[in]  i       The sample index.
+     *  @param[in]  gain    The salinity sensor sensitivity scale factor, in LSB/PSU.
+     *  @param[in]  offs    The salinity sensor offset, in PSU.
+     *
+     *  @return     The corrected salinity, or @ref XMSG_SENS_BAD_SALN if the index is out of range
+     *              or the value is outside the valid salinity range.
+     */
+    template<typename T = double> T SampleCorrectedSalnAsFloat(size_t i, int16_t gain, int16_t offs) const {
+
+        T val = XMSG_SENS_BAD_SALN;
+
+        try {
+            // Get an exclusive lock.
+            lock_guard<recursive_mutex> guard(mutex_);
+
+            if(i < num_corr_saln_samples() && gain) {
+                val = (T) aggregated_corr_saln_data_.at(i) / (T) gain - (T) offs;
+
+                if(val < XMSG_SENS_MIN_SALN || val > XMSG_SENS_MAX_SALN)
+                    val = XMSG_SENS_BAD_SALN;
             }
         }CATCH_BLOCK("Failed to get sensor data value from raw sample counts!")
 

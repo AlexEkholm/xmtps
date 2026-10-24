@@ -352,7 +352,25 @@ def ProcessListingFile(fpath_list):
                             dive_data.drift.saln[idx],
                             dive_data.drift.temp[idx],
                             dive_data.drift.pres[idx])
-                    
+
+                    continue
+
+                # Drift sample times (floats that report them):
+
+                if re.match('^DTM ', line):
+                    continue
+
+                if re.match('^dtm ', line):
+                    x = line.split()
+
+                    idx = int(x[3])
+                    if idx < dive_data.drift.n and x[5] != '-':
+                        dt = DateTime(dt_str = x[5])
+                        if dt.dt_epoch > 0:
+                            dive_data.drift.dt_epoch[idx] = dt.dt_epoch
+
+                    del x
+
                     continue
                 
                 # Engineering data - descent

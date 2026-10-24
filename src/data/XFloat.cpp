@@ -2162,6 +2162,20 @@ void XFloatDiveData::DecodeXMsgData(
 
               break;
 
+            case XMSG_TYPE_ID_SALN_CORR:    // 0xDC
+
+              try {
+
+                /* Decode dynamically corrected profile salinity: */
+
+                linf() << "Decoding corrected profile salinity (bin-averaged) message...";
+                AssignProfileCorrectedSalinityBinned(
+                    std::make_shared<XProfileSalinityCorrected>(id_dive(), id_instrument(), xdata));
+
+              } CATCH_BLOCK("Failed to decode corrected profile salinity message!")
+
+              break;
+
             case XMSG_TYPE_ID_FALL0:    // 0x40
             case XMSG_TYPE_ID_FALL1:
             case XMSG_TYPE_ID_FALL2:
@@ -2243,6 +2257,26 @@ void XFloatDiveData::DecodeXMsgData(
                 AssignPumpTimeSeries(std::make_shared<XPump>(id_dive(), id_instrument(), xdata));
 
               } CATCH_BLOCK("Failed to decode pump message!")
+
+              break;
+
+            case XMSG_TYPE_ID_TIME_DRIFT8:    // 0x78
+            case XMSG_TYPE_ID_TIME_DRIFT9:
+            case XMSG_TYPE_ID_TIME_DRIFTA:
+            case XMSG_TYPE_ID_TIME_DRIFTB:
+            case XMSG_TYPE_ID_TIME_DRIFTC:
+            case XMSG_TYPE_ID_TIME_DRIFTD:
+            case XMSG_TYPE_ID_TIME_DRIFTE:
+            case XMSG_TYPE_ID_TIME_DRIFTF:
+
+              try {
+
+                /* Decode drift sample times: */
+
+                linf() << "Decoding drift time message...";
+                AssignDriftTime(std::make_shared<XDriftTime>(id_dive(), id_instrument(), xdata));
+
+              } CATCH_BLOCK("Failed to decode drift time message!")
 
               break;
 
@@ -2894,6 +2928,20 @@ string XFloatDiveData::GenerateListingString() const {
 
           }CATCH_NOTHROW("Failed to generate drift data listing entry!")
 
+        if(xmsg_composite_drift_data_.HasTimeData())
+
+          try {
+
+            // Print drift sample times.
+            XMSG_SECTION("Drift Sample Times");
+            os << xmsg_composite_drift_data_.GenerateTimeListingString(
+                   id_instrument(),
+                   id_dive(),
+                   xmsg_argo_data_ ? xmsg_argo_data_->drift_state_start_time() : ptime(not_a_date_time))
+               << endl;
+
+          }CATCH_NOTHROW("Failed to generate drift time listing entry!")
+
         if(HasBinnedProfileData())
 
           try {
@@ -2913,6 +2961,24 @@ string XFloatDiveData::GenerateListingString() const {
                << endl;
 
           }CATCH_NOTHROW("Failed to generate profile data listing entry!")
+
+        if(xmsg_composite_profile_binned_.HasCorrectedSalnData())
+
+          try {
+
+            // Print dynamically corrected salinity.
+            XMSG_SECTION("Profile Data (Binned) - Dynamically Corrected Salinity");
+            os << xmsg_composite_profile_binned_.GenerateCorrectedSalinityListingString(
+                   id_instrument(),
+                   id_dive(),
+                   pg,
+                   po,
+                   sg,
+                   so,
+                   pres_correction)
+               << endl;
+
+          }CATCH_NOTHROW("Failed to generate corrected salinity listing entry!")
 
         if(HasUnbinnedProfileData())
 

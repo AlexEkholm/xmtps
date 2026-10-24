@@ -505,6 +505,7 @@ namespace util {
                     case XMSG_TYPE_ID_PRES_DRIFT8:      // 0x98
                     case XMSG_TYPE_ID_TEMP_DRIFT8:      // 0xA8
                     case XMSG_TYPE_ID_SALN_DRIFT8:      // 0xB8
+                    case XMSG_TYPE_ID_TIME_DRIFT8:      // 0x78
                       raw_sensor_data_.push_back(first_sensor_value);
 
                       break;

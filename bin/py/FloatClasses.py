@@ -381,9 +381,11 @@ class Dive:
         else:
             del self.wave
         
-        if self.ascent.n > 0 and self.descent.n > 0:
+        if self.drift.HasMeasuredDatetimes():
+            self.drift.SetDatetimes(self.drift.dt_epoch)
+        elif self.ascent.n > 0 and self.descent.n > 0:
             self.drift.EstimateDatetimes(
-                self.descent.dt_epoch[-1], 
+                self.descent.dt_epoch[-1],
                 self.ascent.dt_epoch[0]
                 )
 
@@ -401,16 +403,24 @@ class Drift:
         self.sigma0           = np.full(num_samples, np.nan)
         self.n                = num_samples
         
+    def HasMeasuredDatetimes(self):
+        """True if every drift sample has a time from the listing's dtm lines."""
+        return self.n > 0 and all(x == x for x in self.dt_epoch)   # x == x is False for NaN
+
     def EstimateDatetimes(self, epoch_start, epoch_end):
-        
+
         if self.n == 0:
             self.dt_epoch = []
             self.dt_str   = []
             self.dt_ref   = []
             self.dt_ref_delta_sec   = []
             return
-        
-        self.dt_epoch = np.round(np.linspace(epoch_start, epoch_end, self.n+2)[1:-1], 0).tolist()
+
+        self.SetDatetimes(np.round(np.linspace(epoch_start, epoch_end, self.n+2)[1:-1], 0).tolist())
+
+    def SetDatetimes(self, dt_epoch):
+
+        self.dt_epoch = list(dt_epoch)
         self.dt_str = [ DateTime().dt_from_epoch(x).dt_str for x in self.dt_epoch ]
         self.dt_ref = DateTime().dt_from_epoch(self.dt_epoch[0])
         self.dt_ref_delta_sec = [ x - self.dt_ref.dt_epoch for x in self.dt_epoch ]

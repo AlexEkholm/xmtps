@@ -464,7 +464,15 @@ Decoder daemon:
   decode as before.
 - Wave: bin frequencies now include the packet's first-sample index, and `wvm` (m²/Hz) columns
   use the same order as `wvs` again (zz, yy, xx, xy, zx, zy), matching their header. Builds
-  3234–3289 printed them as xx, xy, yy, zz under that header.
+  3234–3287 printed them as xx, xy, yy, zz under that header.
+- New: dynamically corrected salinity (X-message 0xDC), sent by floats with dynamic CTD
+  correction enabled (PPE = 2), is decoded as a second binned-profile salinity channel and listed
+  as `PCS`/`pcs` lines (pressure, salinity, corrected salinity). The format was inferred from
+  production packets: a salinity message with four extra bytes (0x00, part index, 0x01, 0x00)
+  after the size field.
+- New: drift sample times (X-messages 0x78–0x7F) are decoded and listed as `DTM`/`dtm` lines:
+  seconds since the drift state start and the resulting date/time. The format (inferred) matches
+  the drift pressure/temperature/salinity messages.
 - Mission configuration message 1 for 10.8.0.4/10.12.0.x accepts 88 bytes (with CTD correction
   parameters) as well as 71.
 - Fixed mission configuration offsets: `ddt` in five firmware layouts, `descend_start_time` for
@@ -476,6 +484,12 @@ Decoder daemon:
 - Surface pressure variance is now divided by gain² (it was 1/gain too large).
 - Added length checks for short or malformed X-messages, bounded curvature sub-blocks, accepted
   phase code 15, and cleared auxiliary temperature data on dive reset.
+
+Python tools:
+
+- `xmtps-list2json.py` uses the measured drift sample times from `dtm` lines when a listing has
+  them; otherwise drift times are still estimated between the end of descent and the start of
+  ascent.
 
 Operations:
 

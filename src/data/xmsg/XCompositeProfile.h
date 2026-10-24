@@ -169,6 +169,67 @@ class XCompositeProfile:
       return os.str();
     }
 
+    /** Generate the dynamically corrected salinity listing (PCS/pcs lines).
+     *
+     *  @param[in]  id_inst The instrument serial number.
+     *  @param[in]  id_dive The dive number.
+     *  @param[in]  pg      The pressure sensor sensitivity scale factor, in LSB/dBar.
+     *  @param[in]  po      The pressure sensor offset, in dBar.
+     *  @param[in]  sg      The salinity sensor sensitivity scale factor, in LSB/PSU.
+     *  @param[in]  so      The salinity sensor offset, in PSU.
+     *  @param[in]  pc      The pressure correction, in dBar, to be subtracted computed pressure
+     *                      value.
+     *
+     *  @throw      log::MessageException if an error occurs while generating the listing string.
+     *
+     *  @return     The listing string.
+     */
+    const string GenerateCorrectedSalinityListingString(
+        int id_inst,
+        int id_dive,
+        uint16_t pg,
+        uint16_t po,
+        uint16_t sg,
+        uint16_t so,
+        float pc) const {
+      ostringstream os;
+
+      try {
+
+        // Get an exclusive lock.
+        lock_guard<recursive_mutex> guard(mutex_);
+
+        static const format fmt1("PCS %5d %4d %11d");
+        os << "#      SN dive  numSamples"
+           << endl
+           << format(fmt1) % id_inst % id_dive % num_corr_saln_samples();
+
+        if(!IsDataComplete() || !IsCorrectedSalnDataComplete()) {
+          os << endl << "#   (Incomplete Corrected Salinity Data)";
+          return os.str();
+        }
+
+        static const format fmt2("pcs %5d %4d %11d %11.3f %11.3f %11.3f");
+        for(size_t i = 0; i < num_corr_saln_samples(); i++) {
+          if(i % 50 == 0) {
+            os << endl
+               << "#---------------------------------------------------------------------------------------------------"
+               << endl
+               << "#      SN dive   sampleIdx        pres        saln    salnCorr"
+               << endl
+               << "#                               (dBar)       (PSU)       (PSU)";
+          }
+
+          os << endl
+             << format(fmt2) % id_inst % id_dive % i % SamplePresAsFloat(i, pg, po, pc)
+                 % SampleSalnAsFloat(i, sg, so) % SampleCorrectedSalnAsFloat(i, sg, so);
+        }
+
+      }CATCH_BLOCK("Failed to generate listing string for corrected salinity data!")
+
+      return os.str();
+    }
+
     /** Generate a PHY entry string from this composite bin-averaged profile data object.
      *
      *  @param[in]  pg      The pressure sensor sensitivity scale factor, in LSB/dBar.

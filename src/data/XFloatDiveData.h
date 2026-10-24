@@ -1249,6 +1249,38 @@ class XFloatDiveData:
 
     }
 
+    /** Assign a drift sample time message to this dive data object.
+     *
+     *  @param[in]      x       A pointer to the drift time message to assign.
+     */
+    void AssignDriftTime(const shared_ptr<x::XDriftTime>& x) {
+
+      // Get an exclusive lock.
+      lock_guard<recursive_mutex> guard(mutex_);
+
+      xmsg_composite_drift_data_.AssignTimeMessage(x);
+
+      // Update file status.
+      set_listing_file_updated(false);
+
+    }
+
+    /** Assign a dynamically corrected profile salinity message to this dive data object.
+     *
+     *  @param[in]      x       A pointer to the corrected salinity message to assign.
+     */
+    void AssignProfileCorrectedSalinityBinned(const shared_ptr<x::XProfileSalinityCorrected>& x) {
+
+      // Get an exclusive lock.
+      lock_guard<recursive_mutex> guard(mutex_);
+
+      xmsg_composite_profile_binned_.AssignCorrectedSalinityMessage(x);
+
+      // Update file status.
+      set_listing_file_updated(false);
+
+    }
+
     /** Assign an engineering abort/beacon message to this dive data object.
      *
      *  @param[in]      x       A pointer to the engineering abort/beacon message to assign.

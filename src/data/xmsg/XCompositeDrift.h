@@ -56,6 +56,139 @@ public:
         /* Do nothing. */
     }
 
+    /** Assign a drift sample time message (0x78-0x7F).
+     *
+     *  @param[in]  x       The drift time message.
+     *
+     *  @throw      util::log::MessageException if @p x is NULL or a drift time message with the
+     *              same index has already been assigned.
+     */
+    void AssignTimeMessage(const shared_ptr<XDriftTime>& x) {
+
+        try {
+
+            // Get an exclusive lock.
+            lock_guard<recursive_mutex> guard(mutex_);
+
+            if(!x)
+                EXC_THROW("Pointer to message object is NULL!");
+
+            // Iterate to emplacement position.
+            auto it = time_messages_.begin();
+            for(; it < time_messages_.end(); it++) {
+                if(x->xmsg_index() == (*it)->xmsg_index())
+                    EXC_THROW("Duplicate XMessage index encountered!");
+                else if(x->xmsg_index() < (*it)->xmsg_index())
+                    break;
+            }
+
+            time_messages_.emplace(it, x);
+
+        }CATCH_BLOCK("Failed to assign drift time message!")
+    }
+
+    /** Remove all assigned messages, including the drift time messages.
+     *
+     */
+    void Reset() {
+
+        // Get an exclusive lock.
+        lock_guard<recursive_mutex> guard(mutex_);
+
+        AbstractXSensorDataComposite<XDriftPressure, XDriftSalinity, XDriftTemperature,
+            XMSG_MAX_DRFT>::Reset();
+        time_messages_.clear();
+    }
+
+    /** Does this composite hold drift time messages?
+     *
+     *  @return     TRUE if at least one drift time message is assigned.
+     */
+    bool HasTimeData() const {
+
+        // Get an exclusive lock.
+        lock_guard<recursive_mutex> guard(mutex_);
+
+        return !time_messages_.empty();
+    }
+
+    /** Get the drift sample times, in seconds since the start of the drift state.
+     *
+     *  @return     The sample times of all assigned drift time messages, in order of message index.
+     */
+    vector<int32_t> SampleTimes() const {
+        vector<int32_t> t;
+
+        // Get an exclusive lock.
+        lock_guard<recursive_mutex> guard(mutex_);
+
+        for(const auto& msg : time_messages_)
+            if(msg)
+                t.insert(t.end(), msg->raw_sensor_data().begin(), msg->raw_sensor_data().end());
+
+        return t;
+    }
+
+    /** Generate the drift sample time listing (DTM/dtm lines).
+     *
+     *  @param[in]  id_inst     The instrument serial number.
+     *  @param[in]  id_dive     The dive number.
+     *  @param[in]  drift_start The drift state start time, or not_a_date_time if unknown.
+     *
+     *  @throw      util::log::MessageException if an error occurs.
+     *
+     *  @return     The listing string.
+     */
+    const string GenerateTimeListingString(int id_inst, int id_dive, const ptime& drift_start) const {
+        ostringstream os;
+
+        try {
+
+            // Get an exclusive lock.
+            lock_guard<recursive_mutex> guard(mutex_);
+
+            const vector<int32_t> t = SampleTimes();
+
+            static const format fmt1("DTM %5d %4d %11d");
+            os << "#      SN dive  numSamples"
+               << endl
+               << format(fmt1) % id_inst % id_dive % t.size();
+
+            // The times must line up with the drift samples, and the indices must be contiguous.
+            bool complete = !t.empty() && t.size() == max_num_samples();
+            int idx = time_messages_.empty() ? 0 : time_messages_.front()->xmsg_index();
+            for(const auto& msg : time_messages_)
+                complete = complete && msg->xmsg_index() == idx++;
+
+            if(!complete) {
+                os << endl << "#   (Incomplete Drift Time Data)";
+                return os.str();
+            }
+
+            static const format fmt2("dtm %5d %4d %11d %11d %20s");
+            for(size_t i = 0; i < t.size(); i++) {
+                if(i % 50 == 0) {
+                    os << endl
+                       << "#---------------------------------------------------------------------------------------------------"
+                       << endl
+                       << "#      SN dive   sampleIdx     elapsed            date/time"
+                       << endl
+                       << "#                                (sec)"
+                       ;
+                }
+
+                string datetime = "-";
+                if(!drift_start.is_special())
+                    datetime = bpt::to_iso_extended_string(drift_start + bpt::seconds(t.at(i))) + "Z";
+
+                os << endl << format(fmt2) % id_inst % id_dive % i % t.at(i) % datetime;
+            }
+
+        }CATCH_BLOCK("Failed to generate listing string for drift time data!")
+
+        return os.str();
+    }
+
     /** Generate a listing string representation of the this composite sensor data object.
      *
      *  @param[in]  id_inst The unique instrument identifier for this composite sensor data object.
@@ -195,6 +328,11 @@ public:
 
         return os.str();
     }
+
+private:
+
+    /** The drift sample time messages, in order of increasing message index. */
+    static_vector<shared_ptr<XDriftTime>, XMSG_MAX_DRFT> time_messages_;
 
 };
 
