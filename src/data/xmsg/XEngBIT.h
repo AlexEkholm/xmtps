@@ -51,9 +51,9 @@ protected:
         alamo_bit_msg_ = alamo_bit_msg;
     }
 
-    /** Set the ALALMO Built-in-Test (BIT) v2 message
+    /** Set the ALAMO Built-in-Test (BIT) v2 message.
      *
-     *  @param[in]  alamo_bit_msg   A shared pointer to the ALALMO Built-in-Test (BIT) message to
+     *  @param[in]  alamo_bit2_msg  A shared pointer to the ALAMO Built-in-Test (BIT) v2 message to
      *                              set.
      */
     void set_alamo_bit2_msg(const shared_ptr<XAlamoBit2>& alamo_bit2_msg) {

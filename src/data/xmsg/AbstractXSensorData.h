@@ -287,17 +287,9 @@ namespace util {
 
         /* Protected Member Functions: */
 
-        /** Parameterized constructor.
+        /** Default constructor.
          *
-         *  @param[in]      dive        The dive or cycle number of this message.
-         *  @param[in]      whoi        The unique WHOI identifier.
-         *  @param[in]      data        Binary X-message data to decode.
-         *
-         *  @throw          util::log::MessageException if
-         *                      - an invalid X-Message type identifier is encountered.
-         *                      - the message is of insufficient length,
-         *                      - an invalid packing format is encountered, or
-         *                      - the message terminator is in an invalid location.
+         *  Constructs an empty sensor data message with an unknown sensor data format.
          */
         AbstractXSensorData() :
                 XMessageIndexable(),

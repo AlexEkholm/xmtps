@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XValveCounts class header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Mar 22, 2016 9:20:55 AM
  *
@@ -34,8 +34,11 @@ namespace xmsg {
 
 /* Types: */
 
-/** The XXX class.
+/** The valve counts class.
  *
+ *  An instance of this class represents a single valve operation decoded from a valve data
+ *  message (see @ref XValve): the pressure, and the case vacuum before and after the valve
+ *  operation.
  */
 class XValveCounts {
 

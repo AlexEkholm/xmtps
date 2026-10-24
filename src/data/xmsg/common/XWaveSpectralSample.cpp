@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XWaveSpectralSample class source file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Jul 20, 2020 11:29:19 AM
  *

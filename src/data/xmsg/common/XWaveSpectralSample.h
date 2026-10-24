@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XWaveSpectralSample class header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Jun 19, 2019 1:18:26 PM
  *
@@ -35,8 +35,10 @@ namespace xmsg {
 
 /* Types: */
 
-/** The XXX class
+/** The wave spectral sample class.
  *
+ *  An instance of this class represents the acceleration spectra and co-/quadrature spectra at a
+ *  single frequency, decoded from a wave X-message (see @ref XWave).
  */
 class XWaveSpectralSample {
 

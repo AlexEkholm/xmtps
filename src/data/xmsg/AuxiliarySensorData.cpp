@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::AuxiliarySensorData class source file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       May 24, 2017 9:49:24 AM
  *

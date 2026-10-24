@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XValveCounts class source file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Mar 22, 2016 9:20:55 AM
  *

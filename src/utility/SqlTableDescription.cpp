@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::mysql::SqlTableDescription class source file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Sep 30, 2017 4:26:11 PM
  *

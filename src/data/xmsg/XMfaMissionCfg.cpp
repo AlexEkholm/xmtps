@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XMfaMissionCfg class source file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Oct 9, 2017 2:34:36 PM
  *

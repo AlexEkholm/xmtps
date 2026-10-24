@@ -92,10 +92,14 @@ public:
      *  @note           All date/time objects use the UTC time-zone.
      *
      *  @param[in]      p           POSIX time from which to generate string.
+     *  @param[in]      extended    If TRUE, use the ISO 8601 extended format
+     *                              (YYYY-MM-DDThh:mm:ssZ); otherwise, use the basic format
+     *                              (YYYYMMDDThhmmss).
      *
      *  @return         An ISO8601 format date/time string representation of the POSIX time object. If
      *                  p is equal to boost::posix_time::not_a_date_time, then the string
-     *                  "0000-00-00T00:00:00Z" will be returned.
+     *                  "0000-00-00T00:00:00Z" (extended) or "00000000000000" (basic) will be
+     *                  returned.
      */
     static string GenerateIso8601String(const ptime& p, bool extended = true) {
         static const string not_a_datetime_string_extended = "0000-00-00T00:00:00Z";

@@ -585,15 +585,19 @@ istream& operator>>(istream& is, XFloatMailMessage& mail) {
  *  global RAW-file-generation-is-enabled flag, @ref raw_file_generation_is_enabled_, is FALSE,
  *  then this function will have no effect. Otherwise, the function will generate the path to the
  *  RAW mail file on the local filesystem and write the file to that path. If the RAW mail message
- *  file already exists, then it will be overwritten.
+ *  file already exists, then it is left unchanged and is not rewritten.
  *
  *  The path to the RAW mail message file will be constructed in the format
- *  [RAW-DIR]/[WWWW]/raw[WWWW]-[MMMMMM]-[DDDD].txt, where
+ *  [RAW-DIR]/[WWWW]/raw[WWWW]-[MMMMM]-[DDDD]-[PPP].txt, where
  *      - [RAW-DIR] is the RAW mail directory path specified, by @ref raw_directory_path_,
  *      - [WWWW] is the four-digit unique instrument serial number,
- *      - [MMMMMM] is the six-digit MOMSN number, and
- *      - [DDDD] is the four-digit dive or cycle number, or "incomplete" if the mail message does
- *        not contain any SBD data.
+ *      - [MMMMM] is the five-digit MOMSN number,
+ *      - [DDDD] is the four-digit dive or cycle number, and
+ *      - [PPP] is the three-digit SBD packet number.
+ *
+ *  If the mail message does not contain valid SBD data, then the path is
+ *  [RAW-DIR]/[WWWW]/raw[WWWW]-[MMMMM]-incomplete-[DATETIME].txt, where [DATETIME] is the mail
+ *  header date/time in ISO 8601 basic format.
  *
  *  @throw          log::util::MessageException if an error occurs while writing the file.
  */

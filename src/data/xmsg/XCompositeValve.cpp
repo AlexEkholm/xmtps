@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XCompositeValve class source file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Mar 22, 2016 10:08:10 AM
  *

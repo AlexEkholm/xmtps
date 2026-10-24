@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XValve class header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Mar 22, 2016 9:35:12 AM
  *
@@ -35,8 +35,10 @@ namespace xmsg {
 
 /* Types: */
 
-/** The XXX class.
+/** The valve data message class.
  *
+ *  An instance of this class represents a decoded valve data X-message, composed of the valve
+ *  operation samples (see @ref XValveCounts) reported for a dive.
  */
 class XValve:
         public AbstractXComposite<XValveCounts>,

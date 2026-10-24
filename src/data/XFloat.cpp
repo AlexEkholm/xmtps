@@ -1863,12 +1863,24 @@ void XFloatDiveData::SaveObjectToDatabase() const {
   }CATCH_BLOCK("Failed to save GPS message objects to database for dive!")
 }
 
-/** XXX
+/** Decode the SBD data of a mail message into this dive data object.
  *
- * @param msg
+ *  Messages transmitted more than 15 minutes before the instrument's start-of-mission or
+ *  deployment date/time are ignored. Otherwise, the mail message is assigned to this dive (see
+ *  @ref AssignMailMessage()), its SBD data is decoded into X-messages (see @ref DecodeXMsgData()),
+ *  the X-message type identifiers are stored in the mail message, and the parent instrument's
+ *  IMEI and latest Iridium position are updated.
  *
- * @return  0 if the message is successfully decoded, or 1 if the message is ignored. If the
- *          message is a duplicate, then it will not be decoded and this function will return 0.
+ *  A message with a duplicate message ID is not assigned or decoded. A retransmission (a message
+ *  whose SBD data is identical to one already assigned to this dive) is assigned, but its SBD data
+ *  is not decoded again.
+ *
+ *  @param[in]  msg     The mail message to decode.
+ *
+ *  @throw      util::log::MessageException if @p msg is NULL or an error occurs while decoding.
+ *
+ *  @return     1 if the message is ignored because it was transmitted before the start-of-mission
+ *              or deployment date/time, or 0 otherwise (including duplicates and retransmissions).
  */
 int XFloatDiveData::DecodeMailMessageData(shared_ptr<XFloatMailMessage>& msg) {
 

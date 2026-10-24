@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The thread definitions header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Dec 28, 2016 9:33:48 AM
  *

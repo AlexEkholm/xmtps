@@ -128,7 +128,7 @@ class XFloat:
      */
     friend options_description util::config::LocalConfiguration::GenerateConfigurationFileOptionsDescription();
 
-    /** Friend function for performing startup tasks during initialization. */
+    // Friend function for performing startup tasks during initialization (documented in Main.cpp).
     friend const util::config::LocalConfiguration& Initialize(int argc, char** argv);
 
 

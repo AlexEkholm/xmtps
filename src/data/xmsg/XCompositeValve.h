@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XCompositeValve class header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Mar 22, 2016 10:08:10 AM
  *
@@ -34,8 +34,10 @@ namespace xmsg {
 
 /* Types: */
 
-/** The XXX class.
+/** The composite valve data class.
  *
+ *  An instance of this class aggregates the valve data messages (see @ref XValve) received for a
+ *  single dive.
  */
 class XCompositeValve:
         public AbstractXComposite<shared_ptr<XValve> > {

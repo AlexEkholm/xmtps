@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::AuxiliarySensorData class header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       May 24, 2017 9:49:24 AM
  *
@@ -34,8 +34,10 @@ namespace util {
 
     /* Types: */
 
-    /** The XXX class.
+    /** The auxiliary sensor data class.
      *
+     *  An instance of this class represents sensor data from an instrument's auxiliary sensor
+     *  channel, decoded in the same way as the primary sensor data (see @ref AbstractXSensorData).
      */
     class AuxiliarySensorData:
         public util::xmsg::AbstractXSensorData {

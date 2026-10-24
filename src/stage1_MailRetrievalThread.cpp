@@ -739,24 +739,25 @@ XFloatMailRetrievalService::~XFloatMailRetrievalService() {
  *  result of parsing the command-line arguments and/or configuration file.
  *
  *  First, the scope thread attribute "ThreadName" is set to "mail-fetch". This attribute is
- *  used by the global logger object for filtering, etc. Next, the minimum UID of the mail
- *  messages to be fetched from the server is determined. If @ref is_reprocess_all_ is TRUE,
- *  the messages will be fetched starting with UID = 0. Otherwise, if @ref is_reprocess_all_
- *  is TRUE, then the maximum mail message UID is queried from the SQL database and incremented
- *  by one to determine the minimum UID of the messages to fetch.
+ *  used by the global logger object for filtering, etc. Next, the instruments whose messages are
+ *  to be reprocessed are determined: all cached instruments if @ref is_reprocess_all_ is TRUE;
+ *  otherwise, those listed in @ref reprocess_by_inst_ids_ and those with PHY generation enabled,
+ *  plus, if @c is_reprocess_active_ is TRUE, those that reported in the last 90 days.
  *
- *  If the user has specified one or more unique instrument identifiers of mail message to
- *  reprocess, then those message will first fetched from the SQL database and passed on to the
- *  mail processing thread. Then, the thread will sleep for a short duration before proceeding
- *  to allow time for the daemon thread to signal termination if the application is configured
- *  to terminate after reprocessing.
+ *  For each instrument to reprocess, its existing dive data is deleted from the SQL database,
+ *  its stored mail messages are fetched from the SQL database and passed on to the mail
+ *  processing thread. Then, the thread will sleep for a short duration before proceeding to
+ *  allow time for the daemon thread to signal termination if the application is configured to
+ *  terminate after reprocessing.
  *
- *  Then the thread enters its primary loop. @ref FetchMailMessages() is called to fetch the
- *  next batch of mail messages from either (1) the SQL database or (2) the mail server if
- *  the messages do not exist in the database. The fetched messages are queued to be processed
- *  by the next thread in the pipeline, @ref XFloatMailProcessingService. If no new messages
- *  are fetched, then connections to the mail server and SQL database are closed and the
- *  thread sleeps for @ref sleep_seconds_if_no_new_msgs_ seconds.
+ *  Then the thread enters its primary loop, which depends on @ref mail_fetch_mode_. In
+ *  @c MAIL_FETCH_SERVER mode, @ref FetchMailMessagesFromServer() fetches the next batch of
+ *  messages from the mail server, by message index starting at @ref message_start_index_. In
+ *  @c MAIL_FETCH_FILESYSTEM mode, @ref FetchMailMessagesFromFileSystem() reads RAW mail files
+ *  from @c mail_file_input_directory_. The fetched messages are queued to be processed by the
+ *  next thread in the pipeline, @ref XFloatMailProcessingService. If no new messages are fetched,
+ *  then the connections to the mail server and SQL database are closed and the thread sleeps
+ *  for @ref sleep_seconds_if_no_new_msgs_ seconds.
  *
  *  The primary loop terminates once termination is signaled (i.e. @ref termination_signaled_
  *  is TRUE) and the thread will disconnect from the mail server and then die. If termination
@@ -802,8 +803,8 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
           lout() << "Reprocessing active floats...";
 
 
-          // Get list of floats that have reported in the last 180 days.
-          ldbg() << "Selecting floats reporting in the last 180 days...";
+          // Get list of floats that have reported in the last 90 days.
+          ldbg() << "Selecting floats reporting in the last 90 days...";
           xmsgs = XFloatMailMessage::SelectObjectsFromDatabase(
               "msg_is_valid = 1 AND iridium_position_datetime >= (CURDATE() - INTERVAL 90 day)",
               "id_instrument",

@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::AbstractXTimeSeriesDataComposite class header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Jun 17, 2016 3:03:57 PM
  *
@@ -38,8 +38,11 @@ namespace xmsg {
 
 /* Types: */
 
-/** The XXX class.
+/** The abstract time-series data composite class template.
  *
+ *  This template aggregates the indexed time-series X-messages of type @p MSG_CLASS received for
+ *  a single dive into one time series. It is used for the surface time-series data (see
+ *  @ref XCompositeSurfaceData).
  */
 template<class MSG_CLASS> class AbstractXTimeSeriesDataComposite/*:
         public util::thread::RecursiveLockable */{
@@ -84,7 +87,7 @@ private:
      *  the composite data message.
      *
      *  This field is set to FALSE during initialization, and is set to FALSE each time a sensor
-     *  data message is assigned to the composite data message. Each time @ref AggregateSensorData()
+     *  data message is assigned to the composite data message. Each time @c AggregateSensorData()
      *  is called, the data will be aggregated, and this field will be set to TRUE.
      *
      */

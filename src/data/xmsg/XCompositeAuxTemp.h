@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XCompositeAuxTemp class header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Jul 31, 2017 3:42:03 PM
  *
@@ -35,8 +35,10 @@ namespace xmsg {
 
 /* Types: */
 
-/** The XXX class.
+/** The composite auxiliary temperature class.
  *
+ *  An instance of this class aggregates the auxiliary-channel profile temperature messages (see
+ *  @ref XProfileTemperature) received for a single dive.
  */
 class XCompositeAuxTemp:
     public AbstractXComposite<shared_ptr<XProfileTemperature> > {

@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XMfaMissionCfg class header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Oct 9, 2017 2:34:36 PM
  *
@@ -34,8 +34,10 @@ namespace xmsg {
 
 /* Types: */
 
-/** The XXX class.
+/** The ALAMO mission configuration (mission parameters) message class.
  *
+ *  An instance of this class assembles the mission configuration X-messages transmitted by an
+ *  instrument and decodes the mission parameters according to the instrument's firmware version.
  */
 class XMfaMissionCfg:
     public util::date::DateUtils {

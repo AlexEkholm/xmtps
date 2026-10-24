@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XEngIce class header file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Mar 22, 2016 4:39:49 PM
  *
@@ -34,18 +34,20 @@ namespace xmsg {
 
 /* Types: */
 
-/** The XXX class.
+/** The ALAMO engineering (ice) message class.
  *
+ *  An instance of this class represents a decoded ALAMO engineering (ice detection) X-message,
+ *  which reports the ice detection status, surfacing attempts, threshold test values and any
+ *  error codes recorded by the instrument.
  */
 class XEngIce:
         public XAlamoEngineering {
 
 
-    /** The engineering surface data error code class.
+    /** The engineering (ice) error code class.
      *
      *  An instance of this object represents a single error code reported in the ALAMO engineering
-     *  (surface) data message. Each error consists of a timestamp and a
-     *
+     *  (ice) data message. Each error consists of a timestamp and a 16-bit error code.
      */
     class XEngIceErrorCode:
             public util::date::DateUtils {

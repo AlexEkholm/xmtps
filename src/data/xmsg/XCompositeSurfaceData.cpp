@@ -1,8 +1,8 @@
-/** The XXX file.
+/** The @ref util::xmsg::XCompositeSurfaceData class source file.
  *
  *  @file
  *
- *  @version    XXX
+ *  @version    0.6
  *
  *  @date       Jun 22, 2016 9:15:25 AM
  *

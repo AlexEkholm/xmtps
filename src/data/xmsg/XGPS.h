@@ -430,11 +430,10 @@ public:
         return make_shared<XGPS>();
     }
 
-    /** XXX
-     *
+    /** Select GPS message objects from the SQL database table.
      *
      *  @exception  util::log::MessageException if an error occurs while querying the database
-     *              or constructing the float objects from the result of the query.
+     *              or constructing the GPS message objects from the result of the query.
      *
      *  @param[in]  where       The SQL select statement "where-condition" clause.
      *  @param[in]  groupBy     The SQL select statement "group-by expression" clause.
@@ -442,7 +441,7 @@ public:
      *  @param[in]  limit       The SQL select statement result set row limit value.
      *  @param[in]  offset      The SQL select statement result set row offset value.
      *
-     *  @return     A vector of shared references to the float objects constructed from the
+     *  @return     A vector of shared references to the GPS message objects constructed from the
      *              results of the SQL query.
      */
     static vector<shared_ptr<XGPS> > SelectObjectsFromDatabase(
@@ -466,8 +465,7 @@ public:
         return vector<shared_ptr<XGPS> >();
     }
 
-    /** XXX
-     *
+    /** Select a single value from the GPS message SQL database table.
      *
      *  @exception  util::log::MessageException if the SQL database query fails or if an error
      *              occurs while attempting to interpret the result of the query.

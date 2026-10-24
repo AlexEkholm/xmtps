@@ -317,7 +317,7 @@ public:
 
     /** Save a persistent entity to the SQL table.
      *
-     *  @throws         @ref log::MessageException if an error occurs.
+     *  @throws         util::log::MessageException if an error occurs.
      *
      *  @param[in]      obj             The instance of the persistent entity to save to the
      *                                  SQL database table.
