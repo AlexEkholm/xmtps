@@ -518,13 +518,14 @@ Python tools:
 - `xmtps-aggregate-json.py` also writes `<id>_mission.json` (one row per dive with mission
   parameters), `<id>_engineering_data.json` (one row per dive, `section.attribute` columns,
   dropping columns no dive reports) and `<id>_engineering_errors.json`.
-- Trajectory plots show the target drift pressure as a thin black line in the background
-  (`DTD<n>` for the current mission phase `MPS`, or `DTD`, from the start of descent to the
-  start of ascent of each dive), and the seafloor at the GPS fixes as a thick black line.
-  Seafloor depth comes from NOAA ETOPO2v2c (nearest 2′ cell), converted to pressure with
-  Saunders (1981). The pressure axis range is unchanged, so a seafloor deeper than the float's
-  data is off the plot. The file is read from `/data1/alamo/meta/bathy/ETOPO2v2c_f4.nc` by
-  default (`-b/--bathymetry FILE`); without it the seafloor line is left out with a warning.
+- Trajectory plots show, behind the other traces and for dives 1 and later, the target drift
+  pressure as a thin dashed black step line (`DTD<n>` for the current mission phase `MPS`, or
+  `DTD`, changing at the start of descent of each dive) and the bathymetry at the GPS fixes as
+  a black line ("Bathymetry" in the legend). Depth comes from NOAA ETOPO2v2c (nearest 2′ cell),
+  converted to pressure with Saunders (1981). The pressure axis range is unchanged, so a
+  seafloor deeper than the float's data is off the plot. The file is read from
+  `/data1/alamo/meta/bathy/ETOPO2v2c_f4.nc` by default (`-b/--bathymetry FILE`); without it the
+  bathymetry line is left out with a warning.
 - `xmtps-aggregate-json.py` plotting is split into one function per plot group
   (`WriteGeoPlots` … `WriteWavePlots`, run in order from `PLOT_WRITERS`); the plot output is
   unchanged.

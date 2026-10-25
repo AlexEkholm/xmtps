@@ -4372,11 +4372,11 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
             df_surface = df_surface[df_surface['dive'] > 0]
             df_drift = df_drift[df_drift['dive'] > 0]
 
-            # Seafloor pressure at the GPS fixes
+            # Seafloor pressure at the GPS fixes of dives 1 and later
 
             df_bathy = df_gps[df_gps['lat'].between(-90, 90) & df_gps['lon'].between(-360, 360)
                               & ~((df_gps['lat'] == 0) & (df_gps['lon'] == 0)) & (df_gps['dt_epoch'] > 0)
-                              & (df_gps['dive'] >= 0)]
+                              & (df_gps['dive'] >= 1)]
             df_bathy = df_bathy.sort_values('dt_epoch')
             bathy_pres = BathymetryPressure(df_bathy['lat'].values, df_bathy['lon'].values) if len(df_bathy) else None
 
@@ -4458,7 +4458,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                             ),
                         -1),
                     hovertemplate='<br>'.join([
-                        'Dive <b>%{customdata[0]}</b>: Seafloor (ETOPO2)',
+                        'Dive <b>%{customdata[0]}</b>: Bathymetry (ETOPO2)',
                         '%{x|%Y-%m-%d %H:%M}Z',
                         '%{customdata[1]:.4f}°N %{customdata[2]:.4f}°E',
                         '%{y:.0f} dBar',
@@ -4466,16 +4466,17 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                         ]),
                     line=dict(
                         color='rgb(0,0,0)',
-                        width=3.0,
+                        width=2.0,
                         ),
                     mode='lines',
-                    name='Seafloor',
+                    name='Bathymetry',
                     opacity=1.0,
                     ))
 
             # Add target drift pressure trace (background): DTD<n> for the current
-            # mission phase MPS, or DTD on firmware without phases, from the start of
-            # descent to the start of ascent of each dive. Dives without mission
+            # mission phase MPS, or DTD on firmware without phases, as one continuous
+            # stepped line that changes at the start of descent of each dive and ends at
+            # the start of the last ascent, for dives 1 and later. Dives without mission
             # parameters keep the last reported target.
 
             targets = {}
@@ -4494,18 +4495,21 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
             target_x, target_y, target_dive = [], [], []
             if targets:
                 t_start = pd.concat([df_descent, df_drift])
-                t_start = t_start[(t_start['dt_epoch'] > 0) & t_start['pres'].notna()].groupby('dive')['dt_epoch'].min()
+                t_start = t_start[(t_start['dive'] >= 1) & (t_start['dt_epoch'] > 0) & t_start['pres'].notna()].groupby('dive')['dt_epoch'].min()
                 t_end_ascent = df_ascent[(df_ascent['dt_epoch'] > 0) & df_ascent['pres'].notna()].groupby('dive')['dt_epoch'].min()
                 t_end_drift = df_drift[(df_drift['dt_epoch'] > 0) & df_drift['pres'].notna()].groupby('dive')['dt_epoch'].max()
-                for dive_num, t0 in t_start.items():
-                    t1 = t_end_ascent.get(dive_num, t_end_drift.get(dive_num))
+                for dive_num, t0 in t_start.sort_values().items():
                     prior = [d for d in targets if d <= dive_num]
                     target = targets[np.max(prior)] if prior else targets[np.min(list(targets))]
-                    if t1 is None or t1 <= t0:
-                        continue
-                    target_x += [DateTime().dt_from_epoch(t0).dt_str, DateTime().dt_from_epoch(t1).dt_str, None]
-                    target_y += [target, target, None]
-                    target_dive += [dive_num, dive_num, None]
+                    target_x.append(DateTime().dt_from_epoch(t0).dt_str)
+                    target_y.append(target)
+                    target_dive.append(dive_num)
+                if target_x:
+                    t1 = t_end_ascent.get(target_dive[-1], t_end_drift.get(target_dive[-1]))
+                    if t1 is not None and t1 > t_start[target_dive[-1]]:
+                        target_x.append(DateTime().dt_from_epoch(t1).dt_str)
+                        target_y.append(target_y[-1])
+                        target_dive.append(target_dive[-1])
 
             if target_x:
                 figs['trajectory'].add_trace(go.Scatter(
@@ -4520,6 +4524,8 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                     line=dict(
                         color='rgb(0,0,0)',
                         width=1.0,
+                        dash='dash',
+                        shape='hv',
                         ),
                     mode='lines',
                     name='Drift Target',
