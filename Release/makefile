@@ -14,27 +14,33 @@ RM := rm
 -include src/data/subdir.mk
 -include src/config/subdir.mk
 -include src/subdir.mk
--include subdir.mk
--include objects.mk
-
 ifneq ($(MAKECMDGOALS),clean)
-ifneq ($(strip $(CC_DEPS)),)
--include $(CC_DEPS)
+ifneq ($(strip $(C++M_DEPS)),)
+-include $(C++M_DEPS)
 endif
 ifneq ($(strip $(C++_DEPS)),)
 -include $(C++_DEPS)
 endif
-ifneq ($(strip $(C_UPPER_DEPS)),)
--include $(C_UPPER_DEPS)
+ifneq ($(strip $(CCM_DEPS)),)
+-include $(CCM_DEPS)
 endif
-ifneq ($(strip $(CXX_DEPS)),)
--include $(CXX_DEPS)
+ifneq ($(strip $(CC_DEPS)),)
+-include $(CC_DEPS)
 endif
 ifneq ($(strip $(CPP_DEPS)),)
 -include $(CPP_DEPS)
 endif
+ifneq ($(strip $(CXXM_DEPS)),)
+-include $(CXXM_DEPS)
+endif
+ifneq ($(strip $(CXX_DEPS)),)
+-include $(CXX_DEPS)
+endif
 ifneq ($(strip $(C_DEPS)),)
 -include $(C_DEPS)
+endif
+ifneq ($(strip $(C_UPPER_DEPS)),)
+-include $(C_UPPER_DEPS)
 endif
 endif
 
@@ -55,32 +61,30 @@ BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ART
 
 # All Target
 all:
-	$(MAKE) --no-print-directory pre-build
-	$(MAKE) --no-print-directory main-build
+	+@$(MAKE) --no-print-directory pre-build && $(MAKE) --no-print-directory main-build && $(MAKE) --no-print-directory post-build
 
 # Main-build Target
 main-build: xmtps
 
 # Tool invocations
-xmtps: $(OBJS) $(USER_OBJS) makefile objects.mk $(OPTIONAL_TOOL_DEPS)
+xmtps: $(OBJS) $(USER_OBJS) makefile $(OPTIONAL_TOOL_DEPS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C++ Linker'
-	g++ -L/usr/lib -L/usr/local/lib -o "xmtps" $(OBJS) $(USER_OBJS) $(LIBS)
+	g++ -L/usr/lib -L/usr/local/lib -o "xmtps" $(OBJS) $(USER_OBJS) $(LIBS) -lboost_chrono -lboost_date_time -lboost_filesystem -lboost_iostreams -lboost_log -lboost_log_setup -lboost_program_options -lboost_regex -lboost_thread -lkmlbase -lkmldom -lkmlengine -lmysqlcppconn -lpthread -lvmime
 	@echo 'Finished building target: $@'
 	@echo ' '
-	$(MAKE) --no-print-directory post-build
 
 # Other Targets
 clean:
-	-$(RM) $(CC_DEPS)$(C++_DEPS)$(EXECUTABLES)$(C_UPPER_DEPS)$(CXX_DEPS)$(OBJS)$(CPP_DEPS)$(C_DEPS) xmtps
+	-$(RM) xmtps
 	-@echo ' '
 
 pre-build:
-	-../build/incrementBuild.sh; if [ -f /var/lock/xmtps/lock.pid ]; then rm /var/lock/xmtps/lock.pid; fi
+	-if [ -f /var/lock/xmtps/lock.pid ]; then rm /var/lock/xmtps/lock.pid; fi
 	-@echo ' '
 
 post-build:
-	-./../build/incrementBuild.sh; doxygen ../doc/doxy.cfg
+	-./../build/incrementBuild.sh; #cd ../doc;  doxygen doxy.cfg
 	-@echo ' '
 
 .PHONY: all clean dependents main-build pre-build post-build
