@@ -514,6 +514,98 @@ xmtps-generate-summary-page.py -i "/data1/alamo/data/json/[0-9]+/[0-9]+_summary.
     -o /data1/alamo/data/plots2 /data1/alamo/data/json
 ```
 
+### JSON files
+
+The Python tools write three kinds of JSON file under the output directory (production:
+`/data1/alamo/data/json/<serial>/`). Times are given twice throughout: `dt_epoch` (Unix seconds,
+UTC) and `dt_str` (ISO 8601, e.g. `2026-10-25T11:05:32Z`). Pressure is in dBar, temperature in
+°C, salinity in PSU; `dens` and `sigma0` are in-situ density and potential density referenced to
+the surface, minus 1000 kg/m³, from `RhoLUT.py`.
+
+#### Per-dive files: `dives/<serial>_<dive>.json`
+
+Written by `xmtps-list2json.py`, one per listing file (pre-mission dives are negative, e.g.
+`9213_-003.json`). Each file is a `FloatClasses.Dive` object serialized with
+[jsonpickle](https://jsonpickle.github.io/): every object carries a `py/object` tag naming its
+class, and its attributes are written by name, so the attribute names in `FloatClasses.py` are
+part of the format (`json_vers`, currently `0.11`, identifies it). Missing values are written as
+`NaN`, which Python's `json` module reads but strict JSON parsers do not.
+
+```
+{"py/object": "FloatClasses.Dive", "json_vers": "0.11",
+ "id": {"py/object": "FloatClasses.FloatId", "whoi": 9287, "dac": -1, "wmo": -1},
+ "list_file": {"py/object": "FloatClasses.File", "path": "data/list/9287/lis9287-0325.txt",
+               "mtime": {"py/object": "FloatClasses.DateTime", "dt_epoch": 1792937148.35,
+                         "dt_str": "2026-10-25T14:05:48Z"}},
+ "dive_num": 325,
+ "profile": {"py/object": "FloatClasses.Profile", "pres": [278.04, 277.6, ...], ..., "n": 278},
+ ...}
+```
+
+| Attribute | Class | Contents |
+|---|---|---|
+| `id` | `FloatId` | Serial number (`whoi`), DAC and WMO IDs (`-1` if unknown). |
+| `list_file` | `File` | Path and modification time of the listing the file was made from. |
+| `dive_num` | | Dive number. |
+| `descent`, `ascent` | `Descent`, `Ascent` | Fall and rise time series: `pres`, `dt_epoch`/`dt_str`, `dt_ref` (the series start) and `dt_ref_delta_sec`, `rate` (dBar/s), `phase_code`. |
+| `drift` | `Drift` | Drift samples: `pres`, `temp`, `saln`, `dens`, `sigma0` and their times (measured when the float sends drift times, otherwise estimated between descent and ascent). |
+| `profile` | `Profile` | Binned profile: `pres`, `temp`, `tcnd` (second temperature channel), `saln`, `saln_corr` (dynamically corrected salinity, NaN if not sent), `dens`, `sigma0`. |
+| `surface` | `Surface` | Surface time series: `pres`, `temp`, `saln` and times. |
+| `pump` | `Pump` | Pump actions: `pres`, `time` (s), `volt`, `curr`, `curr_adj`, `vac`, `power`, `energy`. |
+| `gps`, `sbd` | lists of `Gps`, `Sbd` | GPS fixes and the dive's SBD messages (position, CEP, MOMSN, packet ID, size). |
+| `wave` | `Wave` | Wave spectra (`Szz_g` … in g²/Hz, `Szz` … in m²/Hz), directional moments and derived values: significant wave height `swh` (m), periods (s), mean direction `mwd` (°). |
+| `mission` | `MissionParameters` | Firmware and configuration versions, CTD type, `parameters` (`{name: value}`) and `entries` (section, index, name, value, units of every `m` line). |
+| `engineering` | `Engineering` | One object per engineering section (`descent`, `drift`, `ascent`, `surface`, `ice`, `bit`) with an attribute per parameter, `errors` (error codes) and `extra` (columns not mapped to an attribute). |
+
+#### Aggregate files: `<serial>_<name>.json`
+
+Written by `xmtps-aggregate-json.py`: one table per float, made by concatenating all its dives.
+Each file is a pandas DataFrame in "split" orientation, without an index: a list of `columns`
+and a list of `data` rows. Missing values are `null`; every table has a `dive` column.
+
+```
+{"columns": ["dive", "pres", "temp", "tcnd", "saln", "saln_corr", "dens", "sigma0"],
+ "data": [[0, 131.52, 20.056, 19.863, 34.627, null, 25.035, 24.473], ...]}
+```
+
+Read one with `pandas.read_json(path, orient="split")`.
+
+| File | One row per | Columns |
+|---|---|---|
+| `_profile` | profile bin | `pres`, `temp`, `tcnd`, `saln`, `saln_corr`, `dens`, `sigma0` |
+| `_descent`, `_ascent` | time-series sample | `pres`, `dt_epoch`, `dt_ref_delta_sec`, `dt_str`, `phase_code`, `rate` |
+| `_drift` | drift sample | `pres`, `temp`, `saln`, `dens`, `sigma0`, `dt_epoch`, `dt_ref_delta_sec`, `dt_str` |
+| `_surface` | surface sample | `dt_epoch`, `dt_str`, `pres`, `temp`, `dt_ref_delta_sec` |
+| `_pump` | pump action | `pres`, `time`, `volt`, `curr`, `curr_adj`, `vac`, `power`, `energy` |
+| `_gps` | GPS fix | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `idx`, `ttf_sec`, `nsat`, `snr_min`, `snr_avg`, `snr_max`, `hdop` |
+| `_sbd` | SBD message | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `size_b`, `momsn`, `mtmsn`, `pid` |
+| `_iridium_position` | dive | Iridium position composited from the dive's messages: time (with its range `dt_min_*`/`dt_max_*`), `lat`, `lon`, `cep_km`, `num_pos` |
+| `_profile_position` | dive | Position assigned to the profile: time, `lat`, `lon`, `cep_km`, `src` (`gps` or `iridium`) |
+| `_displacement_surface`, `_displacement_submerged` | dive | Displacement between two positions: `azi` (°), `dist_m`, `duration_s`, `speed_mps`, and `pos1_*`/`pos2_*` |
+| `_cycle_timing` | dive | Start time and duration of descent, drift, ascent and surface, and `total_duration_s` |
+| `_wave` | dive | `swh`, `mwd`, `period_peak`, `period_avg`, `period_zero` |
+| `_wave_spectra` | spectral bin | `freq`, acceleration (`*_g`, g²/Hz) and displacement spectra (m²/Hz), `a0`–`b2`, `r1`, `r2`, `theta1`, `theta2` |
+| `_engineering` | dive | Start time and case vacuum of each engineering section (`descent_*`, `drift_*`, `ascent_*`, `surface_*`) |
+| `_engineering_data` | dive | Every engineering parameter, as `section.attribute` columns (e.g. `drift.mean_pres_dbar`); columns no dive reports are left out |
+| `_engineering_errors` | error | `section`, `idx`, `dt_str`, `code` |
+| `_mission` | dive with mission data | `fwver`, `cfgver`, `ctdtype` and one column per mission parameter (`MSN`, `DTD0`, …) |
+
+#### Float summary: `<serial>_summary.json`
+
+Also written by `xmtps-aggregate-json.py`, and read by `xmtps-generate-summary-page.py` for the
+summary page. It is a jsonpickle object (indented) with the float's `json_vers`, `id`, `fwver`,
+`ctdtype` and `type` (`ALTO` for serial numbers above 10000, otherwise `ALAMO`); `age`, the time
+in seconds from deployment to the latest SBD message; `profdepthsum`, the sum of each dive's
+deepest pressure (dBar); and the `gps` and `sbd` positions at `startup`, `deployment` and
+`latest`, where `latest` also has `cycle` (the last dive), `duration` (s), `nsbd` (its number of
+SBD messages) and `depth` (the deepest pressure of the dive, dBar). Unset numbers are `-999`.
+
+#### `dives/.lastprocessed`
+
+The modification time (Unix seconds) of the newest dive JSON file read by the last aggregate
+run; it is written once the run has written its output. `xmtps-aggregate-json.py` skips a float
+when none of its dive files is newer, unless `-f` is given.
+
 ## Changelog
 
 ### 2026-10-25
@@ -576,6 +668,8 @@ Documentation:
 
 - The README describes the listing file format (layout rules, every line type, and examples)
   and describes the SQL backend in general instead of listing its tables and columns.
+- The README documents the JSON files written by the Python tools: the per-dive jsonpickle
+  files, the aggregate tables, the float summary and `.lastprocessed`.
 
 ### 2026-10-24
 
