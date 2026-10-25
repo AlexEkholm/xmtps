@@ -37,8 +37,10 @@ into JSON and generates the per-float plot pages and the fleet summary page.
 
 ## How it works
 
-Iridium delivers each SBD message as an email with a binary `.sbd` attachment. XMTPS processes
-them in a four-stage pipeline of worker threads, connected by bounded queues:
+Iridium delivers each SBD message as an email with a binary `.sbd` attachment. The binary
+X-message format the floats send is specified in
+[spec/xmessage-format.md](spec/xmessage-format.md). XMTPS processes them in a four-stage
+pipeline of worker threads, connected by bounded queues:
 
 | Stage | Source | Role |
 |---|---|---|
@@ -58,7 +60,8 @@ src/
   Main.cpp, stage*_*.cpp/.h   daemon entry point and pipeline stages
   config/                     command-line/config-file options, MySQL connection settings
   data/                       floats (XFloat), dives (XFloatDiveData), mail messages, metadata
-  data/xmsg/                  X-message decoders (GPS, profiles, drift, engineering, ice, wave, ...)
+  data/xmsg/                  X-message decoders (GPS, profiles, drift, engineering, ice, wave, ...);
+                              the format is specified in spec/xmessage-format.md
   utility/                    logging, MySQL/SQL table helpers, KML, queues, file-system helpers
 bin/
   py/                         JSON conversion, plotting and summary-page tools
@@ -745,6 +748,12 @@ Documentation:
 - The README has a table of contents.
 - The README lists the versions of the compiler, libraries, MySQL server and Python packages
   production uses.
+- New `spec/xmessage-format.md`: a full specification of the ALAMO/ALTO X-message format
+  (packet framing, every message type and version, mission configuration layouts, error codes),
+  compiled from the SOLO-II and ALAMO format documents, MRV's firmware definitions, the decoder
+  source and production packets, with the discrepancies between them.
+- Changelog entries for the versions before the git repository (2014-09 to 2026-07),
+  reconstructed from the old repository and the source snapshots.
 
 ### 2026-10-24
 
@@ -898,6 +907,252 @@ Operations:
 ### 2026-08-05
 
 - Initial commit.
+
+### Before the git repository (2014-09 to 2026-07)
+
+These entries were reconstructed on 2026-10-25. Two sources were used:
+
+- **2021-01 and earlier:** the commit history of the old repository (`git.backup/edu.whoi.aekholm` on argus, 146 commits from 2014-09-08 to 2021-01-29, build 2975).
+- **2021-03 to 2026-07:** the source snapshots on argus (`/data1/alamo/src/xmtps.backup*`) and in Dropbox. These are builds 2988, 3143, 3150, 3194, 3219, 3225, 3234, 3238, 3249 and 3254. Build 3254 is identical to the initial commit (build 3255).
+
+Release dates are the build dates the deployed decoder wrote into the listings' `XSV` line. Changes between two snapshots are listed under the production builds that fall between them, because builds without a snapshot can't be told apart.
+
+#### 0.6.3252 (2026-07-01); source build 3254
+
+- Build only: `boost::lock_guard`/`boost::recursive_mutex` replaced with the `std::` equivalents. No change to output.
+
+#### 0.6.3248 (2026-05-29) and 0.6.3249 debug (2026-06-24); source build 3249
+
+- Decodes the marginal-ice-zone acoustic messages, whose type ID moved from 0xC0 to 0xCA (`XAcousticPosition.h`).
+  - Subtype 3 is a listening window, 37 bytes: start and end UNIX times, with pressure, temperature and salinity at each end.
+  - Subtype 5 is a CACST receive record, 33 bytes: counter, arrival time (s and µs), matched-filter power, source ID, PSK error code, and input and output SNR in 0.1 dB.
+  - Each received ping is assigned to the listening window that contains it.
+- New `APS` listing lines under "Position Data / Acoustic Position", with one block for listening windows and one for receive statistics.
+  - The SNROut column repeats SNRIn, a bug that is still present.
+  - Acoustic data no longer counts as position data for a dive.
+- Mission configuration: firmware 0x0A0C0032 (ALAMO 10.12.0.32) is decoded with the 10.8.0.4 layout.
+- Fall/rise listing header units read "(UTC/+sec)" instead of "(start-time/+sec)".
+
+#### 0.6.3235 debug (2025-10-08) and 0.6.3237 (2025-11-07); source build 3238
+
+- Wave spectra: added a correction for firmware 0x0A060231, 0x0A080031, 0x0A090131 and 0x0A0A0031. These versions send only every other spectral value, with zeros in the second half. The correction doubles the effective sample rate and recomputes the frequencies of the first half.
+- Wave frequency bins are back to `fs·(i+1)/seglen`.
+- `.meta` files with 5-digit DAC IDs are accepted: the filename pattern became `[0-9]{4,5}_...` and the DAC ID limit rose from 10000 to 99999.
+- Fixed an inverted condition: the start-of-mission filter on fetched messages was only applied when the start-of-mission time was invalid.
+
+#### 0.6.3233 (2025-09-05) and 0.6.3232 (2025-09-30); source build 3234
+
+- Wave spectra rework (`XWave.cpp`, `XWaveSpectralSample.h`):
+  - Version-2 spectral scale factors changed from {4096, 1024, 256, 64} to {8192, 2048, 512, 128}, the same as version 1. This halves `wvs`/`wvm` values compared with earlier builds.
+  - Fixed the fill-value test in the `wvm` accessors, which all tested the xx component.
+  - Frequency bins changed to `fs·i/seglen`, so the first bin was 0 Hz (reverted in 0.6.3237).
+  - Only spectral versions 1 and 2 are listed.
+- Regression: `wvm` columns were printed as xx, xy, yy, zz, zx, zy under the zz, yy, xx, xy, zx, zy header. Builds 3234 to 3289 have mislabelled `wvm` columns; fixed on 2026-10-24.
+
+#### 0.6.3222 (2025-02-14), 0.6.3224 (2025-07-15) and 0.6.3226 (2025-08-22); source build 3225
+
+- BIT message version 11 is listed. Before this, v11 messages were decoded but listing them failed. Messages of 256 or 264 bytes are accepted; the extra 8 bytes are not decoded.
+- Mission configuration: firmware 0x0A0A0031 (WIMS 10.10.0.31) is supported, alongside 0x0A080031.
+- KML: the latest-position placemark description is in a `<p>` element, without the trailing instrument ID.
+
+#### 0.6.3219 (2024-09-25); source build 3219
+
+- Mission configuration: firmware 0x0A070101 (10.7.1.1) is supported, with the 10.8 message-0 layout and an 88-byte message 1.
+- 10.7.1.1 and 10.8.0.4 share a listing block. It no longer prints the BIT thresholds (PNB, PNC, PXC) that this layout dropped.
+
+#### 0.6.3217 (2024-09-11); source build 3194
+
+- New `mail.fetchMode` option: 0 fetches from the IMAP server (the default), 1 reads mail files from the local filesystem.
+  - In filesystem mode, `*.raw` and `*.txt` files are read from `dir.mail` under a PID lock file, parsed, and deleted once parsed.
+  - New `dir.mail` and `dir.mail.processed` options. `dir.mail.processed` was not used yet.
+- Stored mail files can be parsed back into messages (`XFloatMailMessage` `operator>>`).
+- The `dir.*` options got defaults (`kml`, `lis`, `log`, `meta`, `raw`, `sbd`, `stat`, `phy`). The maximum fetch count went from 128 to 127.
+- BIT message version 11 (firmware 10.8) is decoded.
+  - It adds a 32-bit traveler error field at offset 50, which moves all later fields.
+  - The CTD status is now read as a 32-bit integer in BIT 9 and 10.
+- Mission configuration: firmware 0x0A080004 (10.8.0.4, SBE) and 0x0A080031 (10.8.0.31, WIMS) are supported.
+  - New layout: message 0 is 327 bytes, without PNB/PNC/PXC.
+  - Message 1 is 71 or 90 bytes, with the WIMS timeout (`WST`) and the dynamic salinity correction parameters.
+- Known problems at this build:
+  - The 10.8.0.4 parser read beyond the 71-byte message 1.
+  - BIT v11 messages could not be listed.
+  - The dynamic salinity correction lines were commented out of the 10.5 to 10.6.3 listings.
+
+#### 0.6.3193 (2024-09-03); source build 3150
+
+- Mission configuration: firmware 0x0A060231 (10.6.2.31, WIMS) is supported.
+  - Its message 1 is 95 bytes, with a WIMS timeout field.
+  - Its listing has a "Surface - Wave-Field Measurement" section (`WST`) and the dynamic salinity correction parameters.
+- Firmware 0x0A060233, 0x0A060300 to 0x0A060304 and 0x0A060333 are accepted with the 10.6.2 layout.
+
+#### 0.6.3006 debug (2021-03-29) to 0.6.3149 (2023-08-23); source build 3143
+
+The deployed releases in this period were:
+
+| Release | Build date |
+|---|---|
+| 0.6.3006 (debug) | 2021-03-29 |
+| 0.6.3008 to 0.6.3011 | 2021-04-09 to 2021-04-14 |
+| 0.6.3048 | 2021-07-13 |
+| 0.6.3061 | 2021-07-28 |
+| 0.6.3064 | 2021-11-22 |
+| 0.6.3067 | 2022-01-04 |
+| 0.6.3071 | 2022-07-06 |
+| 0.6.3078 | 2022-10-04 |
+| 0.6.3081 | 2023-01-26 |
+| 0.6.3139 | 2023-05-05 |
+| 0.6.3142 | 2023-06-22 |
+| 0.6.3149 | 2023-08-23 |
+
+Together they made these changes:
+
+- **Mission configuration** (`XMfaMissionCfg.cpp`):
+  - New firmware support:
+    - 0x08010001 (2021 hurricane floats) and 0x0A020201, with the 0x0800xxxx layout.
+    - 0x08010000, 0x08020000, 0x09000000, 0x0A000000, 0x0A000100, 0x0A020000 to 0x0A020200, 0x0A030000 and 0x0A030100, with a 76-byte message 1.
+    - 10.5.0.0 to 10.5.0.4, 10.6.0.0 to 10.6.0.4, 10.6.1.0 to 10.6.1.4, 10.6.1.33 (Micro-ALTO) and 10.6.2.0 to 10.6.2.4, with a 93-byte message 1.
+  - New "Profile - Dynamic Salinity Correction" listing section, with `PPE` and `PPC0` to `PPC3`. The tau and alpha values were printed against each other's labels.
+- **Firmware version tracking:** only mission configuration message 0 updates a float's firmware version. Before, any message did, because of an always-true comparison.
+- **BIT version 2 decoder** (`XEngBIT.h`, `XAlamoBit2.h`):
+  - BIT versions 6 to 8 use the old decoder (version 6 newly accepted).
+  - Versions 9 (firmware 10.5) and 10 (10.6) use a new 256-byte decoder with IEEE float fields and UNIX times.
+  - `E05`/`E06` lines got a `BITVer` column, and serial numbers are no longer zero-padded.
+- **Wave message:**
+  - Byte 3 is read as the message version.
+  - Version 2 adds an accelerometer gain at offset 14, and the effective scale is `assf·gain²/64`.
+  - The `WVS` header shows the version, gain and effective scale.
+  - `wvs` values are scaled.
+  - New `wvm` lines give displacement spectra in m²/Hz.
+- **`.meta` files:** serial numbers of 4 to 6 digits are accepted in the filename, and the DAC and WMO IDs are copied into the float record.
+- **Sensor data:** values left over after curvature unpacking log a warning instead of failing the message.
+- **Reprocessing and threads:**
+  - Reprocessing at startup covers floats heard from in the last 90 days, down from 180.
+  - The daemon thread spin-up delay dropped from 30 s to 10 s.
+- **Options:**
+  - `dir.nc`, `gen.nc` and `poc.nc` were removed.
+  - The default `mail.user` is `alamo`.
+  - Help text was added for several options.
+- **Repository additions:**
+  - The systemd units `xmtps-alamo.service` and `xmtps-alamo-plot.service`.
+  - The Python plotting tools in `bin/py`.
+  - Build notes for Ubuntu 20.04 and g++-10.
+
+#### Build 2988 (2021-03); Dropbox snapshot
+
+- Ported from `boost::shared_ptr` to `std::shared_ptr` throughout, and to the VMime 0.9.2 API.
+- Removed NetCDF output: the NetCDF writer thread and `NetcdfUtils` were deleted, and `-lnetcdf_c++4` was dropped from the link.
+- Built with the system `g++` instead of `g++-4.7`. Sample configuration in `cfg/options.cfg`.
+
+#### 0.6.2971 to 0.6.2975 (2020-08-10 to 2021-01-29)
+
+- Mission parameter support for firmware 0x08000101 (2020-08-10), 0x08000300 (2020-11-23) and 8.0.5 (2021-01-29).
+- Fixed the listing not being updated when wave spectra were the last message received in real time (2020-09-01).
+
+#### 0.6.2923 to 0.6.2962 (2020-01-15 to 2020-07-29)
+
+- Firmware 0x08000001 (2020-07-24) added directional, spectral wave data. Wave decoding fixes followed on 2020-07-29.
+- Mission parameter support for firmware 0x07020200, 0x07020400, 0x07020800, 0x07020900 and 0x07030500 (2020-03 to 2020-06).
+- RAW file names changed (2020-01-15) so that messages with duplicate MOMSNs are not lost. Fixed RAW file names for incomplete messages (2020-03-31).
+
+#### 0.6.2869 to 0.6.2910 (2019-08-13 to 2019-09-17)
+
+- Wave data decoding, and the hex dump of each message at the end of the listing (2019-08-13).
+- Fixed mission configuration decoding for firmware 6.0.x, 6.4.9 and 6.5.w.
+- Added firmware 0x06057700 and 0x06010300 (2019 ALTO RBR/O2 test float).
+- Fixed the surface engineering message v0x14 and mission message 0xD1 for 0x06050100.
+
+#### 0.6.2803 to 0.6.2805 (2018-10-31 to 2019-06-28)
+
+- Support for the firmware 6.0 message changes (2018-10-29 to 2018-10-31):
+  - mission parameters, ascent engineering and Argo data;
+  - the drift engineering message;
+  - firmware 0x06000100 (2019-03-19) and 0x06050100 (2019-05-30).
+- Fixed the "start-of-drift" label in the drift engineering listing (2019-03-29).
+- PHY files:
+  - support WMO instrument type 868 (ALAMO with an SBE CTD);
+  - samples are ordered by pressure (2019-06).
+- Partial spectral wave decoding (2019-06-21).
+
+#### 0.6.2764 to 0.6.2775 (2017-10-03 to 2018-05-23)
+
+- MFA mission configuration decoding (2017-10-16):
+  - phase-specific fall-to-profile parameters;
+  - fixes for firmware 0x05006100;
+  - an updated listing format.
+- Fixed surface engineering error code decoding (2017-11-03).
+- Ice engineering message v0x11 (2018-05-16).
+- Active floats are reprocessed at startup by default (2018-05-23). Active means a valid SBD message in the last 180 days.
+
+#### 0.6.2592 to 0.6.2633 (2017-03-03 to 2017-08-17)
+
+- **Mission configuration support:**
+  - ALAMO software 0x04016100 (2016 NASCar floats), 0x04056300 and 0x04066100;
+  - 0x04046100 (2017 hurricane floats);
+  - fixed decoding for 0x03006500.
+- **Surface pressure offset correction:**
+  - fixed bad offsets caused by spurious surface pressures;
+  - the correction is no longer computed for SBE floats (2017-04-21).
+- **Surface data:** surface engineering message v0x13 support, and fixes to the derived surface fields when a dive has several surface messages.
+- **Listing format:**
+  - Auxiliary temperature channel data is part of the profile section.
+  - IMEIs in listings are truncated for security (2017-08-02).
+  - "counts" fields were removed from the composite sections.
+  - Unbinned profile lines became `pru`.
+- **PHY files:** written for ALAMO floats with salinity, excluding binned samples above 1 dBar (2017-08).
+- **NetCDF:**
+  - JULD is taken from the start-of-ascent time;
+  - fixes to the writer thread;
+  - unbinned profiles were left out for now.
+- **GPS and KML:** GPS messages with future dates are rejected, and KML files link to argo.whoi.edu.
+- **Configuration:** the valid DAC ID range changed, and per-instrument log files were disabled.
+
+#### 0.6.1555 to 0.6.2457 (2016-02-14 to 2016-12-29)
+
+- **Mail and SQL server connections:** better error handling (2016-02-14).
+- **New messages for firmware 0x02006900** (2016-03-24): engineering surface v0x12, valve data, mission configuration, and ice detection v0x10.
+- **New output:** NetCDF files (2016-04-11), and options to enable or disable PHY files per instrument (2016-06-01).
+- **Surface pressure offset correction** (2016-06-23 to 06-27): computed from the surface pressures of the previous N dives, and applied to the listing, PHY and NetCDF files.
+- **Fixes:**
+  - curvature unpacking for packing factors above 3;
+  - missing data in some listings.
+- **Valid instrument IDs:** 1000 to 10999.
+- **Mail options** (2016-08):
+  - move processed messages out of the inbox folder;
+  - the starting message index;
+  - more robust mail retrieval;
+  - unsupported `.meta` fields are handled.
+- **Master KML:** active (last 30 days) and archived floats in separate folders.
+- **Mission parameter messages:**
+  - firmware 0x03016700 (Solo-II hybrid test float 10083) and 0x0302100 (2016 NASCar floats);
+  - reprocessing no longer fetches mail from before the start of the mission.
+
+#### 0.6.1451 (2015-09-22) and earlier (2014-09-08 to 2015-09-22)
+
+- **2014-09:** first versions on argus.
+  - The signal handler gives a graceful shutdown.
+  - The init.d script.
+  - Zero decoder threads can run, to fetch mail only.
+  - Listing, pump-data, PHY and gain/offset fixes; version 0.6 (2014-10-20).
+- **2015-01 to 2015-03:** X-message format 2.2.
+  - RAW mail files in standard or extended format.
+  - The Argo data message.
+  - The 9-byte surface time series with temperature and salinity.
+  - Curvature packing for profile and drift data.
+  - Reprocessing of one instrument by ID (2015-05-11).
+- **2015-06 to 2015-07:** ALAMO messages.
+  - BIT v7.
+  - Engineering descent, drift and ascent v0x11.
+  - Engineering surface (0xEA).
+  - Mission configuration for software 0x02002300.
+  - The new pump data format.
+  - A FIFO of RAW file paths for the S2A decoder.
+  - Reworked sensor data decoding for curvature-packed messages of differing lengths.
+- **2015-07 to 2015-09:** output and fixes.
+  - Fixed swapped drift-engineering temperature and salinity, and the descent first pump-time adjustment.
+  - KML (2015-08-11) and status files (2015-08-21).
+  - Stored messages are reprocessed when a dive is loaded from the database.
+  - The start-of-dive GPS fix can stand in for the previous dive's profile position.
+  - Firmware 0x02006700 and 0x02006800.
 
 ## Author and license
 
