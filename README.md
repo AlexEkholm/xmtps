@@ -519,8 +519,10 @@ Python tools:
   parameters), `<id>_engineering_data.json` (one row per dive, `section.attribute` columns,
   dropping columns no dive reports) and `<id>_engineering_errors.json`.
 - Trajectory plots show, behind the other traces and for dives 1 and later, the target drift
-  pressure as a thin dashed black step line (`DTD<n>` for the current mission phase `MPS`, or
-  `DTD`, changing at the start of descent of each dive) and the bathymetry at the GPS fixes as
+  pressure as a thin dashed light grey step line (`DTD<n>` for the current mission phase `MPS`, or
+  `DTD`, changing at the start of descent of each dive; once a phase's cycle count is used up,
+  `MPC` ≥ `MNM<n>`, the dive drifts in the next phase `MNS<n>`, since the reported phase is from
+  before the switch) and the bathymetry at the GPS fixes as
   a black line ("Bathymetry" in the legend). Depth comes from NOAA ETOPO2v2c (nearest 2′ cell),
   converted to pressure with Saunders (1981). The pressure axis range is unchanged, so a
   seafloor deeper than the float's data is off the plot. The file is read from

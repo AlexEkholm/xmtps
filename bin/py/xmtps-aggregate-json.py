@@ -4487,6 +4487,14 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                     mps = pd.to_numeric(mrow.get('MPS'), errors = 'coerce')
                     if pd.notna(mps) and not 0 <= mps <= 9:
                         continue
+                    # The phase is reported from before the dive's phase switch: once the
+                    # phase's cycle count is used up (MPC >= MNM<n>), the dive drifts in the
+                    # next phase MNS<n>.
+                    if pd.notna(mps):
+                        mnm, mns, mpc = (pd.to_numeric(mrow.get(k), errors = 'coerce')
+                                         for k in ('MNM{:d}'.format(int(mps)), 'MNS{:d}'.format(int(mps)), 'MPC'))
+                        if pd.notna(mnm) and pd.notna(mns) and pd.notna(mpc) and mpc >= mnm and 0 <= mns <= 9:
+                            mps = mns
                     keys = (['DTD{:d}'.format(int(mps))] if pd.notna(mps) else []) + ['DTD0', 'DTD']
                     value = next((pd.to_numeric(mrow[k], errors = 'coerce') for k in keys if k in mrow and pd.notna(pd.to_numeric(mrow[k], errors = 'coerce'))), None)
                     if value is not None and 0 < value < 7000:
@@ -4522,7 +4530,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                         '<extra></extra>',
                         ]),
                     line=dict(
-                        color='rgb(0,0,0)',
+                        color='rgb(190,190,190)',
                         width=1.0,
                         dash='dash',
                         shape='hv',
