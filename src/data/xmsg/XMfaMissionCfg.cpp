@@ -380,6 +380,7 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
       case 0x07020900: // ALAMO Software version 0x07020900 (2020 ALTO #11011 test float)
       case 0x07030000: // ALAMO Software version 0x07020900 (2020 ALTO RBR/ODO #11060 test float)
       case 0x07030500: // ALAMO Software version 0x07020900 (2020 ALTO RBR/ODO #11060 test float)
+      case 0x07030400: // ALAMO Software version 7.3.4.0 (layout inferred from production messages)
         DecodeXMsgDataFw07020200(msg_idx, data);
         break;
 
@@ -410,6 +411,14 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
         break;
 
       case 0x0A050000: // ALAMO Software version 10.5.0.0
+      case 0x0A020301: // ALAMO Software version 10.2.3.1 (layout inferred from production messages)
+      case 0x0A040000: // ALAMO Software version 10.4.0.0 (layout inferred from production messages)
+      case 0x0A040400: // ALAMO Software version 10.4.4.0 (layout inferred from production messages)
+      case 0x0A040500: // ALAMO Software version 10.4.5.0 (layout inferred from production messages)
+      case 0x0A040600: // ALAMO Software version 10.4.6.0 (layout inferred from production messages)
+      case 0x0A060011: // ALAMO Software version 10.6.0.11 (layout inferred from production messages)
+      case 0x0A060132: // ALAMO Software version 10.6.1.32 (layout inferred from production messages)
+      case 0x0A060401: // ALAMO Software version 10.6.4.1 (layout inferred from production messages)
       case 0x0A050001: // ALAMO Software version 10.5.0.1
       case 0x0A050002: // ALAMO Software version 10.5.0.2
       case 0x0A050003: // ALAMO Software version 10.5.0.3
@@ -454,12 +463,28 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
       case 0x0A080004: // ALAMO Software version 10.8.0.4 (SBE)
       case 0x0A0C0001: // ALAMO Software version 10.12.0.1 (RBR)
       case 0x0A0C0032: // ALAMO/MM2 Software version 10.12.0.32
+      case 0x0A070001: // ALAMO Software version 10.7.0.1 (layout inferred from production messages)
+      case 0x0A070104: // ALAMO Software version 10.7.1.4 (layout inferred from production messages)
+      case 0x0A070211: // ALAMO Software version 10.7.2.11 (layout inferred from production messages)
+      case 0x0A080001: // ALAMO Software version 10.8.0.1 (layout inferred from production messages)
+      case 0x0A090001: // ALAMO Software version 10.9.0.1 (layout inferred from production messages)
+      case 0x0A090101: // ALAMO Software version 10.9.1.1 (layout inferred from production messages)
+      case 0x0A090122: // ALAMO Software version 10.9.1.22 (layout inferred from production messages)
+      case 0x0A0A0001: // ALAMO Software version 10.10.0.1 (layout inferred from production messages)
+      case 0x0A0A0004: // ALAMO Software version 10.10.0.4 (layout inferred from production messages)
+      case 0x0A0A0022: // ALAMO Software version 10.10.0.22 (layout inferred from production messages)
+      case 0x0A0C0004: // ALAMO Software version 10.12.0.4 (layout inferred from production messages)
+      case 0x0A0C0034: // ALAMO Software version 10.12.0.34 (layout inferred from production messages)
+      case 0x0A0D0013: // ALAMO Software version 10.13.0.13 (layout inferred from production messages)
+      case 0x0A0E0028: // ALAMO Software version 10.14.0.28 (layout inferred from production messages)
         DecodeXMsgDataFw0A080004(msg_idx, data);
         break;
 
       case 0x0A080031: // ALAMO Software version 10.8.0.31 (WIMS)
       case 0x0A0A0031: // ALAMO Software version 10.10.0.31 (WIMS)
       case 0x0A0C0131: // ALAMO Software version 10.12.1.31 (WIMS)
+      case 0x0A070131: // ALAMO Software version 10.7.1.31 (WIMS) (layout inferred from production messages)
+      case 0x0A090131: // ALAMO Software version 10.9.1.31 (WIMS) (layout inferred from production messages)
         DecodeXMsgDataFw0A080031(msg_idx, data);
         break;
 
@@ -7182,6 +7207,7 @@ const string XMfaMissionCfg::GenerateListingString(int whoi, int dive, int idx) 
       case 0x07020900: // ALAMO Software version 0x07020900 (2020 ALTO #11011 test float)
       case 0x07030000: // ALAMO Software version 0x07020900 (2020 ALTO RBR/ODO #11060 test float)
       case 0x07030500: // ALAMO Software version 0x07020900 (2020 ALTO RBR/ODO #11060 test float)
+      case 0x07030400: // ALAMO Software version 7.3.4.0 (layout inferred from production messages)
         GenerateListingStringFw07020200(os, whoi, dive);
         break;
 
@@ -7214,6 +7240,14 @@ const string XMfaMissionCfg::GenerateListingString(int whoi, int dive, int idx) 
         break;
 
       case 0x0A050000: // ALAMO Software version 10.5.0.0
+      case 0x0A020301: // ALAMO Software version 10.2.3.1 (layout inferred from production messages)
+      case 0x0A040000: // ALAMO Software version 10.4.0.0 (layout inferred from production messages)
+      case 0x0A040400: // ALAMO Software version 10.4.4.0 (layout inferred from production messages)
+      case 0x0A040500: // ALAMO Software version 10.4.5.0 (layout inferred from production messages)
+      case 0x0A040600: // ALAMO Software version 10.4.6.0 (layout inferred from production messages)
+      case 0x0A060011: // ALAMO Software version 10.6.0.11 (layout inferred from production messages)
+      case 0x0A060132: // ALAMO Software version 10.6.1.32 (layout inferred from production messages)
+      case 0x0A060401: // ALAMO Software version 10.6.4.1 (layout inferred from production messages)
       case 0x0A050001: // ALAMO Software version 10.5.0.1
       case 0x0A050002: // ALAMO Software version 10.5.0.2
       case 0x0A050003: // ALAMO Software version 10.5.0.3
@@ -7248,12 +7282,28 @@ const string XMfaMissionCfg::GenerateListingString(int whoi, int dive, int idx) 
       case 0x0A080004: // ALAMO Software version 10.8.0.4 (SBE)
       case 0x0A0C0001: // ALAMO Software version 10.12.0.1 (RBR)
       case 0x0A0C0032: // ALAMO/MM2 Software version 10.12.0.32
+      case 0x0A070001: // ALAMO Software version 10.7.0.1 (layout inferred from production messages)
+      case 0x0A070104: // ALAMO Software version 10.7.1.4 (layout inferred from production messages)
+      case 0x0A070211: // ALAMO Software version 10.7.2.11 (layout inferred from production messages)
+      case 0x0A080001: // ALAMO Software version 10.8.0.1 (layout inferred from production messages)
+      case 0x0A090001: // ALAMO Software version 10.9.0.1 (layout inferred from production messages)
+      case 0x0A090101: // ALAMO Software version 10.9.1.1 (layout inferred from production messages)
+      case 0x0A090122: // ALAMO Software version 10.9.1.22 (layout inferred from production messages)
+      case 0x0A0A0001: // ALAMO Software version 10.10.0.1 (layout inferred from production messages)
+      case 0x0A0A0004: // ALAMO Software version 10.10.0.4 (layout inferred from production messages)
+      case 0x0A0A0022: // ALAMO Software version 10.10.0.22 (layout inferred from production messages)
+      case 0x0A0C0004: // ALAMO Software version 10.12.0.4 (layout inferred from production messages)
+      case 0x0A0C0034: // ALAMO Software version 10.12.0.34 (layout inferred from production messages)
+      case 0x0A0D0013: // ALAMO Software version 10.13.0.13 (layout inferred from production messages)
+      case 0x0A0E0028: // ALAMO Software version 10.14.0.28 (layout inferred from production messages)
         GenerateListingStringFw0A070101(os, whoi, dive);
         break;
 
       case 0x0A080031: // ALAMO Software version 10.8.0.31 (WIMS)
       case 0x0A0A0031: // ALAMO Software version 10.10.0.31 (WIMS)
       case 0x0A0C0131: // ALAMO Software version 10.12.1.31 (WIMS)
+      case 0x0A070131: // ALAMO Software version 10.7.1.31 (WIMS) (layout inferred from production messages)
+      case 0x0A090131: // ALAMO Software version 10.9.1.31 (WIMS) (layout inferred from production messages)
         GenerateListingStringFw0A080031(os, whoi, dive);
         break;
 

@@ -479,6 +479,18 @@ Decoder daemon:
   mission messages (78,694 dives, 93 firmware versions) gives byte-identical listings before and
   after.
 
+- Mission configuration: 25 more firmware versions are decoded instead of being reported as
+  unsupported, mapped to existing layouts that were identified from production messages:
+  10.2.3.1, 10.4.x, 10.6.0.11, 10.6.1.32 and 10.6.4.1 use the 10.5/10.6 layout; 10.7.0.1,
+  10.7.1.4, 10.7.2.11, 10.8.0.1, 10.9.x (except 10.9.1.31), 10.10.0.x, 10.12.0.4, 10.12.0.34,
+  10.13.0.13 and 10.14.0.28 the 10.7/10.8 layout; 10.7.1.31 and 10.9.1.31 the WIMS layout;
+  7.3.4.0 the 7.2 layout. This covers 3,191 stored dives, including the active floats 11531,
+  11533, 11041, 11498-11500, 11060, 11678, 11700-11712, 11773-11776 and the 9287-9306 wave
+  floats. Checked on all 211,007 production mission messages: only those dives change, the
+  calibration constants decode to their usual values, MSN equals the dive number, and the
+  decoded drift target agrees with the measured drift pressure on 94% of 660 dives (the rest
+  are float behaviour, e.g. 11678 holding a constant pressure above its target).
+
 Build:
 
 - The Release makefiles are regenerated from the Debug ones with `-O2 -g` (they referenced Boost
