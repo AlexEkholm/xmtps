@@ -703,6 +703,14 @@ void XFloat::SaveLocalCacheToDatabase() {
     // Iterate over local cache.
     lout() << "Saving local cache of instrument data to database...";
 
+    /* Check the SQL server first. This also replaces this thread's connection if it has gone
+     * stale: the daemon thread's connection is otherwise idle from startup to shutdown and is
+     * dropped by the server after its idle timeout, which made every save fail. */
+    if(!sql_table_description_.isSqlServerAvailable()) {
+      lwrn() << "SQL server unavailable: local cache of instrument data not saved.";
+      return;
+    }
+
     // Save each float separately, so one failure does not stop the remaining floats being saved.
     for_each(
         id2float_map_.begin(),

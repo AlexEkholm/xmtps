@@ -490,6 +490,10 @@ Decoder daemon:
   calibration constants decode to their usual values, MSN equals the dive number, and the
   decoded drift target agrees with the measured drift pressure on 94% of 660 dives (the rest
   are float behaviour, e.g. 11678 holding a constant pressure above its target).
+- Shutdown: saving the float cache no longer fails after a long uptime. The daemon thread's
+  connection is idle from startup to shutdown and was dropped by the server's idle timeout, so
+  every save failed (seen at the 2026-10-25 restart after 10.8 h); the connection is now checked
+  and replaced first, and if the SQL server is down one warning is logged instead.
 
 Build:
 
