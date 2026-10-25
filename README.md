@@ -13,7 +13,7 @@ them in a four-stage pipeline of worker threads, connected by bounded queues:
 | Stage | Source | Role |
 |---|---|---|
 | 1. Mail retrieval | `src/stage1_MailRetrievalThread.*` | Fetches mail from the IMAP server (or RAW mail files from a directory) and queues it. Optionally reprocesses stored messages from the database at startup. |
-| 2. Mail processing | `src/stage2_MailProcessingThread.*` | Validates the header and SBD attachment, resolves the float's identifiers, writes the RAW/SBD files, and saves the message to MySQL. |
+| 2. Mail processing | `src/stage2_MailProcessingThread.*` | Validates the header and SBD attachment, resolves the float's identifiers, writes the RAW/SBD files, saves the message to MySQL (holding it while the SQL server is unavailable), and then queues it for decoding. |
 | 3. Telemetry decoding | `src/stage3_TelemetryDecoderThread.*` | Decodes the SBD data into X-messages, assigns them to the float's dive, and writes listing/PHY files and dive records when a dive is complete. |
 | 4. Post-processing | `src/stage4b_PostProcessingThread.*` | Periodically writes each float's KML and status files and the master KML file. |
 
@@ -240,125 +240,185 @@ Logs are written to `<dir.log>/YYYY-MM-DD.log`, with warnings and errors also in
 | Listings | `<dir.lis>/<serial>/lis<serial>-<dive>.txt` |
 | PHY, KML, status, SBD | under `dir.phy`, `dir.kml`, `dir.stat`, `dir.sbd` |
 
-Decoded data, messages, floats and dives are also stored in the MySQL schema set by `sql.schema`.
+Decoded data, messages, floats and dives are also stored in the MySQL database (see
+[SQL backend](#sql-backend)).
 
-## Database schema
+## Listing files
 
-XMTPS stores its state in five InnoDB tables in the MySQL schema named by `sql.schema` (production:
-`xmtps_alamo`). Each table is mapped to one C++ class through a static
-`util::mysql::SqlTableDescription`. The description lists the column names and the getter and setter
-used to read and write each column, and generates the `SELECT`, `DELETE` and
-`INSERT ... ON DUPLICATE KEY UPDATE` statements. Saving an object therefore inserts a new row or
-overwrites the existing row with the same primary key.
+A listing file is the decoder's human- and machine-readable record of one dive: everything decoded
+from the dive's SBD messages, written to `<dir.lis>/<serial>/lis<serial>-<dive>.txt` (the dive
+number has four digits; pre-mission dives are negative, e.g. `lis10108--001.txt`). The file is
+rewritten each time a message of the dive is decoded, so it always reflects the messages received
+so far. The Python tools (`xmtps-list2json.py`) parse these files.
 
-| Table | Class | Primary key | One row per | Written by |
-|---|---|---|---|---|
-| `XFloat` | `XFloat` | `id_instrument` | instrument | startup, stage 3 and shutdown |
-| `XFloatMetadata` | `XFloatMetadata` | `id_instrument` | instrument, from its `.meta` file | saved with `XFloat` |
-| `XFloatDive` | `XFloatDiveData` | `id_instrument`, `id_dive` | dive cycle | stage 3 |
-| `XGPS` | `XGPS` | `id_instrument`, `id_dive`, `datetime` | GPS fix | stage 3, saved with the dive |
-| `XFloatMail` | `XFloatMailMessage` | `id_dive`, `id_imei`, `id_sbd_momsn`, `id_sbd_packet`, `id_msg` | mail message (one SBD packet) | stage 2 |
+### Layout rules
 
-Relationships (foreign keys):
+- Lines starting with `#` are comments: banners, section titles, column-name and unit headers.
+  Anything after a `#` on a data line is also a comment (for example a phase name or a parameter
+  description) and is not meant to be machine-readable.
+- Every data line starts with a tag naming its type, followed by the float serial number and the
+  dive number; the remaining fields are separated by whitespace. The comment lines just above a
+  group of data lines give the column names and, on a second line in parentheses, the units.
+- An upper-case tag introduces a group and a lower-case tag of the same name holds its rows, e.g.
+  `PRO` (sample count) and `pro` (one line per profile bin), or `D` (drift start time) and `d`
+  (drift samples).
+- Time-series groups (`F`/`f`, `D`/`d`, `R`/`r`, `SFC`/`sfc`) give an absolute start time
+  (ISO 8601, UTC) on the group line and the time of each row as `+seconds` from that start.
+- Engineering and mission messages that span several lines number them with a minor index,
+  `midx`; `# --- Name ---` comment lines name the sub-groups.
+- Times are UTC (`2026-10-25T12:03:07Z`); an unset time is `0000-00-00T00:00:00Z`. Positions are
+  written as signed latitude and longitude run together (`+12.73113-163.48779`). Missing or invalid
+  sensor values are `-9.999` (pressure, temperature and salinity, with pressure to two decimals);
+  other fields have their own fill values, for example `-1` for unknown IDs (`-001`, `-000001`)
+  and `±999.9999` in the wave spectra.
+- IMEIs are reduced to their last seven digits (`000000002214760`) on purpose.
+
+### Line types
+
+| Tag | Section | Contents |
+|---|---|---|
+| `XSV` | XMTPS software version | X-message format version, XMTPS version, build configuration and date. |
+| `LIS` | Listing details | Serial number, dive, DAC ID, IMEI, WMO ID. |
+| `SBD` | SBD messages | One line per message: size, IMEI, MOMSN, MTMSN, packet ID, session time and position, CEP. |
+| `GPS` | GPS | GPS fixes: time, position, time to fix, satellites, SNR, HDOP, status. |
+| `IRI` | Iridium position | Position estimated from the Iridium sessions: weighted time and position, variance, error. |
+| `A` | Argo data | Mission phase, pressures, durations, cycle timing and sensor gains and offsets (`midx` 0–5). |
+| `PRC` | Pressure correction | Surface pressure offset applied to the profile, and the dives and samples it comes from. |
+| `F` / `f` | Fall time series | Descent: time, pressure, temperature, salinity and phase code (name after `#`). |
+| `D` / `d` | Drift data | Drift/park samples: time, pressure, temperature, salinity. |
+| `PRD` / `prd` | Profile sensor columns | Name, units and description of each `pro` column. |
+| `PRO` / `pro` | Profile data (binned) | One line per pressure bin; the columns are given by `prd`. |
+| `PRU` / `pru` | Profile data (unbinned) | Raw profile samples, for floats that send them. |
+| `VLV` / `vlv` | Valve data | Valve actions: pressure, duration, case vacuum before and after. |
+| `PMP` / `pmp` | Pump data | Pump actions: pressure, duration, voltage, current, case vacuum. |
+| `R` / `r` | Rise time series | Ascent, in the same layout as the fall time series. |
+| `SFC` / `sfc` | Surface time series | Surface samples, in the same layout. |
+| `SFD` | Surface derived fields | Surface pressure statistics: valid count, minimum, mean, maximum, variance. |
+| `WVS` / `wvs` / `wvm` | Ocean surface waves | Spectrum parameters, then acceleration spectra (`wvs`, g²/Hz) and displacement spectra (`wvm`, m²/Hz). |
+| `E05` / `E06` | Engineering (BIT passed / failed) | Built-in test results. |
+| `E07`, `E08`, `E09`, `E0A`, `E0C` | Engineering | Descent, park/drift, ascent, surface and ice engineering messages (`midx` lines). |
+| `e0A`, `e0c` | Engineering errors | Error codes with their time, one line each. |
+| `APS` | Acoustic position | Acoustic listening windows and receive statistics. |
+| `MIS` / `m` | Mission configuration | Configuration message and firmware version, then one parameter per `m` line: name, value, units, `# description`. |
+| `mis` | Mission configuration (older firmware) | The same parameters in fixed-column groups. |
+| `SHX` / `shx` | SBD message hex data | Each SBD message as a hex dump, 16 bytes per line. |
+
+### Examples
+
+The excerpts below are from `lis9287-0325.txt` and `lis11186-0107.txt` (some lines and repeated
+rows left out, marked `...`).
+
+Start of the file, the version and the SBD messages:
 
 ```
-XFloat (id_instrument)
- ├── XFloatMetadata.id_instrument               fk_XFloatMetadata_1
- └── XFloatDive.id_instrument                   fk_XFloatDive_1
-      └── XGPS (id_instrument, id_dive)         fk_XGPS_1
-XFloatMail                                      no foreign key; linked by id_instrument / id_imei
+#===================================================================================================
+# Intermediate Listing for Float #9287, Dive #325
+#===================================================================================================
+#                        Created: 2026-10-25T14:05:48Z
+#---------------------------------------------------------------------------------------------------
+# Dive Data Completeness
+#---------------------------------------------------------------------------------------------------
+#                  Dive Complete: yes
+#          Complete Profile Data: yes
+...
+#       xmessage-version        xmtps-version     build-configuration                build-date/time
+XSV                  2.2            0.6.3298a                   DEBUG         2026-10-25T14:00+00:00
+#      SN dive DAC-ID            IMEI  WMO-ID
+LIS  9287  325   -001 000000002214760 -000001
+...
+#      SN dive size            IMEI MOMSN MTMSN PID            date/time            position  CEP
+#               (b)                                                                          (km)
+SBD  9287  325  192 000000002214760  3638     0   9 2026-10-25T12:03:07Z +12.73113-163.48779    3
+SBD  9287  325  275 000000002214760  3639     0   8 2026-10-25T12:03:20Z +12.73113-163.48779    3
 ```
 
-Because of these keys a float's `XFloat` row must exist before its dives are saved, and a dive's row
-before its GPS fixes; `XFloatDiveData::SaveObjectToDatabase()` saves the parent float first.
-`XFloatMail` has no foreign key, so a message can be stored before its float is known (stage 2).
+A time series: the `F` line gives the number of samples and the start time, and each `f` line the
+offset in seconds, the sample and the phase code:
 
-Common identifier columns:
+```
+#      SN dive idx nSam                 time      pres    temp    saln phaseCode   phaseCodeName
+#                                  (UTC/+sec)    (dBar)  (degC)  (PSU)
+F    9287  325   0   16 2026-10-24T07:37:09Z
+f    9287  325   0    0                   +0      0.12  -9.999  -9.999         1 # start of descent
+f    9287  325   0    1                 +293     30.08  -9.999  -9.999        10 # descending
+f    9287  325   0    2                 +387     43.52  -9.999  -9.999         2 # first descent pump
+```
 
-| Column | Meaning |
-|---|---|
-| `id_instrument` | Float serial number (the instrument ID used throughout XMTPS). |
-| `id_imei` | IMEI of the float's Iridium modem. |
-| `id_wmo` | WMO platform number (`-1` if not assigned). |
-| `id_dac` | Argo data assembly center ID. |
-| `id_dive` | Dive (profile) number. |
+The binned profile, with its column descriptions:
 
-Unset values use sentinel defaults rather than `NULL`: `-1` for IDs, `1400-01-01 00:00:00` for
-dates, `99.99999`/`999.99999` for latitude/longitude, and `9999` for gains and offsets.
+```
+#      SN dive      column    units  description
+prd  9287  325   sampleIdx        -  # Bin index, in the order the float reports the bins.
+prd  9287  325        pres     dBar  # Bin pressure, less the surface pressure offset (see Pressure
+#                                      Correction).
+prd  9287  325       temp1     degC  # CTD temperature.
+...
+#      SN dive  numSamples
+PRO  9287  325         278
+#      SN dive   sampleIdx        pres       temp1       temp2        saln
+#                               (dBar)      (degC)      (degC)       (PSU)
+pro  9287  325           0      278.04       9.817       9.806      34.605
+pro  9287  325           1      277.60       9.817       9.806      34.604
+```
 
-### `XFloat`
+An engineering message over two lines (`midx` 0 and 1), with a sub-group heading:
 
-The current state of each float, reloaded at startup so that processing resumes where it left off.
+```
+#      SN dive midx engVer       start-of-drift      vac0      vac1           seeks    seekPumpAdjT
+#                                                  (inHg)    (inHg)                          (+sec)
+E08 09287  325    0   0x12 2026-10-24T11:05:29Z      6.65      6.69               0              +0
+# --- Drift Sensor Averages ------------------------------------------------------------------------
+#      SN dive midx            pres         pres         temp         temp         saln         saln
+#                            (dBar)      (counts)       (degC)     (counts)        (PSU)     (counts)
+E08 09287  325    1          274.72         7118        9.744        14744       34.523        35523
+```
 
-- Identifiers: `id_instrument`, `id_imei`, `id_wmo`, `id_dac`, and `argo_instrument_type` (Argo
-  instrument type code).
-- Calibration: `gain_*` and `offset_*` for pressure, salinity and temperature, with separate
-  `*_surface` values for the surface sample.
-- Latest positions: `latest_gps_position_*` and `latest_iridium_position_*` (date/time, dive number,
-  latitude, longitude, and Iridium CEP radius), used for the KML and status files.
-- Iridium sequence numbers: `latest_sbd_momsn` and `latest_sbd_mtmsn`, the most recent
-  mobile-originated and mobile-terminated message sequence numbers.
-- Output switches: `phy_file_generation_is_enabled` and `netcdf_file_generation_is_enabled`.
-- Mission: `start_of_mission_datetime`, and `xmsg_version_major`/`xmsg_version_minor` (the
-  X-Message format version the float reports).
-- `latest_iridium_startup_position_datetime` and `latest_iridium_startup_sbd_momsn` exist in the
-  production table but are not read or written by the current code.
+Mission parameters (`lis11186-0107.txt`):
 
-### `XFloatMetadata`
+```
+#      SN dive        CfgMsgVer       FWVer sensor-type        sensor-type-name
+MIS 11186  107             0x18  0x0A0C0001           0      # RBR
+# --- General --------------------------------------------------------------------------------------
+#      SN dive idx param      value      units          desc
+#      -- ---- --- -----      -----      -----          ----
+m   11186  107   0 MSN          107      [-]          # dive cycle number
+m   11186  107   3 MDS         2100      [dBar]       # maximum depth
+```
 
-Deployment metadata parsed from the float's `.meta` file (see [Float metadata](#float-metadata)).
+The hex dump of one SBD message:
 
-- Deployment: `deployment_datetime`, `deployment_latitude`/`deployment_longitude`,
-  `deployment_position_valid`, the `deployment_*_status` fields, `deployment_platform`,
-  `deployment_cruise_id` and `deployment_type`.
-- People: `deployer`, `deployer_address`, `principal_investigators`,
-  `principal_investigators_address`, `principal_investigators_originating_country`.
-- Instrument: `manufacturer`, `wmo_instrument_type` (for example 873, 875 or 876 for ALTO floats),
-  and `wmo_recorder_type`.
-- Other: `comment`, and `local_path`, the path of the `.meta` file.
+```
+#      SN dive   size MOMSN MTMSN PID
+#                 (b)
+SHX  9287  325    192  3638     0   9
+#      SN dive MOMSN idx PID               | 0x  0  1  2  3   4  5  6  7   8  9  A  B   C  D  E  F
+shx  9287  325  3638   0   9 0x0000 (0000) | 0x 58 00 B9 24  47 01 45 09  60 20 5C 20  05 3A 00 50
+#                                          |     X  .  .  $   G  .  E  .   `     \      .  :  .  P
+```
 
-### `XFloatDive`
+## SQL backend
 
-One dive cycle, built from all the SBD messages received for it.
+XMTPS keeps its state in a MySQL database (InnoDB tables in the schema named by `sql.schema`;
+production: `xmtps_alamo`), so that it can be restarted and floats can be reprocessed:
 
-- `complete`: the dive has a complete profile, known sensor gains and offsets, contiguous
-  message IDs and a valid position.
-- `num_sbd_msgs`: the number of SBD messages received for the dive.
-- `iridium_position_datetime_first`/`_last`: the first and last Iridium fix times for the dive.
-- `intermediate_listing_file_path` and `phy_file_path`: the output files written for the dive.
-- `surface_pres_*`: statistics of the surface pressure samples (min, max, mean, variance, valid).
-- `pres_offs*`: the pressure offset applied to the profile, with the number of dives and samples it
-  was computed from and whether it is valid.
+- **Floats**: each float's identifiers, sensor gains and offsets, latest positions and mission
+  start, plus the deployment metadata read from its `.meta` file. They are reloaded at startup so
+  processing resumes where it left off.
+- **Dives and GPS fixes**: the state of each dive cycle and its GPS fixes, rebuilt as messages are
+  decoded.
+- **Mail messages**: every Iridium SBD message received, with its mail header, Iridium session
+  details and the raw SBD data. Reprocessing (`-r`, `-R`, and `-A` at startup) deletes a float's
+  dive records and decodes its stored messages again.
 
-### `XGPS`
+Each table is mapped to a C++ class through `util::mysql::SqlTableDescription`, which generates
+the `SELECT`, `DELETE` and `INSERT ... ON DUPLICATE KEY UPDATE` statements; saving an object
+inserts a row or overwrites the row with the same key. Each worker thread uses its own connection.
 
-One GPS fix reported in an X-Message.
-
-- `datetime`, `latitude`, `longitude` and `valid`.
-- `id_type`: the GPS message type.
-- Fix quality: `hdop`, `num_satellites`, `snr_min`, `snr_mean`, `snr_max`, and `time_to_fix`.
-
-### `XFloatMail`
-
-Every Iridium SBD mail message received, so that a float can be reprocessed from the database with
-`-r`/`--reprocess`.
-
-- Keys: `id_imei`, `id_sbd_momsn`, `id_sbd_packet` and `id_dive` identify the packet; `id_msg` is
-  the mail Message-ID; `id_msg_uid` is the IMAP UID; `id_sbd_mtmsn` is the MTMSN.
-- Mail: `msg_header_datetime`, `msg_header_from`, `msg_header_subject`, `msg_header_raw_text`,
-  `msg_body_text` and `msg_raw_text`, each with an `*_is_valid` flag, and `msg_is_valid` for the
-  whole message.
-- Iridium session: `iridium_position_*` (latitude, longitude, CEP radius, date/time, valid), and
-  `sbd_session_status_code`/`sbd_session_status_string`.
-- Attachment: `sbd_data` (the raw SBD bytes), `sbd_data_is_valid`, `sbd_file_name` and
-  `sbd_file_size_bytes`.
-- Files written: `sbd_file_local_path` and `raw_file_local_path`.
-- `id_dac` and `id_wmo` exist in the production table but are not written by the current code, so
-  they keep their default of `-1`.
-
-Reprocessing (`-r ID`) deletes the float's `XGPS` and `XFloatDive` rows and rebuilds them from its
-`XFloatMail` rows. The full `CREATE TABLE` statements are in the Doxygen documentation (the
-"Libraries and Database Schema" page in `doc/xmtps.pdf`).
+The mail processing thread saves each message before it is decoded. While the SQL server is
+unavailable, messages are held and retried every 10 s and no new mail is fetched (see
+`mail.moveMessages`), so an outage delays processing but does not lose messages. The table
+definitions are in the Doxygen documentation (the "Libraries and Database Schema" page in
+`doc/xmtps.pdf`).
 
 ## Deployment
 
@@ -511,6 +571,11 @@ Python tools:
   alias of `-b/--bathymetry`.
 - Docstrings for all modules, classes and functions of the Python tools (module docstrings with
   usage examples replace the editor templates; inaccurate ones corrected); no code changed.
+
+Documentation:
+
+- The README describes the listing file format (layout rules, every line type, and examples)
+  and describes the SQL backend in general instead of listing its tables and columns.
 
 ### 2026-10-24
 
