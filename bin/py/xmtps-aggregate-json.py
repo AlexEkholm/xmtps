@@ -55,7 +55,7 @@ CPOS_MAX_CEP_KM = 1.0
 
 JSON_VERSION = "0.11"
 
-BATHYMETRY_FILE = '/data1/alamo/meta/bathy/ETOPO2v2c_f4.nc'   # NOAA ETOPO2v2c, 2' cell-centred grid
+BATHYMETRY_FILE = '/data1/etopo2/ETOPO2v2c_f4.nc'   # NOAA ETOPO2v2c, 2' cell-centred grid
 
 bathymetry = None
 
@@ -12463,10 +12463,10 @@ Generate arguments - directories:
 """
 
 parser.add_argument(
-    '-b', '--bathymetry',
+    '-b', '--bathymetry', '--etopo2',
     default=BATHYMETRY_FILE,
     dest='bathymetry',
-    help='read seafloor depth for trajectory plots from ETOPO2 netCDF file FILE (default=\'{}\')'.format(BATHYMETRY_FILE),
+    help='read bathymetry for trajectory plots from ETOPO2 netCDF file FILE (default=\'{}\')'.format(BATHYMETRY_FILE),
     metavar='FILE')
 
 parser.add_argument(

@@ -526,7 +526,7 @@ Python tools:
   a black line ("Bathymetry" in the legend). Depth comes from NOAA ETOPO2v2c (nearest 2′ cell),
   converted to pressure with Saunders (1981). The pressure axis range is unchanged, so a
   seafloor deeper than the float's data is off the plot. The file is read from
-  `/data1/alamo/meta/bathy/ETOPO2v2c_f4.nc` by default (`-b/--bathymetry FILE`); without it the
+  `/data1/etopo2/ETOPO2v2c_f4.nc` by default (`-b/--bathymetry/--etopo2 FILE`); without it the
   bathymetry line is left out with a warning.
 - `xmtps-aggregate-json.py` plotting is split into one function per plot group
   (`WriteGeoPlots` … `WriteWavePlots`, run in order from `PLOT_WRITERS`); the plot output is
