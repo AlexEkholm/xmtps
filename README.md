@@ -525,6 +525,9 @@ Python tools:
   Saunders (1981). The pressure axis range is unchanged, so a seafloor deeper than the float's
   data is off the plot. The file is read from `/data1/alamo/meta/bathy/ETOPO2v2c_f4.nc` by
   default (`-b/--bathymetry FILE`); without it the seafloor line is left out with a warning.
+- `xmtps-aggregate-json.py` plotting is split into one function per plot group
+  (`WriteGeoPlots` … `WriteWavePlots`, run in order from `PLOT_WRITERS`); the plot output is
+  unchanged.
 
 Operations:
 
