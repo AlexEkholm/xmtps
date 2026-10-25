@@ -1530,6 +1530,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw04026200(uint8_t msg_idx, const vector<uint
       os << "Invalid X-Message: Expected 323 bytes, but received " << data.size() << " bytes!";
 #         if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
       {
+        if(data.size() < 323)  // Too short: decoding would read past its end.
+          EXC_THROW(os.str());
         lwrn() << os.str();
       }
 #         else
@@ -1726,6 +1728,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw04036100(uint8_t msg_idx, const vector<uint
       os << "Invalid X-Message: Expected 327 bytes, but received " << data.size() << " bytes!";
 #         if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
       {
+        if(data.size() < 327)  // Too short: decoding would read past its end.
+          EXC_THROW(os.str());
         lwrn() << os.str();
       }
 #         else
@@ -1921,6 +1925,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw04046100(uint8_t msg_idx, const vector<uint
       os << "Invalid X-Message: Expected 328 bytes, but received " << data.size() << " bytes!";
 #         if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
       {
+        if(data.size() < 328)  // Too short: decoding would read past its end.
+          EXC_THROW(os.str());
         lwrn() << os.str();
       }
 #         else
@@ -2125,6 +2131,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw04056300(uint8_t msg_idx, const vector<uint
       os << "Invalid X-Message: Expected 328 bytes, but received " << data.size() << " bytes!";
 #         if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
       {
+        if(data.size() < 328)  // Too short: decoding would read past its end.
+          EXC_THROW(os.str());
         lwrn() << os.str();
       }
 #         else
@@ -2336,6 +2344,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw04066100(uint8_t msg_idx, const vector<uint
       os << "Invalid X-Message: Expected 328 bytes, but received " << data.size() << " bytes!";
 #         if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
       {
+        if(data.size() < 328)  // Too short: decoding would read past its end.
+          EXC_THROW(os.str());
         lwrn() << os.str();
       }
 #         else
@@ -2538,6 +2548,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw05006100(uint8_t msg_idx, const vector<uint
       ostringstream os;
       os << "Invalid X-Message: Expected 328 bytes, but received " << data.size() << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < 328)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -2718,6 +2730,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw05006100(uint8_t msg_idx, const vector<uint
       ostringstream os;
       os << "Invalid X-Message: Expected 79 bytes, but received " << data.size() << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < 79)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -2777,6 +2791,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw05006101(uint8_t msg_idx, const vector<uint
       ostringstream os;
       os << "Invalid X-Message: Expected 328 bytes, but received " << data.size() << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < 328)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -2957,6 +2973,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw05006101(uint8_t msg_idx, const vector<uint
       ostringstream os;
       os << "Invalid X-Message: Expected 74 bytes, but received " << data.size() << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < 74)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -3022,6 +3040,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06000000(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -3209,6 +3229,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06000000(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -3276,6 +3298,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06010300(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -3463,6 +3487,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06010300(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -3530,6 +3556,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06000100(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -3717,6 +3745,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06000100(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -3784,6 +3814,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06040900(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -3971,6 +4003,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06040900(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -4039,6 +4073,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06050100(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -4223,6 +4259,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06050100(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -4289,6 +4327,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06057700(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -4472,6 +4512,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06057700(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -4538,6 +4580,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06080500(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -4725,6 +4769,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw06080500(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -4793,6 +4839,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw07020200(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -4977,6 +5025,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw07020200(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -5045,6 +5095,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw08000000(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -5229,6 +5281,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw08000000(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -5298,6 +5352,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw08010000(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -5482,6 +5538,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw08010000(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -5550,6 +5608,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A050000(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -5734,6 +5794,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A050000(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -5805,6 +5867,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A060231(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -5989,6 +6053,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A060231(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -6063,6 +6129,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A060200(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -6247,6 +6315,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A060200(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -6318,6 +6388,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A070101(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -6506,6 +6578,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A070101(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -6582,6 +6656,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A080004(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -6775,6 +6851,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A080004(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -6853,6 +6931,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A080031(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -7041,6 +7121,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A080031(uint8_t msg_idx, const vector<uint
          << data.size()
          << " bytes!";
 #           if defined(XMSG_DEBUG_MFA_MISS_GFG) && XMSG_DEBUG_MFA_MISS_GFG
+      if(data.size() < EXPECTED_SIZE)  // Too short: decoding would read past its end.
+        EXC_THROW(os.str());
       lwrn() << os.str();
 #           else
       EXC_THROW(os.str());
@@ -8689,7 +8771,7 @@ void XMfaMissionCfg::GenerateListingStringFw04056300(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -8975,7 +9057,7 @@ void XMfaMissionCfg::GenerateListingStringFw05006100(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -9282,7 +9364,7 @@ void XMfaMissionCfg::GenerateListingStringFw06000000(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -9589,7 +9671,7 @@ void XMfaMissionCfg::GenerateListingStringFw06050100(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -9896,7 +9978,7 @@ void XMfaMissionCfg::GenerateListingStringFw06057700(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -10204,7 +10286,7 @@ void XMfaMissionCfg::GenerateListingStringFw06080500(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -10512,7 +10594,7 @@ void XMfaMissionCfg::GenerateListingStringFw07020200(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -10819,7 +10901,7 @@ void XMfaMissionCfg::GenerateListingStringFw08000000(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -11127,7 +11209,7 @@ void XMfaMissionCfg::GenerateListingStringFw08010000(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -11385,8 +11467,8 @@ void XMfaMissionCfg::GenerateListingStringFw0A060231(ostringstream& os, int whoi
   os << "# --- Profile - Dynamic Salinity Correction --------------------------------------------------------" << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "PPE"  % (int)ppe()     % "[-]"      % "dynamic correction mode"  << endl;
-  os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_alpha()    % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
-  os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_tau()      % "[-]"      % "alpha: short-term thermal mass correction" << endl;
+  os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_tau()      % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
+  os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_alpha()    % "[-]"      % "alpha: short-term thermal mass correction" << endl;
   os << lpre << format(fmt_f3)    % midx++  % "PPC2" % ppc_tdelay()   % "[sec]"    % "tdelay: water-cell lag"  << endl;
   os << lpre << format(fmt_f3)    % midx++  % "PPC3" % ppc_ctccoeff() % "[-]"      % "ctccoeff: long-term thermal mass correction"  << endl;
   os << "# --- Profile - Binning Configuration --------------------------------------------------------------" << endl;
@@ -11442,7 +11524,7 @@ void XMfaMissionCfg::GenerateListingStringFw0A060231(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -11709,8 +11791,8 @@ void XMfaMissionCfg::GenerateListingStringFw0A050000(ostringstream& os, int whoi
 //          os << "# --- Profile - Dynamic Salinity Correction --------------------------------------------------------" << endl;
 //          os << str_h1 << endl << str_h2 << endl;
 //          os << lpre << format(fmt_d)     % midx++  % "PPE"  % (int)ppe()     % "[-]"      % "dynamic correction mode"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_alpha()    % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_tau()      % "[-]"      % "alpha: short-term thermal mass correction" << endl;
+//          os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_tau()      % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
+//          os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_alpha()    % "[-]"      % "alpha: short-term thermal mass correction" << endl;
 //          os << lpre << format(fmt_f3)    % midx++  % "PPC2" % ppc_tdelay()   % "[sec]"    % "tdelay: water-cell lag"  << endl;
 //          os << lpre << format(fmt_f3)    % midx++  % "PPC3" % ppc_ctccoeff() % "[-]"      % "ctccoeff: long-term thermal mass correction"  << endl;
 //          break;
@@ -11772,7 +11854,7 @@ void XMfaMissionCfg::GenerateListingStringFw0A050000(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -12033,8 +12115,8 @@ void XMfaMissionCfg::GenerateListingStringFw0A070101(ostringstream& os, int whoi
 //          os << "# --- Profile - Dynamic Salinity Correction --------------------------------------------------------" << endl;
 //          os << str_h1 << endl << str_h2 << endl;
 //          os << lpre << format(fmt_d)     % midx++  % "PPE"  % (int)ppe()     % "[-]"      % "dynamic correction mode"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_alpha()    % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_tau()      % "[-]"      % "alpha: short-term thermal mass correction" << endl;
+//          os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_tau()      % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
+//          os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_alpha()    % "[-]"      % "alpha: short-term thermal mass correction" << endl;
 //          os << lpre << format(fmt_f3)    % midx++  % "PPC2" % ppc_tdelay()   % "[sec]"    % "tdelay: water-cell lag"  << endl;
 //          os << lpre << format(fmt_f3)    % midx++  % "PPC3" % ppc_ctccoeff() % "[-]"      % "ctccoeff: long-term thermal mass correction"  << endl;
 //          break;
@@ -12096,7 +12178,7 @@ void XMfaMissionCfg::GenerateListingStringFw0A070101(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -12355,8 +12437,8 @@ void XMfaMissionCfg::GenerateListingStringFw0A080031(ostringstream& os, int whoi
   os << "# --- Profile - Dynamic Salinity Correction --------------------------------------------------------" << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "PPE"  % (int)ppe()     % "[-]"      % "dynamic correction mode"  << endl;
-  os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_alpha()    % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
-  os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_tau()      % "[-]"      % "alpha: short-term thermal mass correction" << endl;
+  os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_tau()      % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
+  os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_alpha()    % "[-]"      % "alpha: short-term thermal mass correction" << endl;
   os << lpre << format(fmt_f3)    % midx++  % "PPC2" % ppc_tdelay()   % "[sec]"    % "tdelay: water-cell lag"  << endl;
   os << lpre << format(fmt_f3)    % midx++  % "PPC3" % ppc_ctccoeff() % "[-]"      % "ctccoeff: long-term thermal mass correction"  << endl;
   os << "# --- Profile - Binning Configuration --------------------------------------------------------------" << endl;
@@ -12412,7 +12494,7 @@ void XMfaMissionCfg::GenerateListingStringFw0A080031(ostringstream& os, int whoi
   os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
   os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-  os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+  os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
   os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;
@@ -12698,8 +12780,8 @@ void XMfaMissionCfg::GenerateListingStringUnsupported(ostringstream& os, int who
       os << "# --- Profile - Dynamic Salinity Correction --------------------------------------------------------" << endl;
       os << str_h1 << endl << str_h2 << endl;
       os << lpre << format(fmt_d)     % midx++  % "PPE"  % (int)ppe()     % "[-]"      % "dynamic correction mode"  << endl;
-      os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_alpha()    % "[s]"      % "tau: conductivity-temperature lag"  << endl;
-      os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_tau()      % "[-]"      % "alpha: short-term thermal mass correction" << endl;
+      os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_tau()      % "[s]"      % "tau: conductivity-temperature lag"  << endl;
+      os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_alpha()    % "[-]"      % "alpha: short-term thermal mass correction" << endl;
       os << lpre << format(fmt_f3)    % midx++  % "PPC2" % ppc_tdelay()   % "[s]"      % "tdelay: water-cell lag"  << endl;
       os << lpre << format(fmt_f3)    % midx++  % "PPC3" % ppc_ctccoeff() % "[-]"      % "ctccoeff: long-term thermal mass correction"  << endl;
       os << "# --- Profile - Binning Configuration --------------------------------------------------------------" << endl;
@@ -12755,7 +12837,7 @@ void XMfaMissionCfg::GenerateListingStringUnsupported(ostringstream& os, int who
       os << lpre << format(fmt_d)     % midx++  % "DCR"  % dcr()       % "[sec]"       % ""  << endl;
       os << lpre << format(fmt_d)     % midx++  % "DPD"  % dpd()       % "[sec]"       % ""  << endl;
       os << lpre << format(fmt_d)     % midx++  % "DRA"  % dra()       % "[m/s]"       % ""  << endl;
-      os << lpre << format(fmt_d)     % midx++  % "DRT"  % dra()       % "[sec]"       % ""  << endl;
+      os << lpre << format(fmt_d)     % midx++  % "DRT"  % drt()       % "[sec]"       % ""  << endl;
       os << "# --- Descent - Fall Time-Series -------------------------------------------------------------------"            << endl;
       os << str_h1 << endl << str_h2 << endl;
       os << lpre << format(fmt_d)     % midx++  % "DDD"  % ddd()       % "[dBar]"      % "maximum pressure interval"  << endl;

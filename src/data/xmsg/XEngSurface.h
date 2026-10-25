@@ -546,8 +546,8 @@ public:
               set_prof_raw_sample_last_temp(                      u16(    d, 30));
               set_prof_raw_sample_last_saln(                      u16(    d, 32));
               set_prof_num_bins(                                  u16(    d, 34));
-              set_prof_num_bins_empty(                            u16(    d, 36));
-              set_prof_num_raw_samples(                           u16(    d, 38));
+              set_prof_num_raw_samples(                           u16(    d, 36));
+              set_prof_num_bins_empty(                            u16(    d, 38));
               set_air_pump_current_ma(                            u16(    d, 40));
               set_air_pump_runtime_s(                             u16(    d, 42));
               set_air_bladder_max_pres_mpsi(                      u16(    d, 44));
@@ -603,8 +603,8 @@ public:
               set_prof_raw_sample_last_temp(                      u16(    d, 38));
               set_prof_raw_sample_last_saln(                      u16(    d, 40));
               set_prof_num_bins(                                  u16(    d, 42));
-              set_prof_num_bins_empty(                            u16(    d, 44));
-              set_prof_num_raw_samples(                           u16(    d, 46));
+              set_prof_num_raw_samples(                           u16(    d, 44));
+              set_prof_num_bins_empty(                            u16(    d, 46));
               set_air_pump_current_ma(                            u16(    d, 48));
               set_air_pump_runtime_s(                             u16(    d, 50));
               set_air_bladder_max_pres_mpsi(                      u16(    d, 52));
@@ -700,7 +700,7 @@ public:
                 static const format fmt4("#   %5s %4s %4s %20s %15s");
                 static const format fmt_err("e0A %05d %4d %4d %20s      0x%08X");
                 if(num_errors()) {
-                    os << endl << format(fmt4) % "SN" % "dive" % "idx" % "err-code";
+                    os << endl << format(fmt4) % "SN" % "dive" % "idx" % "date-time" % "err-code";
                     int midx = 0;
                     for(vector<shared_ptr<XEngErrorCode>>::const_iterator it = error_codes_.begin();
                             it < error_codes_.end(); it++)

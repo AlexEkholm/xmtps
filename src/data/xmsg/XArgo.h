@@ -533,7 +533,7 @@ public:
                     max_ascent_duration_(XMSG_BAD_U16),
                     max_surface_duration_(XMSG_BAD_U16),
                     mission_phase_(XMSG_BAD_U08),
-                    num_seeks_to_drift_pressure_(XMSG_BAD_U08),
+                    num_seeks_to_drift_pressure_(XMSG_BAD_U16),
                     seek_to_drift_pressure_interval_duration_(XMSG_BAD_U16),
                     target_ascent_rate_(XMSG_BAD_U08),
                     target_drift_duration_(XMSG_BAD_U16),
@@ -698,7 +698,7 @@ public:
                         set_max_fall_to_profle_duration(u16(d, 12));
                         set_target_drift_duration(u16(d, 14));
                         set_target_ascent_rate(u08(d, 33));
-                        set_num_seeks_to_drift_pressure(u08(d, 34));
+                        set_num_seeks_to_drift_pressure(u16(d, 34));
                         set_max_surface_duration(u16(d, 36));
                         set_seek_to_drift_pressure_interval_duration(u16(d, 38));
                         set_mission_phase(u08(d, 64));
@@ -751,7 +751,7 @@ public:
                         set_max_fall_to_profle_duration(u16(d, 12));
                         set_target_drift_duration(u16(d, 14));
                         set_target_ascent_rate(u08(d, 33));
-                        set_num_seeks_to_drift_pressure(u08(d, 34));
+                        set_num_seeks_to_drift_pressure(u16(d, 34));
                         set_max_surface_duration(u16(d, 36));
                         set_seek_to_drift_pressure_interval_duration(u16(d, 38));
                         set_mission_phase(u08(d, 64));
@@ -804,7 +804,7 @@ public:
                         set_max_fall_to_profle_duration(u16(d, 12));
                         set_target_drift_duration(u16(d, 14));
                         set_target_ascent_rate(u08(d, 33));
-                        set_num_seeks_to_drift_pressure(u08(d, 34));
+                        set_num_seeks_to_drift_pressure(u16(d, 34));
                         set_max_surface_duration(u16(d, 36));
                         set_seek_to_drift_pressure_interval_duration(u16(d, 38));
                         set_mission_phase(u08(d, 64));

@@ -765,10 +765,12 @@ class XAlamoBit2:
 
             if(data.size() != 256) { // Check the message size.
               ostringstream os;
-              os << "Invalid X-Message: Expected 260 bytes, but received "
+              os << "Invalid X-Message: Expected 256 bytes, but received "
                  << data.size()
                  << " bytes!";
 #if defined(XMSG_DEBUG_BIST) && XMSG_DEBUG_BIST
+              if(data.size() < 180)  // Too short: decoding would read past its end.
+                EXC_THROW(os.str());
               lwrn() << os.str();
 #else
               EXC_THROW(os.str());
@@ -865,6 +867,8 @@ class XAlamoBit2:
                  << data.size()
                  << " bytes!";
 #if defined(XMSG_DEBUG_BIST) && XMSG_DEBUG_BIST
+              if(data.size() < 184)  // Too short: decoding would read past its end.
+                EXC_THROW(os.str());
               lwrn() << os.str();
 #else
               EXC_THROW(os.str());

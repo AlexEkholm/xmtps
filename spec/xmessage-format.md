@@ -12,6 +12,15 @@ Status: compiled on 2026-10-25. It brings together everything known about the fo
 
 No single earlier document was complete or current, and they disagree in places. Where they disagree, this document says so, and gives the layout that the decoder and real packets agree on.
 
+Decoder fixes in build 3309 (2026-10-25). Writing this document turned up several decoder bugs, which build 3309 fixes. The parts below describe these bugs as found and mark each one fixed:
+
+- Argo `nSeek` is read as two bytes.
+- `APS` SNROut shows the output SNR.
+- Mission `DRT` and `PPC0`/`PPC1` list their own values.
+- 0xEA versions 0x13/0x14 read raw samples before empty bins.
+- The 0xEA version 0x10 error heading formats.
+- Mission and BIT blobs too short for their layout are rejected.
+
 ## Contents
 
 - [How to read this document](#how-to-read-this-document)
@@ -897,7 +906,7 @@ SOLO-II (0) and Deep Argo (1) are `@todo` in the decoder.
 | 28 | 4 | u32 | surface start time | s since 2000-01-01 | `start-of-surface`. |
 | 32 | 1 | u8 | float type | — | 0 = SOLO-II, 1 = Deep Argo, 3 = ALAMO. Must be 3 for decoding. |
 | 33 | 1 | u8 | target ascent rate | cm/s | `tarAscRate`. |
-| 34 | 2 | u16 | max number of seeks | — | **The decoder reads only byte 34 (u8)**, so the listed `nSeek` is the high byte, 0 on all observed floats, where the true value is 1 [O]. |
+| 34 | 2 | u16 | max number of seeks | — | **The decoder reads only byte 34 (u8)**, so the listed `nSeek` is the high byte, 0 on all observed floats, where the true value is 1 [O]. | *(Fixed in build 3309.)*
 | 36 | 2 | u16 | max surface duration | s | `maxSurfT`. Observed raw value 1 [O]. |
 | 38 | 2 | u16 | seek interval | min | `seekIntervalT`. |
 | 40 | 2 | u16 | pressure gain | LSB/dBar | `pGain`. |
@@ -1017,7 +1026,7 @@ The gains/offsets and the X version are also saved to the float record in the da
 3. **0xF0 v2.4.** The spreadsheet layout (no start times, aux-sensor table) disagrees with the
    firmware, the MRV document and the decoder.
 4. **0xF0 decoder bugs:**
-   - `nSeek` read as a u8 at byte 34 instead of a u16 at 34–35.
+   - `nSeek` read as a u8 at byte 34 instead of a u16 at 34–35. *(Fixed in build 3309.)*
    - `tarParkT` listed in 5-minute units under a "(min)" header.
 5. **GPS 0x01/0x02 labels** are swapped in the spreadsheet overview.
 6. **Phase codes:** SOLO-II numbering differs from ALAMO's from code 5 on. The spreadsheet has a
@@ -1657,7 +1666,7 @@ Each threshold is an `f32`. The decoder skips them.
   the build sets `XMSG_DEBUG_BIST` to true, so a wrong size (anything but 256 for 9/10, 256 or
   264 for 11) only logs a warning and the fields are read anyway; the debug build also writes
   the full listing to the debug log. (The format 9/10 warning text says "Expected 260 bytes"
-  although the check is for 256.)
+  although the check is for 256.) *(Fixed in build 3309.)* In build 3309, format 9/10 messages shorter than 180 bytes and format 11 messages shorter than 184 bytes are rejected, because decoding would read past their end.
 - **CTD counts** (formats 7, 8) are converted with the profile gains/offsets from 0xF0 and
   range-checked; the 7.3.5 YAML says the format 8 pressures use the *surface* gains.
 - **Pressure offset** (format 8, offset 16) is read unsigned and divided by 1000; a negative
@@ -2125,7 +2134,7 @@ missing time). The `nErr` line is tagged `e0A` in versions 0x11 and 0x12 but `E0
 0x14. The CTD status is listed only by version 0x10; the 0x11 fields `nSBD`/`nPrevAttempt` are
 printed for all later versions.
 
-In version 0x10 the error heading's format string has five fields but is given four values;
+*(Fixed in build 3309.)* In version 0x10 the error heading's format string had five fields but was given four values;
 boost::format throws in that case, so a 0x10 message with errors is expected to fail listing
 generation (*inferred from the code*; not observed).
 
@@ -2353,7 +2362,7 @@ Between the decoder and the documents:
    the 7.3.5 YAML, the 10.5.0 list and the 10.12.0 list all give the opposite order (samples,
    then empty bins). Listings checked so far (floats 9213, 9216, 9287, 11186) have 0 in both
    fields, so data cannot settle it yet; the documents suggest the decoder's `numEmptyBins` and
-   `numRawSamples` columns are swapped.
+   `numRawSamples` columns are swapped. *(Fixed in build 3309: the decoder now reads samples before empty bins, as the documents give them.)*
 2. **0xEC v0x11 bytes 20–21.** Decoder and 10.5.0 list: a 2-byte field (10.5.0: "seek time
    adjustment") before the error count at 22. Spreadsheet v2.4 and 7.3.5 YAML: error count at
    20. The decoder matches transmitted messages; whether early-firmware 0x11 messages used the
@@ -2759,7 +2768,7 @@ Offsets 0-7 are the common header (C.1.4).
 | 226 | 2 | U2 | DCT2 | s | DCT2: same, phase 2. |
 | 228 | 1 | U1 | DCA | seeks | DCA: maximum descent seeks or calibration attempts. |
 | 229 | 2 | U2 | DRC | s | DRC: calculated descent calibration rate (deprecated |
-| 231 | 2 | U2 | DRT | s | DRT: seek rate adjustment timeout. The MRV docs say I2; the decoder reads U2. The listing's DRT line prints DRA's value (bug |
+| 231 | 2 | U2 | DRT | s | DRT: seek rate adjustment timeout. The MRV docs say I2; the decoder reads U2. The listing's DRT line printed DRA's value (fixed in build 3309; bug |
 | 233 | 2 | U2 | DCX | s | DCX: seek maximum pump time. |
 | 235 | 2 | U2 | DCP | s | DCP: seek minimum pump time. |
 | 237 | 2 | U2 | DCF | s | DCF: seek minimum valve time. |
@@ -2905,7 +2914,7 @@ Each row is the decoder's view of what changed against the layout before it. Exa
 
 #### C.1.10 Decoding notes
 
-- Length checks [decoder]: every layout checks the exact blob length (the size of the received blob, not `jj`). With `XMSG_DEBUG_MFA_MISS_GFG = true`, which is how `XDefinitions.h` is set, a mismatch only logs a warning and decoding continues. A blob shorter than its layout is then read past its end. Only the 4.5.63 D1 check (at least 12 bytes) and the 8-byte minimum for D0 always throw.
+- Length checks [decoder]: every layout checks the exact blob length (the size of the received blob, not `jj`). With `XMSG_DEBUG_MFA_MISS_GFG = true`, which is how `XDefinitions.h` is set, a mismatch only logs a warning and decoding continues. Since build 3309 a blob shorter than its layout is rejected, because decoding would read past its end. A blob shorter than its layout is then read past its end. Only the 4.5.63 D1 check (at least 12 bytes) and the 8-byte minimum for D0 always throw.
 - The decoder never checks the `jj` field or the terminator of a mission blob (`CheckXMsgData` isn't called).
 - [decoder] `DRA` is held in 8 bits, so values above 255 are truncated. `DRT` and `MSN` are read unsigned and `MSN` is stored in an int16. `ICF`/`ICW` are read as U1 in layouts `02006900`-`04016100`.
 - Scaling [decoder]. Only the listing scales values; stored values are raw.
@@ -2950,8 +2959,8 @@ The "Mission Configuration" section is printed once per dive, from the dive's D0
    - The Python tools keep each `m` line (section, index, name, value, units) in the dive JSON as `mission.entries`, and keep `cfgver`, `fwver` and `ctdtype` from the `MIS` line.
 - If no D0 has arrived, the firmware word is still 0xFFFFFFFF and the section is the single line `# Incomplete mission parameters.`
 - Listing bugs [decoder]:
-  - The `DRT` line prints `DRA`'s value.
-  - In the dynamic-correction section, the `PPC0` line (labelled tau) prints alpha (`PPC1`), and the `PPC1` line (labelled alpha) prints tau. The README notes this as unfixed.
+  - The `DRT` line prints `DRA`'s value. *(Fixed in build 3309.)*
+  - In the dynamic-correction section, the `PPC0` line (labelled tau) prints alpha (`PPC1`), and the `PPC1` line (labelled alpha) prints tau. The README notes this as unfixed. *(Fixed in build 3309.)*
   - The `0A070101` listing, which covers 10.7 to 10.14 RBR/SBE including 10.12.0.x, has the dynamic-correction section commented out. `PPC`/`PPE` are decoded but not listed for those floats.
   - `DRA` is labelled `[m/s]` but printed raw (cm/s per NG10.5).
 
@@ -3256,7 +3265,7 @@ APS  9213    1    5    0 2026-09-27T00:01:51.212319Z     -1     45      4  -99.9
 
 - Window lines (`APS %5d %4d %4d %4d %20s %20s`): `midx` is the subtype (3), `widx` the window index, then the start and end times. An unset time prints as `0000-00-00T00:00:00Z`.
 - Receive lines (`APS %5d %4d %4d %4d %27s %6d %6d %6d %6.1f %6.1f`): `midx` = 5, `widx` (-1 if the record is in no window), ToA with microseconds (an invalid time prints as `0000-00-00T00:00:00.000000Z`), source ID, MFD power, PSK error code, SNRIn and SNROut in dB.
-- **Bug:** the SNROut column prints SNRIn again. The example above should show -9.9 for SNROut. The README notes this as still present.
+- **Bug:** the SNROut column prints SNRIn again. The example above should show -9.9 for SNROut. The README notes this as still present. *(Fixed in build 3309.)*
 
 ---
 
@@ -3279,8 +3288,8 @@ Mission configuration:
 7. **10.7.1.1 D1** is 88 bytes and probably carries `PPC`/`PPE`, but the decoder doesn't decode them.
 8. **0x08020000 and 0x0A020201** decode but have no listing function, so they get the generic "unsupported" listing.
 9. **Listing bugs:**
-   - `DRT` prints `DRA`.
-   - The `PPC0`/`PPC1` values are swapped against their labels.
+   - `DRT` prints `DRA`. *(Fixed in build 3309.)*
+   - The `PPC0`/`PPC1` values are swapped against their labels. *(Fixed in build 3309.)*
    - `PPC`/`PPE` are not listed for 10.7-10.14 non-WIMS floats.
    - The 6.5.77 listing shows `WMT` = 65535 because that layout doesn't decode it.
 10. **Units:**
@@ -3314,7 +3323,7 @@ Acoustics:
 21. **The CACST "counter"** looks like a UNIX-time seed plus a running count.
 22. **PSK error codes and source ID** semantics are undocumented.
 23. **Subtypes 1 and 2** are not decoded.
-24. **The SNROut listing column** repeats SNRIn.
+24. **The SNROut listing column** repeats SNRIn. *(Fixed in build 3309.)*
 
 ---
 

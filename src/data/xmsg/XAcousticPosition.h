@@ -664,7 +664,7 @@ class XAcousticPosition:
             os << format(fmt5)
                 % id_instrument() % id_dive() % 5 % cacst->window_idx()
                 % cacst->toa_iso8601_string() % (int)cacst->src() % (int)cacst->mfd_power()
-                % cacst->psk_error_code() % cacst->snr_in_as_float() % cacst->snr_in_as_float()
+                % cacst->psk_error_code() % cacst->snr_in_as_float() % cacst->snr_out_as_float()
                 << endl;
           });
 

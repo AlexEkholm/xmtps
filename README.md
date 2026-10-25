@@ -715,6 +715,18 @@ when none of its dive files is newer, unless `-f` is given.
 
 Decoder daemon:
 
+- Decoder fixes found while writing the X-message specification:
+  - Argo data (0xF0): the number of seeks (`nSeek` in the `A` lines) is read as two bytes; it was
+    read as one, so it listed 0 instead of 1.
+  - The `APS` acoustic lines list the output SNR in the SNROut column (it repeated SNRIn).
+  - Mission configuration listings: the `DRT` line shows `DRT` (it showed `DRA`), and the `PPC0`
+    and `PPC1` values are printed under their own labels (tau and alpha were swapped).
+  - Surface engineering (0xEA) versions 0x13 and 0x14 read the number of raw profile samples
+    before the number of empty bins, as all the format documents give them (they were swapped);
+    the version 0x10 error list heading no longer fails to format.
+  - Mission configuration and BIT messages too short for their layout are rejected instead of
+    being read past their end; other size mismatches still only log a warning. The BIT 9/10 size
+    warning gives the size it checks (256, not 260).
 - Startup: the active-float query selects only `DISTINCT id_instrument` instead of whole
   `XFloatMail` rows (with their SBD data); it took 88 s instead of 248 s at the 2026-10-25
   restart, still as a table scan. `XFloatMail.iridium_position_datetime` has since been indexed,
