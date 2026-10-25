@@ -35,6 +35,16 @@ OBJS += \
 
 
 # Each subdirectory must supply rules for building sources it contributes
+# XMfaMissionCfg.cpp (very large mission configuration decoders) is built with -O1: at -O2 GCC
+# did not finish it within an hour; -O1 takes about 5 minutes. Keep this rule if the makefiles
+# are regenerated.
+src/data/xmsg/XMfaMissionCfg.o: ../src/data/xmsg/XMfaMissionCfg.cpp src/data/xmsg/subdir.mk
+	@echo 'Building file: $<'
+	@echo 'Invoking: GCC C++ Compiler'
+	g++ --std=c++11 -DBOOST_ALL_DYN_LINK=1 -D'BUILD_DATETIME="$(shell date  '+%FT%R%:z')"' -D'BUILD_NUMBER=$(shell cat ../build/buildNo.txt)' -O1 -g -Wextra -Wfloat-equal -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$@" -o "$@" "$<"
+	@echo 'Finished building: $<'
+	@echo ' '
+
 src/data/xmsg/%.o: ../src/data/xmsg/%.cpp src/data/xmsg/subdir.mk
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
