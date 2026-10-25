@@ -5,6 +5,36 @@ ALAMO and ALTO profiling floats, decodes it, stores it in MySQL, and writes the 
 status and RAW files used downstream. A set of Python tools in `bin/py` turns the listing files
 into JSON and generates the per-float plot pages and the fleet summary page.
 
+## Contents
+
+- [How it works](#how-it-works)
+  - [Source layout](#source-layout)
+- [Building](#building)
+  - [Versions](#versions)
+- [Configuration](#configuration)
+  - [How options are read](#how-options-are-read)
+  - [Command-line only options](#command-line-only-options)
+  - [Configuration file options](#configuration-file-options)
+  - [Example configuration file](#example-configuration-file)
+  - [Float metadata](#float-metadata)
+- [Running](#running)
+  - [Output files](#output-files)
+- [Listing files](#listing-files)
+  - [Layout rules](#layout-rules)
+  - [Line types](#line-types)
+  - [Examples](#examples)
+- [SQL backend](#sql-backend)
+- [Deployment](#deployment)
+- [Python tools (`bin/py`)](#python-tools-binpy)
+  - [Command-line options](#command-line-options)
+  - [JSON files](#json-files)
+    - [Per-dive files: `dives/<serial>_<dive>.json`](#per-dive-files-divesserial_divejson)
+    - [Aggregate files: `<serial>_<name>.json`](#aggregate-files-serial_namejson)
+    - [Float summary: `<serial>_summary.json`](#float-summary-serial_summaryjson)
+    - [`dives/.lastprocessed`](#diveslastprocessed)
+- [Changelog](#changelog)
+- [Author and license](#author-and-license)
+
 ## How it works
 
 Iridium delivers each SBD message as an email with a binary `.sbd` attachment. XMTPS processes
@@ -55,6 +85,35 @@ with each commit by the `build/hooks/pre-commit` hook (enable it in a clone with
 the build number of the commit it was built from.
 
 The code uses POSIX APIs (`open`/`O_EXCL`, `getpid`, signals), so it builds on Linux only.
+
+### Versions
+
+The versions production (`argus.whoi.edu`) builds and runs with, as of 2026-10-25. The C++
+libraries are the Ubuntu packages; other versions may work but are not tested.
+
+| Component | Version | Notes |
+|---|---|---|
+| OS | Ubuntu 26.04.1 LTS (kernel 7.0) | |
+| Compiler | g++ 15.2.0, GNU Make 4.4.1 | compiled as C++11 (`--std=c++11`) |
+| Boost | 1.90.0 (`libboost-dev` 1.90.0.1ubuntu3) | linked shared (`BOOST_ALL_DYN_LINK`); the binary loads `chrono`, `filesystem`, `log`, `program_options` and `thread` |
+| VMime | 0.9.2 (`libvmime-dev` 0.9.2-9build1) | TLS through GnuTLS (`libgnutls.so.30`) |
+| MySQL Connector/C++ | 1.1.12 (`libmysqlcppconn-dev` 1.1.12-4.1ubuntu4, `libmysqlcppconn.so.7`) | legacy JDBC-style API (`sql::Connection`); uses `libmysqlclient.so.24` and OpenSSL 3 |
+| libkml | 1.3.0 (`libkml-dev` 1.3.0-13) | |
+| MySQL server | 8.4.11 | `sql_mode` must allow zero dates (see [SQL backend](#sql-backend)) |
+| Python | 3.12.13, in the venv `/data1/alamo/bin/py/.venv` | |
+| numpy | 2.5.0 | |
+| scipy | 1.18.0 | `scipy.interpolate` (`RhoLUT.py`), `scipy.io.netcdf_file` (ETOPO2) |
+| pandas | 3.0.3 | |
+| plotly | 6.8.0 | |
+| kaleido | 1.3.0 (with `choreographer` 1.3.0, `logistro` 2.0.1) | PNG export; drives Google Chrome for Testing 142.0.7444.175, which choreographer downloaded to `~/.local/share/choreographer` |
+| jsonpickle | 4.1.2 | |
+| geographiclib | 2.1 | |
+| Pillow | 12.2.0 | |
+| yattag | 1.16.1 | |
+| python-dateutil | 2.9.0.post0 | |
+| pytz | 2026.2 | |
+| orjson, simplejson | 3.11.9, 4.1.1 | used by plotly's JSON encoder (orjson) and by choreographer (simplejson) |
+| ETOPO2 | ETOPO2v2c (NOAA NCEI, 2006), `/data1/etopo2/ETOPO2v2c_f4.nc` | bathymetry in the trajectory plots |
 
 ## Configuration
 
@@ -446,7 +505,8 @@ The installed copies live in `/etc/systemd/system/`. After installing or changin
 ## Python tools (`bin/py`)
 
 Requires Python 3 with `numpy`, `scipy`, `pandas`, `plotly` (plus `kaleido` for PNG export),
-`jsonpickle`, `geographiclib`, `pytz`, `python-dateutil`, `Pillow` and `yattag`.
+`jsonpickle`, `geographiclib`, `pytz`, `python-dateutil`, `Pillow` and `yattag`; see
+[Versions](#versions) for the versions production uses.
 
 | Script | Purpose |
 |---|---|
@@ -682,6 +742,9 @@ Documentation:
   files, the aggregate tables, the float summary and `.lastprocessed`.
 - `sql/xmtps-schema.sql` creates the database tables (the production schema, with the new
   `XFloatMail.iridium_position_datetime` index); it is referenced from the SQL backend section.
+- The README has a table of contents.
+- The README lists the versions of the compiler, libraries, MySQL server and Python packages
+  production uses.
 
 ### 2026-10-24
 
