@@ -9,6 +9,7 @@ Created on Thu Apr  7 13:50:06 2022
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.filterwarnings(action='ignore', message='Cannot close a netcdf_file opened with mmap=True')
 
 
 import argparse
@@ -52,6 +53,37 @@ CPOS_SPAN_SECONDS = 3600
 CPOS_MAX_CEP_KM = 1.0
 
 JSON_VERSION = "0.11"
+
+BATHYMETRY_FILE = '/data1/alamo/meta/bathy/ETOPO2v2c_f4.nc'   # NOAA ETOPO2v2c, 2' cell-centred grid
+
+bathymetry = None
+
+def BathymetryPressure(lat, lon):
+    """Return the seafloor pressure (dBar) from ETOPO2 at each position, NaN on land.
+
+    Uses the nearest grid cell and the Saunders (1981) depth-to-pressure conversion. Returns
+    None if the bathymetry file can't be read.
+    """
+    global bathymetry
+    if bathymetry is None:
+        try:
+            from scipy.io import netcdf_file
+            nc = netcdf_file(args.bathymetry, mmap = True)
+            bathymetry = dict(nc = nc, x = np.array(nc.variables['x'][:], dtype = np.double),
+                              y = np.array(nc.variables['y'][:], dtype = np.double), z = nc.variables['z'])
+        except Exception as e:
+            logger.warning('Failed to read bathymetry file {}: {}'.format(args.bathymetry, e))
+            bathymetry = False
+    if not bathymetry:
+        return None
+    x, y = bathymetry['x'], bathymetry['y']
+    lat, lon = np.asarray(lat, dtype = np.double), np.asarray(lon, dtype = np.double)
+    ix = np.mod(np.round((lon - x[0]) / (x[1] - x[0])).astype(int), len(x))
+    iy = np.clip(np.round((lat - y[0]) / (y[1] - y[0])).astype(int), 0, len(y) - 1)
+    depth = -np.array(bathymetry['z'][iy, ix], dtype = np.double)
+    depth[depth <= 0] = np.nan
+    c1 = (5.92 + 5.25 * np.sin(np.radians(lat)) ** 2) * 1e-3
+    return ((1 - c1) - np.sqrt((1 - c1) ** 2 - 8.84e-6 * depth)) / 4.42e-6
 
 opts = dict(
     fig = dict(
@@ -589,14 +621,65 @@ def AggregateDiveData():
                         })
                     
                     float_aggregate_data['engineering'] = df_eng
-                    
+
                 except:
                     errstr = 'Failed to aggregate engineering data for float {}, dive {}'.format(float_id, dive_num)
-                        
+
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
                     logger.error(errstr)
-                
+
+                # Aggregate mission parameters and all engineering values (one row per dive), and
+                # the engineering error codes. Dive JSON written before these fields existed has
+                # none, so those dives are left out.
+
+                logger.debug('Aggregating mission and engineering values for float {:04d}...'.format(float_id))
+                try:
+
+                    rows_mission, rows_eng, rows_err = [], [], []
+
+                    for dive in float_data.dives:
+
+                        mission = getattr(dive, 'mission', None)
+                        if mission is not None and (mission.fwver or mission.parameters):
+                            row = { 'dive': dive.dive_num, 'fwver': mission.fwver,
+                                    'cfgver': getattr(mission, 'cfgver', ''), 'ctdtype': mission.ctdtype }
+                            row.update(mission.parameters)
+                            rows_mission.append(row)
+
+                        row = { 'dive': dive.dive_num }
+                        for section in ('descent', 'drift', 'ascent', 'surface', 'ice', 'bit'):
+                            obj = getattr(dive.engineering, section, None)
+                            if obj is None:
+                                continue
+                            for attr, value in vars(obj).items():
+                                if isinstance(value, DateTime):
+                                    value = value.dt_str
+                                row[section + '.' + attr] = value
+                        for section, cols in getattr(dive.engineering, 'extra', {}).items():
+                            for col, value in cols.items():
+                                row[section + '.' + col] = value
+                        rows_eng.append(row)
+
+                        for error in getattr(dive.engineering, 'errors', []):
+                            rows_err.append(dict({ 'dive': dive.dive_num }, **error))
+
+                    if rows_mission:
+                        float_aggregate_data['mission'] = pd.DataFrame(rows_mission)
+                    if rows_eng:
+                        # Drop columns that no dive of this float reports (NaN, '' or unset times).
+                        df = pd.DataFrame(rows_eng).replace('', np.nan)
+                        float_aggregate_data['engineering_data'] = df.dropna(axis = 1, how = 'all')
+                    if rows_err:
+                        float_aggregate_data['engineering_errors'] = pd.DataFrame(rows_err)
+
+                except:
+                    errstr = 'Failed to aggregate mission and engineering values for float {}'.format(float_id)
+
+                    if hasattr(args, 'halt') and args.halt:
+                        raise Exception(errstr)
+                    logger.error(errstr)
+
                 # Aggregate gps data:
                 
                 logger.debug('Aggregating GPS data for float {:04d}...'.format(float_id))
@@ -1829,6 +1912,16 @@ def WriteAggregateJsonFiles():
                 
                 logger.debug('Writing aggregegate engineering file: ' + fpath)
                 float_aggregate_data['engineering'].to_json(fpath, orient='split', index=False)
+
+            # Write mission parameter, engineering value and engineering error files:
+
+            for key in ('mission', 'engineering_data', 'engineering_errors'):
+                if key in float_aggregate_data:
+                    fpath = os.path.join(dpath_float, '{}_{}.json'.format(float_id, key))
+                    fpath = re.sub('\\\\', '/', fpath)
+
+                    logger.debug('Writing aggregegate {} file: '.format(key) + fpath)
+                    float_aggregate_data[key].to_json(fpath, orient='split', index=False)
 
             # Write gps data file:    
                 
@@ -4312,7 +4405,15 @@ def WritePlotFiles():
                         df_descent = df_descent[df_descent['dive'] > 0]
                         df_surface = df_surface[df_surface['dive'] > 0]
                         df_drift = df_drift[df_drift['dive'] > 0]
-                        
+
+                        # Seafloor pressure at the GPS fixes
+
+                        df_bathy = df_gps[df_gps['lat'].between(-90, 90) & df_gps['lon'].between(-360, 360)
+                                          & ~((df_gps['lat'] == 0) & (df_gps['lon'] == 0)) & (df_gps['dt_epoch'] > 0)
+                                          & (df_gps['dive'] >= 0)]
+                        df_bathy = df_bathy.sort_values('dt_epoch')
+                        bathy_pres = BathymetryPressure(df_bathy['lat'].values, df_bathy['lon'].values) if len(df_bathy) else None
+
                         # Calculate ranges
                        
                         rng = dict(
@@ -4341,10 +4442,10 @@ def WritePlotFiles():
                                 ])
                             )
                         rng['pres']   = np.round(rng['pres']   + [ 5.00, 0.00], 0)
-                        
+
                         rng['time'] = np.round(rng['time'] + [(rng['time'][1] - rng['time'][0]) * -0.03, (rng['time'][1] - rng['time'][0]) * +0.03] + [-21600, +21600])
-                        rng['time'] = [ DateTime().dt_from_epoch(x).dt_str for x in rng['time'] ] 
-                        
+                        rng['time'] = [ DateTime().dt_from_epoch(x).dt_str for x in rng['time'] ]
+
                         
                         # Generate Figures
                         
@@ -4377,9 +4478,90 @@ def WritePlotFiles():
                                     )
                                 ),
                             )
-                            
+
+                        # Add seafloor trace (background): ETOPO2 depth at the GPS fixes, as pressure
+
+                        if bathy_pres is not None and np.any(~np.isnan(bathy_pres)):
+                            figs['trajectory'].add_trace(go.Scatter(
+                                x=df_bathy['dt_str'],
+                                y=bathy_pres,
+                                customdata=np.stack(
+                                    (   df_bathy['dive'],
+                                        df_bathy['lat'],
+                                        df_bathy['lon'],
+                                        ),
+                                    -1),
+                                hovertemplate='<br>'.join([
+                                    'Dive <b>%{customdata[0]}</b>: Seafloor (ETOPO2)',
+                                    '%{x|%Y-%m-%d %H:%M}Z',
+                                    '%{customdata[1]:.4f}°N %{customdata[2]:.4f}°E',
+                                    '%{y:.0f} dBar',
+                                    '<extra></extra>',
+                                    ]),
+                                line=dict(
+                                    color='rgb(0,0,0)',
+                                    width=3.0,
+                                    ),
+                                mode='lines',
+                                name='Seafloor',
+                                opacity=1.0,
+                                ))
+
+                        # Add target drift pressure trace (background): DTD<n> for the current
+                        # mission phase MPS, or DTD on firmware without phases, from the start of
+                        # descent to the start of ascent of each dive. Dives without mission
+                        # parameters keep the last reported target.
+
+                        targets = {}
+                        df_mission = float_aggregate_data.get('mission')
+                        if df_mission is not None:
+                            for _, mrow in df_mission.iterrows():
+                                # Skip unset configurations (MPS 255, DTD 65535) sent before a mission is loaded
+                                mps = pd.to_numeric(mrow.get('MPS'), errors = 'coerce')
+                                if pd.notna(mps) and not 0 <= mps <= 9:
+                                    continue
+                                keys = (['DTD{:d}'.format(int(mps))] if pd.notna(mps) else []) + ['DTD0', 'DTD']
+                                value = next((pd.to_numeric(mrow[k], errors = 'coerce') for k in keys if k in mrow and pd.notna(pd.to_numeric(mrow[k], errors = 'coerce'))), None)
+                                if value is not None and 0 < value < 7000:
+                                    targets[int(mrow['dive'])] = float(value)
+
+                        target_x, target_y, target_dive = [], [], []
+                        if targets:
+                            t_start = pd.concat([df_descent, df_drift])
+                            t_start = t_start[(t_start['dt_epoch'] > 0) & t_start['pres'].notna()].groupby('dive')['dt_epoch'].min()
+                            t_end_ascent = df_ascent[(df_ascent['dt_epoch'] > 0) & df_ascent['pres'].notna()].groupby('dive')['dt_epoch'].min()
+                            t_end_drift = df_drift[(df_drift['dt_epoch'] > 0) & df_drift['pres'].notna()].groupby('dive')['dt_epoch'].max()
+                            for dive_num, t0 in t_start.items():
+                                t1 = t_end_ascent.get(dive_num, t_end_drift.get(dive_num))
+                                prior = [d for d in targets if d <= dive_num]
+                                target = targets[np.max(prior)] if prior else targets[np.min(list(targets))]
+                                if t1 is None or t1 <= t0:
+                                    continue
+                                target_x += [DateTime().dt_from_epoch(t0).dt_str, DateTime().dt_from_epoch(t1).dt_str, None]
+                                target_y += [target, target, None]
+                                target_dive += [dive_num, dive_num, None]
+
+                        if target_x:
+                            figs['trajectory'].add_trace(go.Scatter(
+                                x=target_x,
+                                y=target_y,
+                                customdata=target_dive,
+                                hovertemplate='<br>'.join([
+                                    'Dive <b>%{customdata}</b>: Drift Target',
+                                    '%{y:.0f} dBar',
+                                    '<extra></extra>',
+                                    ]),
+                                line=dict(
+                                    color='rgb(0,0,0)',
+                                    width=1.0,
+                                    ),
+                                mode='lines',
+                                name='Drift Target',
+                                opacity=1.0,
+                                ))
+
                         # Add satcom traces
-                        
+
                         figs['trajectory'].add_trace(go.Scatter(
                             x=df_sbd['dt_str'],
                             y=[-0.5]*len(df_sbd),
@@ -4554,6 +4736,7 @@ def WritePlotFiles():
                         if 'df_gps' in locals(): del df_gps
                         if 'df_sbd' in locals(): del df_sbd
                         if 'df_surface' in locals(): del df_surface
+                        if 'df_bathy' in locals(): del df_bathy
                         if 'fig' in locals(): del fig
                         if 'fig_meta' in locals(): del fig_meta
                         if 'figs' in locals(): del figs
@@ -12156,6 +12339,13 @@ parser.add_argument(
 """
 Generate arguments - directories:
 """
+
+parser.add_argument(
+    '-b', '--bathymetry',
+    default=BATHYMETRY_FILE,
+    dest='bathymetry',
+    help='read seafloor depth for trajectory plots from ETOPO2 netCDF file FILE (default=\'{}\')'.format(BATHYMETRY_FILE),
+    metavar='FILE')
 
 parser.add_argument(
     '-D', '--display-figures',

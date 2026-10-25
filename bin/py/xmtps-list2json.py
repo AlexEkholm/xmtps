@@ -236,6 +236,170 @@ def ColumnValues(columns, x):
         return None
     return { name: x[i + 1] for i, name in enumerate(columns) }
 
+ENG_SECTIONS = { 'E05': 'bit', 'E06': 'bit', 'E07': 'descent', 'E08': 'drift', 'E09': 'ascent',
+                 'E0A': 'surface', 'E0C': 'ice' }
+
+# Listing column -> attribute of the FloatClasses Engineering* section objects, for every
+# engineering message version. A key is the column name, 'name|units' where the same name is
+# listed in physical units and in counts, or 'sub-group/name' where BIT versions 9-11 reuse
+# names in different listing sub-groups.
+ENG_COLUMNS = {
+    'descent': {
+        'engVer': 'version', 'start-of-descent': 'dt_start', 'vac0': 'vac0', 'vac1': 'vac1',
+        'seeks': 'seeks', 'seekPumpAdjT': 'seek_pump_adj_s',
+        'OilValveOpenPosSurf': 'oil_valve_open_pos_surf_v',
+        'OilValveClosePosFallPump': 'oil_valve_close_pos_fall_pump_v',
+        'AirValveMidPosSurf': 'air_valve_mid_pos_surf_v',
+        'pumpT': 'pump_time_s', 'pumpI': 'pump_current_a', 'sysI': 'system_current_a',
+        'sysV': 'system_voltage_v', 'vac': 'case_vac_inhg', 'pumpAdj': 'first_pump_adj_s',
+        },
+    'drift': {
+        'engVer': 'version', 'start-of-drift': 'dt_start', 'vac0': 'vac0', 'vac1': 'vac1',
+        'seeks': 'seeks', 'seekPumpAdjT': 'seek_pump_adj_s',
+        'meanP': 'mean_pres_dbar', 'meanT': 'mean_temp_degc',
+        'start-of-fall': 'dt_fall_start', 'fallP': 'fall_start_pres_dbar',
+        'pres': 'mean_pres_dbar', 'pres|counts': 'mean_pres_counts',
+        'temp': 'mean_temp_degc', 'temp|counts': 'mean_temp_counts',
+        'saln': 'mean_saln_psu', 'saln|counts': 'mean_saln_counts',
+        },
+    'ascent': {
+        'engVer': 'version', 'start-of-ascent': 'dt_start', 'vac0': 'vac0', 'vac1': 'vac1',
+        'sysI': 'system_current_a', 'pumpT': 'pump_time_s',
+        'start-of-fall': 'dt_fall_start', 'fallP': 'fall_start_pres_dbar',
+        },
+    'surface': {
+        'engVer': 'version', 'start-of-surface': 'dt_start', 'vac0': 'vac0', 'vac1': 'vac1',
+        'CTD-status': 'ctd_status', 'vac': 'case_vac_inhg', 'sysV': 'system_voltage_v',
+        'sysI': 'system_current_a', 'nSBD': 'num_sbd', 'nAtmpt': 'num_prev_attempts',
+        'nPrevAttempt': 'num_prev_attempts',
+        'APCur': 'air_pump_current_a', 'APRunT': 'air_pump_runtime_s',
+        'AirBladMxP': 'air_bladder_max_pres_psi',
+        'AVOpenStart': 'air_valve_open_start_v', 'AVMidEnd': 'air_valve_mid_end_v',
+        'ACVpenCal': 'air_valve_open_cal_v', 'AVMidCal': 'air_valve_mid_cal_v',
+        'AVCloseCal': 'air_valve_close_cal_v',
+        'OVOpenAirPmp': 'oil_valve_open_air_pump_v', 'OVCloseEnd': 'oil_valve_close_end_v',
+        'OVOpenCal': 'oil_valve_open_cal_v', 'OVClosCal': 'oil_valve_close_cal_v',
+        'presOffset': 'pres_offset_dbar',
+        'firstPres': 'prof_first_pres_dbar', 'firstPres|counts': 'prof_first_pres_counts',
+        'firstTemp': 'prof_first_temp_degc', 'firstTemp|counts': 'prof_first_temp_counts',
+        'firstSaln': 'prof_first_saln_psu', 'firstSaln|counts': 'prof_first_saln_counts',
+        'lastPres': 'prof_last_pres_dbar', 'lastPres|counts': 'prof_last_pres_counts',
+        'lastTemp': 'prof_last_temp_degc', 'lastTemp|counts': 'prof_last_temp_counts',
+        'lastSaln': 'prof_last_saln_psu', 'lastSaln|counts': 'prof_last_saln_counts',
+        'numBins': 'prof_num_bins', 'numEmptyBins': 'prof_num_empty_bins',
+        'numRawSamples': 'prof_num_raw_samples', 'gpsOffset': 'gps_rtc_offset_s',
+        'start': 'dt_sampling_start', 'end': 'dt_sampling_end', 'nErr': 'num_errors',
+        },
+    'ice': {
+        'engVer': 'version', 'mode': 'mode', 'ice-status': 'ice_status', 'urgency': 'urgency',
+        'surfAttempts': 'surface_attempts', 'numStoredSBD': 'num_stored_sbd',
+        'lastXmit': 'time_since_last_xmit_s', 'minPres': 'min_pres_dbar',
+        'testTemp': 'test_temp', 'testSalinity': 'test_saln_psu', 'nErr': 'num_errors',
+        },
+    'bit': {
+        # BIT versions 6-8
+        'BITVer': 'version', 'SWVer': 'sw_version', 'BITResults': 'results',
+        'BITTime': 'duration_s', 'CTDStat': 'ctd_status',
+        'pres': 'pres_dbar', 'pres|counts': 'pres_counts',
+        'presPostReset': 'pres_post_reset_dbar', 'presPostReset|counts': 'pres_post_reset_counts',
+        'presPreReset': 'pres_pre_reset_dbar', 'presPreReset|counts': 'pres_pre_reset_counts',
+        'presOffset': 'pres_offset_dbar',
+        'temp': 'temp_degc', 'temp|counts': 'temp_counts',
+        'saln': 'saln_psu', 'saln|counts': 'saln_counts',
+        'VacStart': 'case_vac_start_inhg', 'VacEnd': 'case_vac_end_inhg',
+        'BatStart': 'battery_start_v', 'BatEnd': 'battery_end_v',
+        'AVOpenPos': 'air_valve_open_v', 'AVOpenPosCal': 'air_valve_open_cal_v',
+        'AVMidPos': 'air_valve_mid_v', 'AVMidPosCal': 'air_valve_mid_cal_v',
+        'AVClosePos': 'air_valve_closed_v', 'AVClosePosCal': 'air_valve_closed_cal_v',
+        'APTestTime': 'air_pump_test_s', 'APCycleCount': 'air_pump_cycles',
+        'APMxAPres': 'air_pump_max_pres_psi', 'APMxLoadCur': 'air_pump_current_max_a',
+        'APMxLoadCur12V': 'air_pump_current_max_12v_a', 'APMxLoadBatV': 'air_pump_battery_max_v',
+        'OVOpenPos': 'oil_valve_open_v', 'OVOpenPosCal': 'oil_valve_open_cal_v',
+        'OVClosePos': 'oil_valve_closed_v', 'OVClosePosCal': 'oil_valve_closed_cal_v',
+        'OPTestTime': 'oil_pump_test_s', 'OPMxLoadCur': 'oil_pump_current_max_a',
+        'OPMxLoadCur12V': 'oil_pump_current_max_12v_a', 'OPMxLoadBatV': 'oil_pump_battery_max_v',
+        # BIT versions 9-11
+        'FWVer': 'sw_version', 'sensorType': 'sensor_type', 'sensorTypeName': 'sensor_type_name',
+        'startTime': 'dt_start', 'endTime': 'dt_end', 'Date/Time/duration': 'duration_s',
+        'CTD/errors': 'ctd_errors', 'CTD/status': 'ctd_status',
+        'presPreCal': 'pres_pre_reset_dbar', 'presPostCal': 'pres_post_reset_dbar',
+        'Case Vacuum/errors': 'case_vac_errors', 'caseVacStart': 'case_vac_start_inhg',
+        'caseVacEnd': 'case_vac_end_inhg',
+        'Battery Voltage/errors': 'battery_errors', 'batVoltStart': 'battery_start_v',
+        'batVoltEnd': 'battery_end_v',
+        'Air Valve Positions/open': 'air_valve_open_v', 'Air Valve Positions/mid': 'air_valve_mid_v',
+        'Air Valve Positions/closed': 'air_valve_closed_v',
+        'Air Valve Calibration Positions/open': 'air_valve_open_cal_v',
+        'Air Valve Calibration Positions/mid': 'air_valve_mid_cal_v',
+        'Air Valve Calibration Positions/closed': 'air_valve_closed_cal_v',
+        'Air Pump/errors': 'air_pump_errors', 'Air Pump/duration': 'air_pump_test_s',
+        'Air Pump/cycles': 'air_pump_cycles', 'Air Pump/presMax': 'air_pump_max_pres_psi',
+        'Air Pump/currAvg': 'air_pump_current_avg_a', 'Air Pump/currMax': 'air_pump_current_max_a',
+        'Air Pump/12VCurrMax': 'air_pump_current_max_12v_a',
+        'Air Pump/batMax': 'air_pump_battery_max_v', 'Air Pump/powerMax': 'air_pump_power_max_w',
+        'Oil Valve Positions/open': 'oil_valve_open_v', 'Oil Valve Positions/closed': 'oil_valve_closed_v',
+        'Oil Valve Calibration Positions/open': 'oil_valve_open_cal_v',
+        'Oil Valve Calibration Positions/closed': 'oil_valve_closed_cal_v',
+        'Oil Pump/errors': 'oil_pump_errors', 'Oil Pump/duration': 'oil_pump_test_s',
+        'Oil Pump/currAvg': 'oil_pump_current_avg_a', 'Oil Pump/currMax': 'oil_pump_current_max_a',
+        'Oil Pump/12VCurrMax': 'oil_pump_current_max_12v_a',
+        'Oil Pump/batMax': 'oil_pump_battery_max_v', 'Oil Pump/powerMax': 'oil_pump_power_max_w',
+        },
+    }
+
+def ParseValue(s):
+    """Convert a listing field to an int or float where possible; otherwise keep the string."""
+    if re.fullmatch(r'[+-]?\d+', s):
+        return int(s)
+    if re.fullmatch(r'[+-]?(\d+\.\d*|\.\d+)([eE][+-]?\d+)?', s):
+        return float(s)
+    return s
+
+def HeaderFields(names_line, units_line):
+    """Return (name, units) for the columns of an engineering header after 'SN dive midx'.
+
+    The listing right-aligns each unit under its column name, so units are matched to names by
+    the right edge of their text.
+    """
+    names = [(m.group(), m.end()) for m in re.finditer(r'\S+', names_line[1:])][3:]
+    units = [(m.group().strip('()'), m.end()) for m in re.finditer(r'\S+', units_line[1:])] \
+        if units_line else []
+    return [(name, next((u for u, e in units if abs(e - end) <= 2), '')) for name, end in names]
+
+def ParseEngineeringLine(engineering, line, header, units_line, group):
+    """Store one engineering (E0x) or engineering error (e0x) listing line.
+
+    Each column is stored in the section object's attribute given by ENG_COLUMNS (looked up by
+    'sub-group/name', then 'name|units', then 'name'); date/time attributes get a DateTime.
+    Columns not in ENG_COLUMNS go into engineering.extra[section]. Error lines go into
+    engineering.errors.
+    """
+    x = line.split('#', 1)[0].split()
+    section = ENG_SECTIONS.get(x[0].upper(), x[0].lower())
+    fields = HeaderFields(header, units_line) if header else []
+    data = x[4:]
+    if len(fields) != len(data):
+        raise Exception('Engineering line does not match its header: \'' + line + '\'')
+
+    if x[0][0] == 'e':
+        # Error line: SN dive idx date-time err-code
+        error = { 'section': section, 'idx': int(x[3]) }
+        for (name, unit), value in zip(fields, data):
+            error[{ 'date-time': 'dt_str', 'err-code': 'code' }.get(name, name)] = ParseValue(value)
+        engineering.errors.append(error)
+        return
+
+    obj = getattr(engineering, section, None)
+    columns = ENG_COLUMNS.get(section, {})
+    for (name, unit), value in zip(fields, data):
+        attr = columns.get(group + '/' + name) or columns.get(name + '|' + unit) or columns.get(name)
+        if obj is not None and attr is not None:
+            setattr(obj, attr, DateTime(dt_str = value) if attr.startswith('dt_') else ParseValue(value))
+        else:
+            extra = engineering.extra.setdefault(section, {})
+            key = name + ('_' + unit if name in extra and unit else '')
+            extra[key] = ParseValue(value)
+
 def ProcessListingFile(fpath_list):
 
     #global float_map
@@ -310,6 +474,10 @@ def ProcessListingFile(fpath_list):
 
         columns = []    # column names of the latest data-table header
         drift_ref = None    # drift start time from the D line (floats that send drift times)
+        eng_header = None   # latest '#      SN dive midx ...' (or idx) header line
+        eng_units = None    # the units line under it, if any
+        expect_units = False
+        group = ''          # latest '# --- Name ---' sub-group (engineering and mission sections)
 
         for line in lines:
             
@@ -333,6 +501,35 @@ def ProcessListingFile(fpath_list):
                     # depend on the float (aux temperature, corrected salinity, drift times).
                     if re.match(r'^#\s+SN\s+dive\s+(sampleIdx|idx\s+nSam|nSam)\s', line):
                         columns = line[1:].split()
+
+                    # Engineering headers ('SN dive midx ...', or 'SN dive idx ...' for error
+                    # lines) and the units line under them.
+                    if re.match(r'^#\s+SN\s+dive\s+(midx|idx)\s', line):
+                        eng_header, eng_units, expect_units = line, None, True
+                        continue
+                    if expect_units:
+                        expect_units = False
+                        if not re.match(r'^#\s*-', line):
+                            eng_units = line
+
+                    # Sub-group headings, e.g. '# --- Air Pump & Bladder ------'.
+                    m = re.match(r'^# --- (.*?)\s*-+$', line)
+                    if m:
+                        group = m.group(1)
+                    elif re.match(r'^# (Engineering|Mission Configuration)\b', line):
+                        group = ''
+
+                    continue
+
+                expect_units = False
+
+                # Engineering data, all sections and minor indices:
+
+                if re.match(r'^[Ee]0[0-9A-Fa-f] ', line):
+                    try:
+                        ParseEngineeringLine(dive_data.engineering, line, eng_header, eng_units, group)
+                    except Exception as e:
+                        logger.debug(str(e))
 
                     continue
 
@@ -391,77 +588,6 @@ def ProcessListingFile(fpath_list):
 
                     continue
 
-                # Engineering data - descent
-                
-                if re.match('^E07 ', line):
-                    
-                    x = line.split();
-                    midx = int(x[3])
-                    
-                    if midx == 0:
-                        dive_data.engineering.descent.dt_start = DateTime(dt_str = x[5])
-                        dive_data.engineering.descent.vac0 = float(x[6])
-                        dive_data.engineering.descent.vac1 = float(x[7])
-                    
-                    del midx
-                    del x
-                    
-                    continue
-                
-                # Engineering data - drift
-                
-                if re.match('^E08 ', line):
-                    
-                    x = line.split();
-                    midx = int(x[3])
-                    
-                    if midx == 0:
-                        dive_data.engineering.drift.dt_start = DateTime(dt_str = x[5])
-                        dive_data.engineering.drift.vac0 = float(x[6])
-                        dive_data.engineering.drift.vac1 = float(x[7])
-                    
-                    del midx
-                    del x
-                    
-                    continue                
-
-                # Engineering data - ascent
-                
-                if re.match('^E09 ', line):
-                    
-                    x = line.split();
-                    midx = int(x[3])
-                    
-                    if midx == 0:
-                        dive_data.engineering.ascent.dt_start = DateTime(dt_str = x[5])
-                        dive_data.engineering.ascent.vac0 = float(x[6])
-                        dive_data.engineering.ascent.vac1 = float(x[7])
-                    
-                    del midx
-                    del x
-                    
-                    continue                
-                
-                # Engineering data - surface
-                
-                if re.match('^E0A ', line):
-                    
-                    x = line.split();
-                    midx = int(x[3])
-                    
-                    if midx == 0:
-                        dive_data.engineering.surface.dt_start = DateTime(dt_str = x[5])
-                        dive_data.engineering.surface.vac0 = float(x[6])
-                        dive_data.engineering.surface.vac1 = float(x[7])
-                    
-                    del midx
-                    del x
-                    
-                    continue                
-                
-                if re.match('^e0A ', line):
-                    continue
-                
                 # Descent time-series data:
                 
                 if re.match('^F ', line):
@@ -596,24 +722,42 @@ def ProcessListingFile(fpath_list):
                 # TODO Mission Parameters:
                 if re.match('^MIS ', line):
                 
-                    x = line.split()
-                    
-                    dive_data.mission.fwver = x[4]
-                    
-                    if int(x[5]) == 0:
+                    # MIS SN dive [midx] cfgVer fwVer sensorType # sensorTypeName; older listings
+                    # have the minor index, so locate the fields by the hex versions.
+                    x = line.split('#', 1)[0].split()
+                    hexes = [i for i, t in enumerate(x) if i > 2 and t.lower().startswith('0x')]
+
+                    if len(hexes) >= 2:
+                        dive_data.mission.cfgver = x[hexes[0]]
+                        dive_data.mission.fwver = x[hexes[1]]
+                        sensor = x[hexes[1] + 1] if len(x) > hexes[1] + 1 else ''
+                    else:
+                        dive_data.mission.fwver = x[4]
+                        sensor = x[5]
+
+                    if sensor == '0':
                         dive_data.mission.ctdtype = 'RBR'
-                    elif int(x[5]) == 1:
+                    elif sensor == '1':
                         dive_data.mission.ctdtype = 'SBE'
                     else:
-                        dive_data.mission.ctdtype = ''                    
-                    
+                        dive_data.mission.ctdtype = ''
+
                     continue
-                
+
                 if re.match('^m ', line):
-                    x = line.split()
-                    
-                    dive_data.mission.parameters[x[4]] = float(x[5])
-                    
+                    # m SN dive idx name value [units] # description (not kept)
+                    x = line.split('#', 1)[0].split()
+                    value = ParseValue(x[5])
+
+                    dive_data.mission.parameters[x[4]] = float(value) if isinstance(value, (int, float)) else value
+                    dive_data.mission.entries.append({
+                        'section': group,
+                        'idx': int(x[3]),
+                        'name': x[4],
+                        'value': value,
+                        'units': x[6].strip('[]') if len(x) > 6 else '',
+                        })
+
                     continue
                 
                 # Profile data:

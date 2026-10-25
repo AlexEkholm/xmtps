@@ -433,32 +433,192 @@ class Drift:
         self.sigma0   = self.sigma0.tolist()
         
 class Engineering():
-    
+    """Engineering data for one dive, one object per listing section (E07-E0C, BIT E05/E06).
+
+    Each section object has an attribute for every column of every engineering message
+    version, named with its units; the ENG_COLUMNS table in xmtps-list2json.py maps listing
+    columns to these attributes. Attributes that a float's message version does not report
+    keep their default (NaN, '' or an unset DateTime).
+    """
+
     def __init__(self):
         self.ascent  = EngineeringAscent()
         self.descent = EngineeringDescent()
         self.drift   = EngineeringDrift()
         self.surface = EngineeringSurface()
-        
-class EngineeringAscent(EngineeringData):
-    
-    def __init__(self, dt_start = DateTime(), vac0 = -9.99, vac1 = -9.99):
-        EngineeringData.__init__(self, dt_start, vac0, vac1)
-        
+        self.ice     = EngineeringIce()
+        self.bit     = EngineeringBit()
+        self.errors  = []   # [{'section', 'idx', 'dt_str', 'code'}] from the e0x error lines
+        self.extra   = {}   # {section: {column: value}} for listing columns not in ENG_COLUMNS
+
 class EngineeringDescent(EngineeringData):
-    
-    def __init__(self, dt_start = DateTime(), vac0 = -9.99, vac1 = -9.99):
-        EngineeringData.__init__(self, dt_start, vac0, vac1)
-        
+    """Descent engineering message (E07, versions 0x10-0x11)."""
+
+    def __init__(self, dt_start = None, vac0 = -9.99, vac1 = -9.99):
+        EngineeringData.__init__(self, dt_start if dt_start else DateTime(), vac0, vac1)
+        self.version                         = ''       # engVer
+        # dt_start: start-of-descent; vac0, vac1: case vacuum at start/end (inHg), v0x11
+        self.seeks                           = np.nan   # seeks, v0x11
+        self.seek_pump_adj_s                 = np.nan   # seekPumpAdjT (+sec), v0x11
+        self.oil_valve_open_pos_surf_v       = np.nan   # OilValveOpenPosSurf (V), v0x11
+        self.oil_valve_close_pos_fall_pump_v = np.nan   # OilValveClosePosFallPump (V), v0x11
+        self.air_valve_mid_pos_surf_v        = np.nan   # AirValveMidPosSurf (V), v0x11
+        self.pump_time_s                     = np.nan   # pumpT (sec), v0x10
+        self.pump_current_a                  = np.nan   # pumpI (A), v0x10
+        self.system_current_a                = np.nan   # sysI (A), v0x10
+        self.system_voltage_v                = np.nan   # sysV (V), v0x10
+        self.case_vac_inhg                   = np.nan   # vac (inHg), v0x10
+        self.first_pump_adj_s                = np.nan   # pumpAdj (+sec), v0x10
+
 class EngineeringDrift(EngineeringData):
-    
-    def __init__(self, dt_start = DateTime(), vac0 = -9.99, vac1 = -9.99):
-        EngineeringData.__init__(self, dt_start, vac0, vac1)        
+    """Park/drift engineering message (E08, versions 0x10-0x12)."""
+
+    def __init__(self, dt_start = None, vac0 = -9.99, vac1 = -9.99):
+        EngineeringData.__init__(self, dt_start if dt_start else DateTime(), vac0, vac1)
+        self.version                         = ''       # engVer
+        # dt_start: start-of-drift; vac0, vac1: case vacuum at start/end (inHg), v0x11+
+        self.seeks                           = np.nan   # seeks, v0x11+
+        self.seek_pump_adj_s                 = np.nan   # seekPumpAdjT (+sec), v0x11+
+        self.mean_pres_dbar                  = np.nan   # meanP (v0x10) / pres (v0x11+) (dBar)
+        self.mean_pres_counts                = np.nan   # pres (counts), v0x11+
+        self.mean_temp_degc                  = np.nan   # meanT (v0x10) / temp (v0x11+) (degC)
+        self.mean_temp_counts                = np.nan   # temp (counts), v0x11+
+        self.mean_saln_psu                   = np.nan   # saln (PSU), v0x11+
+        self.mean_saln_counts                = np.nan   # saln (counts), v0x11+
+        self.dt_fall_start                   = DateTime()   # start-of-fall, v0x10
+        self.fall_start_pres_dbar            = np.nan   # fallP (dBar), v0x10
+
+class EngineeringAscent(EngineeringData):
+    """Ascent engineering message (E09, versions 0x10-0x12)."""
+
+    def __init__(self, dt_start = None, vac0 = -9.99, vac1 = -9.99):
+        EngineeringData.__init__(self, dt_start if dt_start else DateTime(), vac0, vac1)
+        self.version                         = ''       # engVer
+        # dt_start: start-of-ascent; vac0, vac1: case vacuum at start/end (inHg), v0x11+
+        self.system_current_a                = np.nan   # sysI (A), v0x10
+        self.pump_time_s                     = np.nan   # pumpT (sec), v0x10
+        self.dt_fall_start                   = DateTime()   # start-of-fall, v0x12
+        self.fall_start_pres_dbar            = np.nan   # fallP (dBar), v0x12
 
 class EngineeringSurface(EngineeringData):
-    
-    def __init__(self, dt_start = DateTime(), vac0 = -9.99, vac1 = -9.99):
-        EngineeringData.__init__(self, dt_start, vac0, vac1)
+    """Surface engineering message (E0A, versions 0x10-0x14)."""
+
+    def __init__(self, dt_start = None, vac0 = -9.99, vac1 = -9.99):
+        EngineeringData.__init__(self, dt_start if dt_start else DateTime(), vac0, vac1)
+        self.version                         = ''       # engVer
+        # dt_start: start-of-surface; vac0, vac1: case vacuum at start/end (inHg), v0x11+
+        self.ctd_status                      = ''       # CTD-status, v0x10
+        self.case_vac_inhg                   = np.nan   # vac (inHg), v0x10
+        self.system_voltage_v                = np.nan   # sysV (V), v0x10
+        self.system_current_a                = np.nan   # sysI (A), v0x10
+        self.num_sbd                         = np.nan   # nSBD
+        self.num_prev_attempts               = np.nan   # nAtmpt (v0x10) / nPrevAttempt
+        self.air_pump_current_a              = np.nan   # APCur (A)
+        self.air_pump_runtime_s              = np.nan   # APRunT (sec)
+        self.air_bladder_max_pres_psi        = np.nan   # AirBladMxP (PSI)
+        self.air_valve_open_start_v          = np.nan   # AVOpenStart (V)
+        self.air_valve_mid_end_v             = np.nan   # AVMidEnd (V)
+        self.air_valve_open_cal_v            = np.nan   # ACVpenCal (V)
+        self.air_valve_mid_cal_v             = np.nan   # AVMidCal (V)
+        self.air_valve_close_cal_v           = np.nan   # AVCloseCal (V)
+        self.oil_valve_open_air_pump_v       = np.nan   # OVOpenAirPmp (V)
+        self.oil_valve_close_end_v           = np.nan   # OVCloseEnd (V)
+        self.oil_valve_open_cal_v            = np.nan   # OVOpenCal (V)
+        self.oil_valve_close_cal_v           = np.nan   # OVClosCal (V)
+        self.pres_offset_dbar                = np.nan   # presOffset (dBar), v0x12+
+        self.prof_first_pres_dbar            = np.nan   # firstPres (dBar), v0x13+
+        self.prof_first_pres_counts          = np.nan   # firstPres (counts)
+        self.prof_first_temp_degc            = np.nan   # firstTemp (degC)
+        self.prof_first_temp_counts          = np.nan   # firstTemp (counts)
+        self.prof_first_saln_psu             = np.nan   # firstSaln (PSU)
+        self.prof_first_saln_counts          = np.nan   # firstSaln (counts)
+        self.prof_last_pres_dbar             = np.nan   # lastPres (dBar), v0x13+
+        self.prof_last_pres_counts           = np.nan   # lastPres (counts)
+        self.prof_last_temp_degc             = np.nan   # lastTemp (degC)
+        self.prof_last_temp_counts           = np.nan   # lastTemp (counts)
+        self.prof_last_saln_psu              = np.nan   # lastSaln (PSU)
+        self.prof_last_saln_counts           = np.nan   # lastSaln (counts)
+        self.prof_num_bins                   = np.nan   # numBins, v0x13+
+        self.prof_num_empty_bins             = np.nan   # numEmptyBins
+        self.prof_num_raw_samples            = np.nan   # numRawSamples
+        self.gps_rtc_offset_s                = np.nan   # gpsOffset (sec), v0x13+
+        self.dt_sampling_start               = DateTime()   # start (surface sampling), v0x14
+        self.dt_sampling_end                 = DateTime()   # end (surface sampling), v0x14
+        self.num_errors                      = np.nan   # nErr
+
+class EngineeringIce:
+    """Ice engineering message (E0C, versions 0x10-0x11)."""
+
+    def __init__(self):
+        self.version                         = ''       # engVer
+        self.mode                            = np.nan   # mode
+        self.ice_status                      = np.nan   # ice-status
+        self.urgency                         = np.nan   # urgency
+        self.surface_attempts                = np.nan   # surfAttempts
+        self.num_stored_sbd                  = np.nan   # numStoredSBD
+        self.time_since_last_xmit_s          = np.nan   # lastXmit (sec)
+        self.min_pres_dbar                   = np.nan   # minPres (dBar)
+        self.test_temp                       = np.nan   # testTemp (listed as raw counts)
+        self.test_saln_psu                   = np.nan   # testSalinity (PSU)
+        self.num_errors                      = np.nan   # nErr, v0x11
+
+class EngineeringBit:
+    """Built-in test messages (E05 passed / E06 failed; BIT versions 6-8 and 9-11)."""
+
+    def __init__(self):
+        self.version                         = np.nan   # BITVer
+        self.sw_version                      = ''       # SWVer (v6-8) / FWVer (v9-11)
+        self.results                         = ''       # BITResults
+        self.sensor_type                     = np.nan   # sensorType, v9-11
+        self.sensor_type_name                = ''       # sensorTypeName, v9-11
+        self.duration_s                      = np.nan   # BITTime (v6-8) / duration (sec)
+        self.dt_start                        = DateTime()   # startTime, v9-11
+        self.dt_end                          = DateTime()   # endTime, v9-11
+        self.ctd_status                      = ''       # CTDStat (v6-8) / status (v9-11)
+        self.ctd_errors                      = ''       # errors (CTD), v9-11
+        self.pres_dbar                       = np.nan   # pres (dBar), v7
+        self.pres_counts                     = np.nan   # pres (counts), v7
+        self.pres_post_reset_dbar            = np.nan   # presPostReset (dBar) (v8) / presPostCal
+        self.pres_post_reset_counts          = np.nan   # presPostReset (counts), v8
+        self.pres_pre_reset_dbar             = np.nan   # presPreReset (dBar) (v8) / presPreCal
+        self.pres_pre_reset_counts           = np.nan   # presPreReset (counts), v8
+        self.pres_offset_dbar                = np.nan   # presOffset (dBar)
+        self.temp_degc                       = np.nan   # temp (degC)
+        self.temp_counts                     = np.nan   # temp (counts), v7-8
+        self.saln_psu                        = np.nan   # saln (PSU)
+        self.saln_counts                     = np.nan   # saln (counts), v7-8
+        self.case_vac_errors                 = ''       # errors (Case Vacuum), v9-11
+        self.case_vac_start_inhg             = np.nan   # VacStart / caseVacStart (inHg)
+        self.case_vac_end_inhg               = np.nan   # VacEnd / caseVacEnd (inHg)
+        self.battery_errors                  = ''       # errors (Battery Voltage), v9-11
+        self.battery_start_v                 = np.nan   # BatStart / batVoltStart (V)
+        self.battery_end_v                   = np.nan   # BatEnd / batVoltEnd (V)
+        self.air_valve_open_v                = np.nan   # AVOpenPos / open (V)
+        self.air_valve_open_cal_v            = np.nan   # AVOpenPosCal / open, calibration (V)
+        self.air_valve_mid_v                 = np.nan   # AVMidPos / mid (V)
+        self.air_valve_mid_cal_v             = np.nan   # AVMidPosCal / mid, calibration (V)
+        self.air_valve_closed_v              = np.nan   # AVClosePos / closed (V)
+        self.air_valve_closed_cal_v          = np.nan   # AVClosePosCal / closed, calibration (V)
+        self.air_pump_errors                 = ''       # errors (Air Pump), v9-11
+        self.air_pump_test_s                 = np.nan   # APTestTime / duration (sec)
+        self.air_pump_cycles                 = np.nan   # APCycleCount / cycles
+        self.air_pump_max_pres_psi           = np.nan   # APMxAPres / presMax (PSI)
+        self.air_pump_current_avg_a          = np.nan   # currAvg (A), v9-11
+        self.air_pump_current_max_a          = np.nan   # APMxLoadCur / currMax (A)
+        self.air_pump_current_max_12v_a      = np.nan   # APMxLoadCur12V / 12VCurrMax (A)
+        self.air_pump_battery_max_v          = np.nan   # APMxLoadBatV / batMax (V)
+        self.air_pump_power_max_w            = np.nan   # powerMax (W), v9-11
+        self.oil_valve_open_v                = np.nan   # OVOpenPos / open (V)
+        self.oil_valve_open_cal_v            = np.nan   # OVOpenPosCal / open, calibration (V)
+        self.oil_valve_closed_v              = np.nan   # OVClosePos / closed (V)
+        self.oil_valve_closed_cal_v          = np.nan   # OVClosePosCal / closed, calibration (V)
+        self.oil_pump_errors                 = ''       # errors (Oil Pump), v9-11
+        self.oil_pump_test_s                 = np.nan   # OPTestTime / duration (sec)
+        self.oil_pump_current_avg_a          = np.nan   # currAvg (A), v9-11
+        self.oil_pump_current_max_a          = np.nan   # OPMxLoadCur / currMax (A)
+        self.oil_pump_current_max_12v_a      = np.nan   # OPMxLoadCur12V / 12VCurrMax (A)
+        self.oil_pump_battery_max_v          = np.nan   # OPMxLoadBatV / batMax (V)
+        self.oil_pump_power_max_w            = np.nan   # powerMax (W), v9-11
 
 class File:
     
@@ -512,7 +672,9 @@ class MissionParameters:
     def __init__(self, fwver = '', ctdtype= ''):
         self.fwver = fwver
         self.ctdtype = ctdtype
-        self.parameters = {}
+        self.cfgver = ''            # mission configuration message version (MIS line)
+        self.parameters = {}        # {name: value}
+        self.entries = []           # [{'section', 'idx', 'name', 'value', 'units'}]
 
 class Profile:
     

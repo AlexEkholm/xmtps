@@ -497,12 +497,34 @@ Decoder daemon:
 Python tools:
 
 - `xmtps-list2json.py` reads `pro` and `d` lines by the column names in their header, so it
-  handles the new `salnCorr`, `elapsed` and `date/time` columns as well as the aux-temperature
-  format.
+  handles the new `salnCorr` column and the drift-times layout as well as the aux-temperature
+  format. Drift sample times are the `D` line's drift start plus each `d` line's `time` offset.
 - Measured drift sample times are used when a listing has them; otherwise drift times are still
   estimated between the end of descent and the start of ascent.
 - Profiles carry `saln_corr` (dynamically corrected salinity) in the dive JSON and the aggregated
   profile table; it is NaN for floats that don't send it.
+- Mission parameters: every `m` line is kept with its section, index, value and units
+  (`mission.entries` in the dive JSON; the `#` description is not kept);
+  `mission.parameters` keeps non-numeric values
+  instead of failing on them. The `MIS` line also gives `cfgver`, and the firmware version is
+  read correctly from older listings that have a minor index on that line.
+- Engineering data: the Engineering classes in `FloatClasses.py` now define every parameter of
+  every descent, drift, ascent, surface, ice and BIT message version as an explicit attribute
+  named with its units (e.g. `drift.mean_pres_dbar`, `surface.prof_num_bins`,
+  `bit.air_pump_current_max_a`). Each `E0x` line is parsed by its column header and mapped to
+  these attributes through the `ENG_COLUMNS` table; columns not in the table go into
+  `engineering.extra`, and the `e0x` error lines go into `engineering.errors`. Unreported
+  parameters keep NaN, '' or an unset time. The old fixed-position E07–E0A parsing was removed.
+- `xmtps-aggregate-json.py` also writes `<id>_mission.json` (one row per dive with mission
+  parameters), `<id>_engineering_data.json` (one row per dive, `section.attribute` columns,
+  dropping columns no dive reports) and `<id>_engineering_errors.json`.
+- Trajectory plots show the target drift pressure as a thin black line in the background
+  (`DTD<n>` for the current mission phase `MPS`, or `DTD`, from the start of descent to the
+  start of ascent of each dive), and the seafloor at the GPS fixes as a thick black line.
+  Seafloor depth comes from NOAA ETOPO2v2c (nearest 2′ cell), converted to pressure with
+  Saunders (1981). The pressure axis range is unchanged, so a seafloor deeper than the float's
+  data is off the plot. The file is read from `/data1/alamo/meta/bathy/ETOPO2v2c_f4.nc` by
+  default (`-b/--bathymetry FILE`); without it the seafloor line is left out with a warning.
 
 Operations:
 
