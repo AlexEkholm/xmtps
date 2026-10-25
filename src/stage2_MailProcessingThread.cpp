@@ -53,6 +53,12 @@ unsigned int XFloatMailProcessingService::num_threads_;
 
 std::atomic<bool> XFloatMailProcessingService::termination_signaled_(false);
 
+vector<int> XFloatMailProcessingService::processed_msg_uids_;
+
+std::mutex XFloatMailProcessingService::processed_msg_uids_mutex_;
+
+std::atomic<bool> XFloatMailProcessingService::track_processed_msg_uids_(false);
+
 /* Function Definitions: */
 
 /** Pop a mail message out of the mail processing queue.
@@ -98,13 +104,11 @@ bool block) {
  *  global logger object for filtering, etc.
  *
  *  Next, the message processing begins. If the message header is invalid, then the message is
- *  discarded. Otherwise, if the header is valid, the message is save to the SQL database. If
- *  the SBD data is valid, then the message is queued for consumption by the next thread in
- *  the processing pipeline, @ref XFloatTelemetryDecoderService.
- *
- *  Finally, the raw mail file and binary SBD data file are written to the local filesystem.
- *  The SQL database entry for the mail messages is then updated with the paths to the files
- *  on the local filesystem.
+ *  discarded. Otherwise, the raw mail file and binary SBD data file are written to the local
+ *  filesystem and the message, with the paths to those files, is saved to the SQL database.
+ *  Finally, if the SBD data is valid, the message is queued for consumption by the next thread
+ *  in the processing pipeline, @ref XFloatTelemetryDecoderService. A message is therefore only
+ *  decoded once it has been saved.
  *
  *  @param[in]      msg         A shared reference to the mail message to process.
  *
@@ -181,6 +185,13 @@ void XFloatMailProcessingService::ProcessMailMsg(const shared_ptr<XFloatMailMess
 
     linf() << "Processing message...";
 
+    // Write the files.
+    msg->WriteFiles();
+
+    // Persist the mail message to the SQL database, before it is decoded, so that a message is
+    // only decoded once it is saved.
+    msg->SaveObjectToDatabase();
+
     // Check if the message attachment is valid.
     if(!msg->sbd_data_is_valid())
 
@@ -191,15 +202,122 @@ void XFloatMailProcessingService::ProcessMailMsg(const shared_ptr<XFloatMailMess
       // Submit message to telemetry decoder queue.
       XFloatTelemetryDecoderService::MsgDecodingQueuePush(msg);
 
-    // Write the files.
-    msg->WriteFiles();
-
-    // Persist the mail message to the SQL database.
-    msg->SaveObjectToDatabase();
-
   }CATCH_BLOCK("Failed to process mail message!")
 
   return;
+}
+
+/** Process a mail message, unless the SQL server is unavailable.
+ *
+ *  Calls @ref ProcessMailMsg(). If that fails and the SQL server cannot be reached, the message
+ *  has not been saved and must be kept: FALSE is returned and the caller retries the message.
+ *  Any other failure is passed on, as before, and the message is dropped. A message that was
+ *  processed or dropped is recorded as processed (see @ref TakeProcessedMsgUids()).
+ *
+ *  @param[in]      msg         A shared reference to the mail message to process.
+ *
+ *  @throw          util::log::MessageException if processing failed while the SQL server is
+ *                  available.
+ *
+ *  @return         TRUE if the message was processed, FALSE if the SQL server is unavailable.
+ */
+bool XFloatMailProcessingService::TryProcessMailMsg(const shared_ptr<XFloatMailMessage>& msg) const {
+
+  try {
+
+    ProcessMailMsg(msg);
+
+  } catch(...) {
+
+    if(!isSqlServerAvailable())
+      return false;
+
+    MarkMsgProcessed(msg);
+    throw;
+  }
+
+  MarkMsgProcessed(msg);
+  return true;
+}
+
+/** Process a mail message, holding it while the SQL server is unavailable.
+ *
+ *  A message that cannot be saved because the SQL server is unavailable is not dropped: it is
+ *  retried every @ref XFLT_SQL_RETRY_MS milliseconds until it is processed or termination is
+ *  signaled. The start and end of an outage are logged once.
+ *
+ *  @param[in]      msg         A shared reference to the mail message to process.
+ *
+ *  @throw          util::log::MessageException if processing failed while the SQL server is
+ *                  available.
+ *
+ *  @return         TRUE if the message was processed, FALSE if termination was signaled while
+ *                  the SQL server was still unavailable.
+ */
+bool XFloatMailProcessingService::ProcessMailMsgWhenSqlAvailable(
+    const shared_ptr<XFloatMailMessage>& msg) const {
+
+  bool waiting = false;
+
+  while(!TryProcessMailMsg(msg)) {
+
+    if(!waiting) {
+      lwrn() << "SQL server unavailable: holding mail messages and retrying every "
+             << XFLT_SQL_RETRY_MS / 1000 << " s...";
+      waiting = true;
+    }
+
+    CloseSqlConnection();
+    for(unsigned int n = XFLT_SQL_RETRY_MS / XFLT_THREAD_SLEEP_MS; n-- && !termination_signaled_; )
+      sleep(millisec(XFLT_THREAD_SLEEP_MS));
+
+    if(termination_signaled_)
+      return false;
+  }
+
+  if(waiting)
+    lout() << "SQL server available again: mail message processing resumed.";
+
+  return true;
+}
+
+/** Record a mail message as processed, if processed message UIDs are being tracked.
+ *
+ *  @param[in]      msg         A shared reference to the processed mail message.
+ */
+void XFloatMailProcessingService::MarkMsgProcessed(const shared_ptr<XFloatMailMessage>& msg) {
+
+  if(!track_processed_msg_uids_ || !msg)
+    return;
+
+  std::lock_guard<std::mutex> guard(processed_msg_uids_mutex_);
+  processed_msg_uids_.push_back(msg->id_msg_uid());
+}
+
+/** Set whether the UIDs of processed mail messages are recorded.
+ *
+ *  The mail retrieval thread enables this when it moves mail messages out of the inbox, so that
+ *  it moves a message only once it has been processed.
+ *
+ *  @param[in]      track       TRUE to record the UIDs of processed mail messages.
+ */
+void XFloatMailProcessingService::set_track_processed_msg_uids(bool track) {
+  track_processed_msg_uids_ = track;
+}
+
+/** Take the UIDs of the mail messages processed since the last call.
+ *
+ *  @return         The UIDs of the mail messages saved to the SQL database or rejected since the
+ *                  previous call. The list is cleared.
+ */
+vector<int> XFloatMailProcessingService::TakeProcessedMsgUids() {
+
+  vector<int> uids;
+
+  std::lock_guard<std::mutex> guard(processed_msg_uids_mutex_);
+  uids.swap(processed_msg_uids_);
+
+  return uids;
 }
 
 /** Set the termination signaled flag.
@@ -256,19 +374,26 @@ void XFloatMailProcessingService::operator ()() ATTR_NO_EXCEPTIONS {
   ldbg() << "Thread instantiated.";
 
   shared_ptr<XFloatMailMessage> msg;
+  size_t num_unsaved = 0;
+  bool sql_unavailable = false;
 
   // Enter the primary thread loop.
   do { // } while(!termination_signaled_);
 
     try {
 
+      // Drop a message whose processing failed in the previous iteration.
+      msg.reset();
+
       // Pop message from queue. Do not block.
       if(MsgProcessingQueuePop(msg, false)) {
 
         do {
 
-          // Process the message.
-          ProcessMailMsg(msg);
+          // Process the message, holding it while the SQL server is unavailable. On
+          // termination the held message is retried once more below.
+          if(!ProcessMailMsgWhenSqlAvailable(msg))
+            break;
 
           // Reset the message pointer.
           msg.reset();
@@ -289,17 +414,34 @@ void XFloatMailProcessingService::operator ()() ATTR_NO_EXCEPTIONS {
   // Terminate.
   ldbg() << "Termination signal received! Shutting down...";
 
-  // Drain messages queued while this thread was sleeping, so none are lost on shutdown.
-  while(MsgProcessingQueuePop(msg, false)) {
+  /* Drain the held message and the messages still queued, so none are lost on shutdown. Once
+   * the SQL server is found unavailable, the rest are not tried (each try may wait for a
+   * connection timeout); they have not been saved. */
+  do {
 
-    try {
+    if(msg) {
 
-      ProcessMailMsg(msg);
+      if(sql_unavailable)
+        ++num_unsaved;
+      else
+        try {
 
-    }CATCH_NOTHROW("Exception caught while draining mail processing queue!")
+          if(!TryProcessMailMsg(msg)) {
+            sql_unavailable = true;
+            ++num_unsaved;
+          }
+
+        }CATCH_NOTHROW("Exception caught while draining mail processing queue!")
+    }
 
     msg.reset();
-  }
+
+  } while(MsgProcessingQueuePop(msg, false));
+
+  if(num_unsaved)
+    lwrn() << num_unsaved << " mail message(s) not processed because the SQL server is "
+           << "unavailable. Messages still on the mail server are fetched again at the next "
+           << "start.";
 
   CloseSqlConnection();
 

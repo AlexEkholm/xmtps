@@ -108,6 +108,10 @@
 /** XFloat service threads' idle sleep time, in milliseconds. */
 #define XFLT_THREAD_SLEEP_MS                    (100)
 
+/** Interval at which a mail message is retried while the SQL server is unavailable, in
+ *  milliseconds. */
+#define XFLT_SQL_RETRY_MS                       (10000)
+
 /** The interval at which the daemon tread will flush the global logger, in seconds.
  *
  */

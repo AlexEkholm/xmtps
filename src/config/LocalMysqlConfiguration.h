@@ -96,6 +96,8 @@ public:
 
     static shared_ptr<sql::ResultSet> executeQuery(const string& query);
 
+    static bool isSqlServerAvailable();
+
     static int executeUpdate(const string& update);
 
     static shared_ptr<sql::ResultSet> executeSelectQuery(const string& what,

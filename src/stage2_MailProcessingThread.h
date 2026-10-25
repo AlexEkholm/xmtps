@@ -36,6 +36,9 @@
 
 /* Includes: */
 
+// std
+#include <mutex>
+
 // local
 #include "stage3_TelemetryDecoderThread.h"
 
@@ -50,10 +53,11 @@ namespace xfloat {
  *  This class defines the operation of the mail processing thread(s), which are the second stage
  *  in the processing pipeline. The mail processing thread(s) consumes messages that were fetched
  *  from the mail server in the previous stage of the processing pipeline, @ref
- *  XFloatMailRetrievalService. The messages are validated, saved to the SQL database, queued for
+ *  XFloatMailRetrievalService. The messages are validated, their file representations are written
+ *  to the local file system, they are saved to the SQL database, and finally they are queued for
  *  consumption in the next stage of the processing pipeline, the telemetry decoder thread(s),
- *  @ref XFloatTelemetryDecoderService, and finally their file representations are written to the
- *  local file system.
+ *  @ref XFloatTelemetryDecoderService. While the SQL server is unavailable a message is held and
+ *  retried, so that no message is dropped because it could not be saved.
  *
  *  Zero or more instance of this thread may be instantiated after application initialization,
  *  depending on the configuration options. Each thread enters a primary loop in which messages
@@ -132,9 +136,28 @@ class XFloatMailProcessingService:
 
     static void set_termination_signaled(bool termination_signaled = true);
 
+    static void MarkMsgProcessed(const shared_ptr<XFloatMailMessage>& msg);
+
+    /* Private Static Data Members: */
+
+    /** Mail message UIDs processed (saved or rejected) since the last
+     *  @ref TakeProcessedMsgUids() call; recorded only while @ref track_processed_msg_uids_. */
+    static vector<int> processed_msg_uids_;
+
+    /** Mutex for @ref processed_msg_uids_. */
+    static std::mutex processed_msg_uids_mutex_;
+
+    /** Whether to record the UIDs of processed mail messages (set by the mail retrieval
+     *  thread when it moves processed messages out of the inbox). */
+    static std::atomic<bool> track_processed_msg_uids_;
+
   public:
 
     /* Public Static Member Functions: */
+
+    static void set_track_processed_msg_uids(bool track);
+
+    static vector<int> TakeProcessedMsgUids();
 
     static bool MsgProcessingQueuePush(const shared_ptr<XFloatMailMessage>& msg, bool block = true);
 
@@ -153,6 +176,10 @@ class XFloatMailProcessingService:
     /* Private Member Functions: */
 
     void ProcessMailMsg(const shared_ptr<XFloatMailMessage>& msg) const;
+
+    bool TryProcessMailMsg(const shared_ptr<XFloatMailMessage>& msg) const;
+
+    bool ProcessMailMsgWhenSqlAvailable(const shared_ptr<XFloatMailMessage>& msg) const;
 
   public:
 

@@ -71,6 +71,10 @@ unsigned int XFloatMailRetrievalService::message_start_index_(1);
 
 bool XFloatMailRetrievalService::move_mail_messages_;
 
+map<int, pair<vmime::net::message::uid, string> > XFloatMailRetrievalService::pending_moves_;
+
+bool XFloatMailRetrievalService::sql_server_unavailable_(false);
+
 vector<unsigned int> XFloatMailRetrievalService::reprocess_by_inst_ids_;
 
 unsigned int XFloatMailRetrievalService::sleep_seconds_if_no_new_msgs_;
@@ -391,7 +395,6 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromFileSystem() {
 size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
 
     using vmime::net::folder;
-    using vmime::net::folderAttributes;
     using vmime::net::message;
     using vmime::net::messageSet;
 
@@ -403,8 +406,6 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
                     | fetchAttributes::CONTENT_INFO | fetchAttributes::STRUCTURE
                     | fetchAttributes::UID);
 
-    static vmime::shared_ptr<folder> folder_dest;
-    static string folder_dest_name;
     static vmime::shared_ptr<folder> folder_inbox;
     static vmime::shared_ptr<message> msg;
     static size_t msg_count;
@@ -414,23 +415,11 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
     msgs.reserve(max_num_msgs_to_fetch_+1);
 
     // Initialize variables.
-    folder_dest_name.clear();
     msg_count = 0;
     msgs.resize(0);
-    folder_dest.reset();
     folder_inbox.reset();
     msg.reset();
 
-
-    /* Message-destination-folder to UID-vector map.
-     *
-     * This map is used to keep track of the destination folder(s) on the mailserver to which
-     * the messages will be move after having been fetched.
-     */
-    map<string, vector<message::uid> > folder2uid_map;
-
-    bool is_moved;
-    size_t num_not_moved = 0;
 
     try {
 
@@ -439,6 +428,10 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
         // Open the inbox folder.
         if(!(folder_inbox = OpenMailInboxFolder()))
             EXC_THROW("Failed to open mail inbox folder!");
+
+        // Move the messages fetched earlier that have been processed out of the inbox.
+        if(move_mail_messages_)
+            MoveProcessedMessages(folder_inbox);
 
         // Check the message start index.
         if(message_start_index_ < 1)
@@ -483,107 +476,37 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
         lout() << "Fetched " << msgs.size() << " new message(s) from mail server...";
 
         // Iterate over fetched messages.
-        for(auto it = msgs.begin(); it != msgs.end(); ++it) {
-
-            is_moved = false;
+        for(auto it = msgs.begin(); it != msgs.end(); ++it)
 
             try {
 
+                xmsg = std::make_shared<XFloatMailMessage>(msg = *it);
+
+                /* Register the message for moving before it is queued: it is moved out of the
+                 * inbox only once the mail processing thread has processed it (see
+                 * MoveProcessedMessages()), so a message whose processing is interrupted, e.g.
+                 * by an SQL server outage, stays in the inbox. */
+                if(move_mail_messages_)
+                    pending_moves_[xmsg->id_msg_uid()] = make_pair(
+                            msg->getUID(),
+                            util::date::DateUtils::GenerateIso8601String(
+                                    xmsg->msg_header_datetime(),
+                                    false).substr(0, 6));
+
                 // Push message to the processing queue.
-                XFloatMailProcessingService::MsgProcessingQueuePush(
-                        xmsg = std::make_shared<XFloatMailMessage>(msg = *it),
-                        true);
-
-                if(move_mail_messages_) {
-
-                    // Determine the appropriate destination folder and add UID to vector.
-                    folder2uid_map[util::date::DateUtils::GenerateIso8601String(
-                            xmsg->msg_header_datetime(),
-                            false).substr(0, 6)].push_back(msg->getUID());
-                    is_moved = true;
-                }
+                XFloatMailProcessingService::MsgProcessingQueuePush(xmsg, true);
 
             }CATCH_NOTHROW("Failed to process fetched message!")
-
-            /* Skip a failed message rather than aborting the batch, which would cause the whole
-             * batch to be re-fetched and re-queued forever. */
-            if(!is_moved)
-                ++num_not_moved;
-        }
 
         // Reset pointers.
         msg.reset();
         xmsg.reset();
 
-        if(!move_mail_messages_) {
-
-            // Increment the messages start index.
-            message_start_index_ = std::min(
-                    message_start_index_ + max_num_msgs_to_fetch_,
-                    msg_count + 1);
-
-            // Reset pointer.
-            folder_inbox.reset();
-
-            // Return number of messages fetched.
-            return msgs.size();
-
-        }
-
-        // Move message(s) to the appropriate folder(s).
-        for(auto it = folder2uid_map.begin(); it != folder2uid_map.end(); ++it)
-
-            try {
-
-                // Get the destination folder.
-                if(!(folder_dest = folder_inbox->getFolder(
-                        folder::path::component(folder_dest_name = it->first))))
-
-                    EXC_THROW("Failed to get destination folder: " + folder_dest_name);
-
-                // Check if the destination folder exists.
-                if(!folder_dest->exists())
-
-                    try {
-
-                        ldbg() << "Creating folder: " << folder_dest_name;
-
-                        // Create the folder.
-                        folder_dest->create(folderAttributes());
-
-                    }CATCH_BLOCK("Failed to create mail folder: " + folder_dest_name)
-
-
-                try {
-
-                    // Copy the message(s) to the destination folder.
-                    ldbg() << "Copying "
-                              << it->second.size()
-                              << " message(s) to folder: "
-                              << folder_dest_name;
-                    folder_inbox->copyMessages(
-                            folder_dest->getFullPath(),
-                            messageSet::byUID(it->second));
-
-                }CATCH_BLOCK("Failed to copy message(s) to folder: " + folder_dest_name)
-
-                try {
-
-                    // Delete the message(s) from the source folder.
-                    ldbg() << "Deleting " << it->second.size() << " message(s) from inbox";
-                    folder_inbox->deleteMessages(messageSet::byUID(it->second));
-                    folder_inbox->expunge();
-
-                }CATCH_BLOCK("Failed to delete message(s) from the source folder!")
-
-                // Reset pointer.
-                folder_dest.reset();
-
-            }CATCH_BLOCK("Failed to move mail message(s)!")
-
-        /* Messages that could not be moved remain at the start of the fetched range after the
-         * expunge, so step past them to avoid re-fetching them on every iteration. */
-        message_start_index_ += num_not_moved;
+        /* Step past the fetched messages: they stay in the inbox until they are moved, and
+         * MoveProcessedMessages() lowers the index by the number of messages it removes. */
+        message_start_index_ = std::min(
+                message_start_index_ + max_num_msgs_to_fetch_,
+                msg_count + 1);
 
         // Reset pointer.
         folder_inbox.reset();
@@ -595,6 +518,96 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
 
     return 0;
 
+}
+
+/** Move the fetched mail messages that have been processed out of the inbox.
+ *
+ *  A fetched message is moved only once the mail processing thread has processed it, i.e. saved
+ *  it to the SQL database or rejected it (see XFloatMailProcessingService::TakeProcessedMsgUids()),
+ *  so a message whose processing is interrupted, e.g. by an SQL server outage or a restart, stays
+ *  in the inbox and is fetched again. Each message is copied to the folder named after the year
+ *  and month of its header date, then deleted from the inbox, and the inbox is expunged.
+ *
+ *  The moved messages were fetched earlier, so they are all below @ref message_start_index_,
+ *  which is lowered by the number of messages removed from the inbox.
+ *
+ *  @param[in]      folder_inbox    The open inbox folder.
+ */
+void XFloatMailRetrievalService::MoveProcessedMessages(
+        const vmime::shared_ptr<vmime::net::folder>& folder_inbox) {
+
+    using vmime::net::folder;
+    using vmime::net::folderAttributes;
+    using vmime::net::message;
+    using vmime::net::messageSet;
+
+    // Collect the processed messages by destination folder.
+    map<string, vector<message::uid> > folder2uid_map;
+    for(int uid : XFloatMailProcessingService::TakeProcessedMsgUids()) {
+
+        auto it = pending_moves_.find(uid);
+        if(it == pending_moves_.end())
+            continue;
+
+        folder2uid_map[it->second.second].push_back(it->second.first);
+        pending_moves_.erase(it);
+    }
+
+    // Move message(s) to the appropriate folder(s).
+    for(auto it = folder2uid_map.begin(); it != folder2uid_map.end(); ++it)
+
+        try {
+
+            // Get the destination folder.
+            vmime::shared_ptr<folder> folder_dest(
+                    folder_inbox->getFolder(folder::path::component(it->first)));
+            if(!folder_dest)
+                EXC_THROW("Failed to get destination folder: " + it->first);
+
+            // Check if the destination folder exists.
+            if(!folder_dest->exists()) {
+
+                ldbg() << "Creating folder: " << it->first;
+                folder_dest->create(folderAttributes());
+            }
+
+            // Copy the message(s) to the destination folder.
+            ldbg() << "Copying " << it->second.size() << " message(s) to folder: " << it->first;
+            folder_inbox->copyMessages(folder_dest->getFullPath(), messageSet::byUID(it->second));
+
+            // Delete the message(s) from the inbox.
+            ldbg() << "Deleting " << it->second.size() << " message(s) from inbox";
+            folder_inbox->deleteMessages(messageSet::byUID(it->second));
+            folder_inbox->expunge();
+
+            // The removed messages were below the fetch index.
+            message_start_index_ = (message_start_index_ > it->second.size())
+                    ? message_start_index_ - it->second.size()
+                    : 1;
+
+        }CATCH_NOTHROW("Failed to move mail message(s) to folder: " + it->first)
+}
+
+/** Check that the SQL server is available before fetching mail messages.
+ *
+ *  While the SQL server is unavailable, no mail messages are fetched, so they stay on the mail
+ *  server (or in the input directory) instead of waiting in memory until they can be saved. The
+ *  start and end of an outage are logged once.
+ *
+ *  @return         TRUE if the SQL server is available.
+ */
+bool XFloatMailRetrievalService::SqlServerAvailableForFetching() {
+
+    bool available = isSqlServerAvailable();
+
+    if(!available && !sql_server_unavailable_)
+        lwrn() << "SQL server unavailable: not fetching mail messages until it is available.";
+    else if(available && sql_server_unavailable_)
+        lout() << "SQL server available again: fetching mail messages.";
+
+    sql_server_unavailable_ = !available;
+
+    return available;
 }
 
 /** Generate the mail server URL string.
@@ -755,9 +768,10 @@ XFloatMailRetrievalService::~XFloatMailRetrievalService() {
  *  messages from the mail server, by message index starting at @ref message_start_index_. In
  *  @c MAIL_FETCH_FILESYSTEM mode, @ref FetchMailMessagesFromFileSystem() reads RAW mail files
  *  from @c mail_file_input_directory_. The fetched messages are queued to be processed by the
- *  next thread in the pipeline, @ref XFloatMailProcessingService. If no new messages are fetched,
- *  then the connections to the mail server and SQL database are closed and the thread sleeps
- *  for @ref sleep_seconds_if_no_new_msgs_ seconds.
+ *  next thread in the pipeline, @ref XFloatMailProcessingService. No messages are fetched while
+ *  the SQL server is unavailable (@ref SqlServerAvailableForFetching()). If no new messages are
+ *  fetched, then the connections to the mail server and SQL database are closed and the thread
+ *  sleeps for @ref sleep_seconds_if_no_new_msgs_ seconds.
  *
  *  The primary loop terminates once termination is signaled (i.e. @ref termination_signaled_
  *  is TRUE) and the thread will disconnect from the mail server and then die. If termination
@@ -781,6 +795,10 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
     BOOST_LOG_SCOPED_THREAD_ATTR("ThreadName", attr::constant<string>("mail-fetch"));
 
     ldbg() << "Thread started.";
+
+    // When moving messages out of the inbox, move each only once it has been processed.
+    XFloatMailProcessingService::set_track_processed_msg_uids(
+            move_mail_messages_ && mail_fetch_mode_ == MAIL_FETCH_SERVER);
 
     // Check if any data needs to be reprocessed.
     if(is_reprocess_all_) {
@@ -880,13 +898,14 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
         while(!termination_signaled_)
           try {
 
-              // Fetch new messages.
+              // Fetch new messages, unless the SQL server is unavailable.
               num_messages_fetched = 0;
-              try {
+              if(SqlServerAvailableForFetching())
+                  try {
 
-                  num_messages_fetched = FetchMailMessagesFromServer();
+                      num_messages_fetched = FetchMailMessagesFromServer();
 
-              }CATCH_NOTHROW("Failed to fetch messages from mail server!")
+                  }CATCH_NOTHROW("Failed to fetch messages from mail server!")
 
               // Check if any messages were fetched.
               if(num_messages_fetched)
@@ -923,13 +942,14 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
         while(!termination_signaled_)
           try {
 
-              // Fetch new messages.
+              // Fetch new messages, unless the SQL server is unavailable.
               num_messages_fetched = 0;
-              try {
+              if(SqlServerAvailableForFetching())
+                  try {
 
-                 num_messages_fetched = FetchMailMessagesFromFileSystem();
+                     num_messages_fetched = FetchMailMessagesFromFileSystem();
 
-              }CATCH_NOTHROW("Failed to fetch messages from mail server!")
+                  }CATCH_NOTHROW("Failed to fetch messages from mail server!")
 
               // Check if any messages were fetched.
               if(num_messages_fetched)

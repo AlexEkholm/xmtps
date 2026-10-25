@@ -182,6 +182,35 @@ shared_ptr<sql::ResultSet> LocalMysqlConfiguration::executeQuery(const std::stri
     return MysqlUtils::ExecuteQuery(getSqlConnection(), query);
 }
 
+/** Check whether the SQL server can be reached.
+ *
+ *  Runs "SELECT 1" on this thread's SQL connection. If that fails, the connection is closed and
+ *  the query is tried once more on a new connection, because a connection that was open while
+ *  the server went down stays unusable.
+ *
+ *  @return         TRUE if the SQL server answered the query, otherwise FALSE.
+ */
+bool LocalMysqlConfiguration::isSqlServerAvailable() {
+
+    for(int attempt = 0; attempt < 2; ++attempt)
+        try {
+
+            shared_ptr<sql::ResultSet> res(executeQuery("SELECT 1;"));
+            if(res && res->next())
+                return true;
+
+        } catch(...) {
+
+            try {
+                CloseSqlConnection();
+            } catch(...) {
+                /* Do nothing. */
+            }
+        }
+
+    return false;
+}
+
 /** Execute an SQL update and return the status code.
  *
  *  @param[in]      update      The SQL update to execute. This must be a well-formatted SQL update

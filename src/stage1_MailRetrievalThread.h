@@ -256,10 +256,19 @@ class XFloatMailRetrievalService:
     /** Move mail messages flag.
      *
      *  If set, then the mail messages will be moved out of the inbox folder after being
-     *  processed.
+     *  processed, i.e. once the mail processing thread has saved them to the SQL database (or
+     *  rejected them). See @ref MoveProcessedMessages().
      *
      */
     static bool move_mail_messages_;
+
+    /** Fetched mail messages waiting to be moved out of the inbox once processed: message UID
+     *  (as in XFloatMailMessage::id_msg_uid()) to the IMAP UID and the destination folder.
+     */
+    static map<int, pair<vmime::net::message::uid, string> > pending_moves_;
+
+    /** Whether the SQL server was found unavailable at the last check before fetching. */
+    static bool sql_server_unavailable_;
 
     /** A vector containing the unique instrument identifier of messages to reprocess from the SQL
      *  database.
@@ -355,7 +364,11 @@ class XFloatMailRetrievalService:
 
     static vector<path> ListRawMailFiles();
 
+    static void MoveProcessedMessages(const vmime::shared_ptr<vmime::net::folder>& folder_inbox);
+
     static void set_termination_signaled(bool termination_signaled = true);
+
+    static bool SqlServerAvailableForFetching();
 
 
   public:

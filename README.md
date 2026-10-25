@@ -149,7 +149,7 @@ General:
 | `mail.password` | none | Mail account password. |
 | `mail.folder` | empty (server default) | Folder to read messages from, e.g. `INBOX`. |
 | `mail.fetchMode` | `0` | `0` fetch from the mail server; `1` read RAW mail files from `dir.mail` (renamed to `.err` if they can't be parsed). |
-| `mail.moveMessages` | `0` | After processing, move server messages to the folder `INBOX.<YYYYMM>` for their header date. |
+| `mail.moveMessages` | `0` | Move server messages to the folder `INBOX.<YYYYMM>` for their header date once they are processed (saved to the SQL database or rejected); a message whose processing is interrupted stays in the inbox. |
 | `mail.xDlyS` | `60` | Seconds to wait before checking again when no new messages are found. |
 | `mail.validSenderRegex` | `(sbdservice@sbd.iridium.com\|service@sbd.pac.disa.mil)` | Senders whose messages are accepted. |
 | `mail.validSubjectRegex` | `SBD Msg From Unit: (\d+)` | Accepted subjects; the captured number is the IMEI. |
@@ -462,8 +462,16 @@ Decoder daemon:
 
 - Startup: the active-float query selects only `DISTINCT id_instrument` instead of whole
   `XFloatMail` rows (with their SBD data); it took 88 s instead of 248 s at the 2026-10-25
-  restart. The column it filters on (`iridium_position_datetime`) has no index, so it is still a
-  table scan.
+  restart, still as a table scan. `XFloatMail.iridium_position_datetime` has since been indexed,
+  which lets the query read only the recent rows.
+- Mail messages are no longer lost when the SQL server is unavailable. The mail processing
+  thread writes a message's files and saves it before queueing it for decoding; if that fails
+  and the SQL server cannot be reached (`SELECT 1`), the message is held and retried every
+  10 s instead of being dropped (logged once when the outage starts and ends). The mail
+  retrieval thread does not fetch while the SQL server is unavailable, so mail stays on the
+  server, and with `mail.moveMessages` a message is moved out of the inbox only after it has
+  been processed, not when it is fetched. Messages still unsaved at shutdown stay on the mail
+  server and are fetched again at the next start.
 - `XMfaMissionCfg::DecodeXMsgData` (6,504 lines) and `GenerateListingString` (5,584 lines) are
   split into one member function per firmware layout (`DecodeXMsgDataFw<version>`,
   `GenerateListingStringFw<version>`, plus `…Unsupported` and `GenerateListingStringIncomplete`);
