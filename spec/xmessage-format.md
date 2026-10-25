@@ -86,7 +86,7 @@ The MRV documents and the SOLO-II PDF are in the Float Group's `mrv/doc` folder.
 | 0xD0–0xD1 | Mission configuration (binary, two parts) | C.1 | yes (117 firmware versions) | `MIS`, `m`, `mis` |
 | 0xD2–0xD7 | Mission configuration, further parts / SOLO-II ASCII dump | C.1 | no | — |
 | 0xDC | Dynamically corrected profile salinity | A.4.2 | yes | `salnCorr` column of `pro` |
-| 0xDE | Mission command echo | C.2 | checked, not decoded | — |
+| 0xDE | Mission command echo | C.2 | yes | `CMD` |
 | 0xE0 | Engineering, diagnostic dive (SOLO-II) | B.1.1 | validated only | — |
 | 0xE2 | Engineering, normal dive (SOLO-II) | B.1.2 | validated only | — |
 | 0xE3 | Engineering, mission abort (SOLO-II) | B.1.3 | validated only | — |
@@ -179,11 +179,14 @@ rise (0x5n), pump (0x6n), surface time series (0x8n) and valve (0xEB); Argo data
 
 **Checksum.** `sum = (Σ bytes from 'X' (offset 0) through the byte before '$') mod 256`. It is
 written as two characters, high nibble first, each nibble + 0x30. So the characters are in the
-range `0`–`?` (`0x3A`–`0x3F` = `:;<=>?` stand for nibble values 10–15) [S]. Verified on all 27
-production packets examined [O].
+range `0`–`?` (`0x3A`–`0x3F` = `:;<=>?` stand for nibble values 10–15) [S]. All 1,351,052 X
+packets in the production RAW files (all floats and firmware, 2014–2026) have a correct checksum
+[O].
 
-> **Decoder note [D]:** the checksum is **not verified** (`@todo` in `XFloatDiveData::DecodeXMsgData`).
-> The blob parser reads offsets 8 … len−5 and ignores the last 4 bytes.
+> **Decoder note [D]:** since build 3310 the decoder verifies the checksum
+> (`XFloatDiveData::DecodeXMsgData`). A packet whose checksum does not match is discarded and
+> logged ("X-Message checksum mismatch"); a packet without the `$cc>` trailer is decoded with a
+> warning. The blob parser reads offsets 8 … len−5.
 
 #### A.1.3 Blob structure: `ID jj <data> ;`
 
@@ -1043,7 +1046,7 @@ The gains/offsets and the X version are also saved to the float record in the da
     and 6 (always 0) and byte 5 (always 1) are unknown.
 13. **Legacy first-difference decoder:** it drops a final sub-block of 1–2 values. The SOLO-II
     document's 22-byte sub-block size should be 27.
-14. **Checksum:** documented and verified on production data, but the decoder does not check it.
+14. **Checksum:** documented and verified on production data. *(The decoder checks it since build 3310.)*
 
 ## Part B — Engineering messages
 
@@ -2425,7 +2428,7 @@ This part covers these blob types:
 | ID | Name | Decoder class | Status in the XMTPS decoder |
 |---|---|---|---|
 | 0xD0-0xD7 | Mission configuration | `XMfaMissionCfg` (`XAlamoMissionConfiguration` is the unused older version) | D0 and D1 are decoded for 117 firmware versions. D2-D7 are rejected. SOLO-II ASCII dumps are not decoded. |
-| 0xDE | Mission command echo | `XMissionCmdEcho` | Checked, not decoded, nothing listed. |
+| 0xDE | Mission command echo | `XMissionCmdEcho` | Decoded since build 3310; one `CMD` listing line per command. |
 | 0xC1, 0xC3 | Ocean surface waves | `XWave`, `XWaveSpectralSample`, `XWaveRawSample` | Spectral versions 0-2 are decoded. The raw IMU format is not. |
 | 0xCA | Marginal-ice-zone (MIZ) acoustics | `XAcousticPosition` | Subtypes 3 and 5 are decoded. Subtypes 1 and 2 are seen in production but ignored. |
 
@@ -2983,18 +2986,45 @@ After it receives a ground-station command upload, the float sends back the comm
 
 XF2.4 defines only the ID, size and terminator.
 
-Production (float 9213, 10.12.0.32) [inferred]. The echo is the uploaded command list with each command ending in `;`, followed by `MIC 1`, then 8 NUL bytes, then the terminator:
+Production [inferred, from all 2026 echoes on argus]. The echo is the uploaded command text exactly as sent: the commands separated by `;`, ending with `MIC 1` (which the upload itself ends with). Besides the text, the blob carries 8-9 bytes of undocumented binary data. Its position varies:
 
-```
-DE 00 37 | "dft 0 100;dft 1 100;dft 2 100;duc 100;MIC 1" 00 00 00 00 00 00 00 00 | 3B
-```
+- **After the text:** seen in most echoes. The bytes are NULs, but the last one is sometimes not (0x01, 0x08 and 0x80 have been seen).
 
-The commands use the mission-parameter mnemonics in lower case, with a phase index where the parameter has one (`dft 0 100` sets `DFT0` to 100). What `MIC 1` means and what the 8 trailing zero bytes are for is not documented. Because `;` also appears inside the text, the end of the blob must be found from `jj`, not by looking for the first `;`.
+  ```
+  DE 00 37 | "dft 0 100;dft 1 100;dft 2 100;duc 100;MIC 1" | 00 00 00 00 00 00 00 00 | 3B
+  ```
+
+- **Before the text:** all NULs. Seen in the dive 0 echoes of the Lowell ALAMOs (10.12.1) and of 11190 (10.12.0.1).
+
+  ```
+  DE 00 55 | 00 00 00 00 00 00 00 00 00 | "psi 1800000;pdt 1800;...;MIC 1" | 3B
+  ```
+
+The commands use the mission-parameter mnemonics, with a phase index where the parameter has one (`dft 0 100` sets `DFT0` to 100). They are echoed in whatever case they were uploaded in. A long upload may come back as two consecutive echo blobs in the same session. When several uploads are queued, each one is echoed separately. Because `;` also appears inside the text, the end of the blob must be found from `jj`, not by looking for the first `;`.
+
+**Verification against uploads (2026-10-25).** The uploads sent with `upload-alamo-cmd` since 2026-01-01 (`/data1/alamo/data/sbd/outgoing`) were compared with the echoes in the RAW files:
+
+- 261 uploads were echoed back exactly, some in two pieces.
+- 23 were not echoed, all to floats that have not called in since.
+- A few were not echoed although the float called in. One, to 9213 on 2026-09-28, verifiably did not take effect: its mission parameters still show the old values.
+- A handful of echoes match no recorded upload (`ppe`, `wst` commands). They were presumably sent another way.
 
 #### Decoding notes [decoder]
 
-- `XMissionCmdEcho` calls `CheckXMsgData(data, 0xDE, -1)`. That checks the ID, that `jj` (lower 12 bits) is at least 4 and no more than the data received, and that the terminator is at `jj - 1`. A decode is still a TODO.
-- In the listing, the section banner "Ground Station Upload Command Echo-Back Messages" is printed whenever a dive has at least one 0xDE blob. Each echo then adds an empty line: the text itself is not listed.
+- `XMissionCmdEcho` calls `CheckXMsgData(data, 0xDE, -1)`. That checks the ID, that `jj` (lower 12 bits) is at least 4 and no more than the data received, and that the terminator is at `jj - 1`.
+- Since build 3310 the text is decoded. Leading NULs are skipped, the text ends at the next NUL, and it is split at `;` into commands. Blank entries are dropped, surrounding spaces are trimmed, and other non-printable bytes are kept as `\xNN`. The trailing `MIC 1` is listed as a command like the others. (Before build 3310 the echo was checked but not decoded, and the listing section was printed empty.)
+- Listing: under the section banner "Ground Station Upload Command Echo-Back Messages" (printed whenever a dive has at least one 0xDE blob), one line per command:
+
+```
+#      SN dive eidx cidx  command
+CMD  9213    3    0    0  dft 0 100
+CMD  9213    3    0    1  dft 1 100
+CMD  9213    3    0    2  dft 2 100
+CMD  9213    3    0    3  duc 100
+CMD  9213    3    0    4  MIC 1
+```
+
+  `eidx` numbers the dive's echo-back messages, and `cidx` the commands within one.
 
 ---
 

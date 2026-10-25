@@ -394,6 +394,17 @@ public:
 
                         break;
 
+                    case x::XMSG_TYPE_ID_MISS_CONF0:
+                    case x::XMSG_TYPE_ID_MISS_CONF1:
+
+                        /* The mission configuration gives the sensor type, which decides whether
+                         * the offset is computed; it may arrive after the surface data. */
+
+                        // Compute the pressure offset.
+                        xdive->ComputePressureOffsetFromSurfaceTimeSeries(3);
+
+                        break;
+
                     case x::XMSG_TYPE_ID_GPS_ENDOFDIVE:
 
                         /* Do type-specific pre-processing for GPS (end-of-dive) messages: */

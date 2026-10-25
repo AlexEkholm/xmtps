@@ -292,6 +292,7 @@ XFloat::XFloat(int whoi, long long imei, int wmo, int dac) :
         Iridium(whoi, imei, wmo, dac),
         argo_instrument_type_(XARGO_INSRUMENT_TYPE_UNKNOWN),
         fw_version_(XMSG_BAD_U32),
+        sensor_type_(XMSG_BAD_U08),
         gain_pressure_(XFLT_GAIN_INVALID),
         gain_pressure_surface_(XFLT_GAIN_INVALID),
         gain_salinity_(XFLT_GAIN_INVALID),
@@ -338,6 +339,7 @@ XFloat::XFloat() :
         Iridium(),
         argo_instrument_type_(XARGO_INSRUMENT_TYPE_UNKNOWN),
         fw_version_(XMSG_BAD_U32),
+        sensor_type_(XMSG_BAD_U08),
         gain_pressure_(XFLT_GAIN_INVALID),
         gain_pressure_surface_(XFLT_GAIN_INVALID),
         gain_salinity_(XFLT_GAIN_INVALID),
@@ -2028,9 +2030,24 @@ void XFloatDiveData::DecodeXMsgData(
       EXC_THROW(os.str());
     }
 
-    /** @todo   Verify the X-Message checksum value  during the decoding of the X-Message
-     *          data.
-     */
+    /* Verify the checksum: the packet ends in '$', two checksum characters and '>'. The checksum
+     * is the 8-bit sum of all bytes from the leading 'X' to the byte before '$', sent as two
+     * characters, high nibble first, each nibble + 0x30. */
+    {
+      const size_t n = data.size();
+      uint8_t sum = 0;
+      for(size_t i = 0; i < n - 4; ++i)
+        sum += data[i];
+      if(data[n - 4] != '$' || data[n - 1] != '>') {
+        lwrn() << "X-Message packet has no '$cc>' trailer; checksum not verified.";
+      } else if(data[n - 3] != 0x30 + (sum >> 4) || data[n - 2] != 0x30 + (sum & 0x0F)) {
+        ostringstream os;
+        os << "X-Message checksum mismatch: received '" << (char) data[n - 3] << (char) data[n - 2]
+           << "', computed '" << (char) (0x30 + (sum >> 4)) << (char) (0x30 + (sum & 0x0F))
+           << "'! Packet discarded.";
+        EXC_THROW(os.str());
+      }
+    }
 
     // Iterate over message bytes.
     for(size_t i = 0; i < data.size() - 4 /* Ignoring checksum. */; ++i) {
@@ -2509,6 +2526,10 @@ void XFloatDiveData::DecodeXMsgData(
                   // Update firmware version.
                   parent_instrument()->set_fw_version(xmsg_mission_cfg_.fw_version());
                 }
+
+                // Remember the sensor type for dives without a mission configuration message.
+                if(xmsg_mission_cfg_.sensor_type_is_known())
+                  parent_instrument()->set_sensor_type(xmsg_mission_cfg_.sensor_type());
 
                 set_listing_file_updated(false);
 
@@ -3218,14 +3239,17 @@ string XFloatDiveData::GenerateListingString() const {
       try {
 
         XMSG_HEADER2("Ground Station Upload Command Echo-Back Messages");
+        os << "#      SN dive eidx cidx  command" << endl;
+        int eidx = 0;
         for_each(
             xmsg_mission_cmd_echoback_.begin(),
             xmsg_mission_cmd_echoback_.end(),
             [&](const shared_ptr<XMissionCmdEcho>& msg) {
 
-              if(msg) os << msg->GenerateListingString() << endl;
+              if(msg) os << msg->GenerateListingString(eidx++);
 
             });
+        os << endl;
 
       }CATCH_NOTHROW("Failed to generate listing entry for ground station upload command "
           "echo-back message!")
@@ -3520,16 +3544,18 @@ void XFloatDiveData::GetGainsAndOffsets(
  *  The offset is the mean of the minimum surface pressures, after outliers are discarded (see
  *  @ref UpdateDerivedSurfaceDataFields()), of this dive and up to @p max_num_dives preceding dives,
  *  counting only dives whose surface pressure is valid and that have at least @p min_num_samples
- *  surface pressure samples. Each counted dive counts equally, regardless of its number of samples. The result is stored in the pressure offset fields (@c pres_offs,
+ *  surface pressure samples. Each counted dive counts equally, regardless of its number of
+ *  samples. The result is stored in the pressure offset fields (@c pres_offs,
  *  @c pres_offs_num_dives, @c pres_offs_num_samples, @c pres_offs_valid), which the listing and
  *  PHY output use for the pressure offset correction.
  *
  *  The offset is only computed for floats whose CTD needs the correction. The sensor type comes
- *  from this dive's mission configuration message when it gives one: RBR sensors are corrected,
- *  SBE sensors (which correct pressure onboard) are not. Otherwise the WMO instrument type in the
- *  float's .meta file decides: 866, 867 and 875 are corrected; SBE sensors (868, 873, 876) and
- *  unknown types are not, and an unexpected type is logged as a warning. The offset is also left
- *  invalid if no dive has valid surface pressure data.
+ *  from this dive's mission configuration message when it gives one, else from the float's last
+ *  mission configuration message that did (floats need not send one every dive): RBR sensors are
+ *  corrected, SBE sensors (which correct pressure onboard) are not. Otherwise the WMO instrument
+ *  type in the float's .meta file decides: 866, 867 and 875 are corrected; SBE sensors (868, 873,
+ *  876) and unknown types are not, and an unexpected type is logged as a warning. The offset is
+ *  also left invalid if no dive has valid surface pressure data.
  *
  *  @note       Preceding dives are loaded with @ref XFloat::GetDiveData(), which may read them from
  *              the database.
@@ -3575,13 +3601,20 @@ float XFloatDiveData::ComputePressureOffsetFromSurfaceTimeSeries(unsigned int ma
       return 0;
     }
 
-    // Check the sensor type in the mission configuration message (0: RBR, 1: SBE).
+    /* Check the sensor type (0: RBR, 1: SBE) in this dive's mission configuration message or,
+     * for floats that do not send one every dive, in the float's last one that gave it. */
     bool sensor_type_known;
     unsigned int sensor_type;
     {
       lock_guard<recursive_mutex> guard(mutex_);  // Get an exclusive lock.
       sensor_type_known = xmsg_mission_cfg_.sensor_type_is_known();
       sensor_type = xmsg_mission_cfg_.sensor_type();
+    }
+    if(!sensor_type_known && (xfloat = parent_instrument())
+        && (xfloat->sensor_type() == 0 || xfloat->sensor_type() == 1)) {
+      sensor_type_known = true;
+      sensor_type = xfloat->sensor_type();
+      ldbg() << "Sensor type from the float's last mission configuration message: " << sensor_type;
     }
     if(sensor_type_known && sensor_type != 0) {
 

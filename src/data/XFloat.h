@@ -276,6 +276,12 @@ class XFloat:
      */
     uint32_t fw_version_;
 
+    /** The CTD sensor type (0: RBR, 1: SBE) from the last mission configuration message that gave
+     *  one, or XMSG_BAD_U08 if none has. Dives without a mission configuration message of their
+     *  own use it to decide on the pressure offset correction.
+     */
+    uint8_t sensor_type_;
+
     /** The instrument metadata.
      *
      *  This is a shared reference to this instrument metadata object corresponding to this
@@ -701,6 +707,18 @@ class XFloat:
       lock_guard<recursive_mutex> guard(mutex_);
 
       return fw_version_;
+    }
+
+    /** Get the CTD sensor type from the last mission configuration message that gave one.
+     *
+     *  @return   The sensor type (0: RBR, 1: SBE), or XMSG_BAD_U08 if unknown.
+     */
+    uint8_t sensor_type() const {
+
+      // Get an exclusive lock.
+      lock_guard<recursive_mutex> guard(mutex_);
+
+      return sensor_type_;
     }
 
     /** Get the pressure gain value, in dBar/LSB.
@@ -1204,6 +1222,18 @@ class XFloat:
       lock_guard<recursive_mutex> guard(mutex_);
 
       fw_version_ = fw_version;
+    }
+
+    /** Set the CTD sensor type from a mission configuration message.
+     *
+     *  @param[in]  sensor_type The sensor type (0: RBR, 1: SBE).
+     */
+    void set_sensor_type(uint8_t sensor_type) {
+
+      // Get an exclusive lock.
+      lock_guard<recursive_mutex> guard(mutex_);
+
+      sensor_type_ = sensor_type;
     }
 
     /** Set the instrument pressure gain value, in dBar/LSB.

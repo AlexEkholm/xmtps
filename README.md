@@ -290,8 +290,10 @@ the dive's pressures. SBE CTDs correct pressure onboard and are not corrected ag
 
 - **Which floats**: the sensor type comes from the dive's mission configuration message (the
   `MIS` line: 0 = RBR, corrected; 1 = SBE, not corrected), when its firmware layout is
-  supported. Otherwise the WMO instrument type in the float's `.meta` file decides: 866, 867 and
-  875 are corrected; 868, 873, 876, unknown types and floats without a `.meta` file are not.
+  supported. Floats need not send that message every dive, so a dive without one uses the sensor
+  type of the float's last mission configuration message that gave it. Otherwise the WMO
+  instrument type in the float's `.meta` file decides: 866, 867 and 875 are corrected; 868, 873,
+  876, unknown types and floats without a `.meta` file are not.
 - **Offset**: for each dive, the minimum surface pressure sample after outliers are discarded
   (samples farther from the median than 3 × 1.4826 × the median absolute deviation, or than
   0.1 dBar if that is larger). The offset is the mean of these minima over the dive and up to
@@ -390,6 +392,7 @@ so far. The Python tools (`xmtps-list2json.py`) parse these files.
 | `APS` | Acoustic position | Acoustic listening windows and receive statistics. |
 | `MIS` / `m` | Mission configuration | Configuration message and firmware version, then one parameter per `m` line: name, value, units, `# description`. |
 | `mis` | Mission configuration (older firmware) | The same parameters in fixed-column groups. |
+| `CMD` | Command echo-back | One line per command the float echoed back after a command upload (X-message 0xDE): SN, dive, echo index, command index and the command text, e.g. `dft 0 100`. |
 | `SHX` / `shx` | SBD message hex data | Each SBD message as a hex dump, 16 bytes per line. |
 
 ### Examples
@@ -715,6 +718,16 @@ when none of its dive files is newer, unless `-f` is given.
 
 Decoder daemon:
 
+- X-message packets are checked against their checksum (the two characters between `$` and
+  `>`); a packet that fails is discarded and logged. All 1,351,052 packets in the production RAW
+  files pass.
+- The command echo-back message (0xDE), which floats send after a command upload, is decoded:
+  each echoed command is listed on a `CMD` line under "Ground Station Upload Command Echo-Back
+  Messages" (before, the section was printed empty).
+- Surface pressure offset correction: dives without a mission configuration message use the
+  sensor type of the float's last one, so floats that send it only on some dives (most hurricane
+  floats) are corrected on every dive even without a `.meta` file. The offset is also recomputed
+  when a mission configuration message arrives after the dive's surface data.
 - Decoder fixes found while writing the X-message specification:
   - Argo data (0xF0): the number of seeks (`nSeek` in the `A` lines) is read as two bytes; it was
     read as one, so it listed 0 instead of 1.
