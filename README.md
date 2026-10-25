@@ -528,6 +528,11 @@ Python tools:
 - `xmtps-aggregate-json.py` plotting is split into one function per plot group
   (`WriteGeoPlots` … `WriteWavePlots`, run in order from `PLOT_WRITERS`); the plot output is
   unchanged.
+- Plot images are written through one persistent kaleido/Chromium browser instead of a new
+  browser per image (2.2 s → 0.6 s per image): a full aggregate of 9213 takes 47 s instead of
+  309 s, and of 11186 103 s instead of 382 s, with identical PNG and HTML output. The browser
+  is started only when there are floats to plot; if it can't start, images are written one
+  browser at a time as before.
 
 Operations:
 

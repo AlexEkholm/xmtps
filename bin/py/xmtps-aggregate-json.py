@@ -10,6 +10,7 @@ Created on Thu Apr  7 13:50:06 2022
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings(action='ignore', message='Cannot close a netcdf_file opened with mmap=True')
+warnings.filterwarnings(action='ignore', message='The kopts argument is ignored if using a server')
 
 
 import argparse
@@ -12578,7 +12579,21 @@ try:
         if not os.path.isdir(args.plot_output):
             logger.error('Invalid plot output directory: ' + args.plot_output)
         else:
-            WritePlotFiles()
+            # Keep one Chromium browser running for all image exports instead of kaleido
+            # starting one per image (about 0.6 s instead of 2.2 s per image).
+            kaleido_server = False
+            if float_aggregate_map:
+                try:
+                    import kaleido
+                    kaleido.start_sync_server(silence_warnings = True)
+                    kaleido_server = True
+                except Exception as e:
+                    logger.warning('Failed to start kaleido server, starting a browser per image: {}'.format(e))
+            try:
+                WritePlotFiles()
+            finally:
+                if kaleido_server:
+                    kaleido.stop_sync_server(silence_warnings = True)
 
     # Record processed files only after all output has been written
 
