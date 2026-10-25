@@ -62,8 +62,9 @@ bathymetry = None
 def BathymetryPressure(lat, lon):
     """Return the seafloor pressure (dBar) from ETOPO2 at each position, NaN on land.
 
-    Uses the nearest grid cell and the Saunders (1981) depth-to-pressure conversion. Returns
-    None if the bathymetry file can't be read.
+    Interpolates bilinearly between the four surrounding grid cell centres (longitude wraps at
+    the dateline) and uses the Saunders (1981) depth-to-pressure conversion. Returns None if the
+    bathymetry file can't be read.
     """
     global bathymetry
     if bathymetry is None:
@@ -79,9 +80,17 @@ def BathymetryPressure(lat, lon):
         return None
     x, y = bathymetry['x'], bathymetry['y']
     lat, lon = np.asarray(lat, dtype = np.double), np.asarray(lon, dtype = np.double)
-    ix = np.mod(np.round((lon - x[0]) / (x[1] - x[0])).astype(int), len(x))
-    iy = np.clip(np.round((lat - y[0]) / (y[1] - y[0])).astype(int), 0, len(y) - 1)
-    depth = -np.array(bathymetry['z'][iy, ix], dtype = np.double)
+    # Grid spacing from the full span: the coordinates are float32, so neighbouring cells
+    # differ by up to 1e-6 degrees, which over the grid adds up to a third of a cell.
+    fx = (lon - x[0]) / ((x[-1] - x[0]) / (len(x) - 1))
+    fy = np.clip((lat - y[0]) / ((y[-1] - y[0]) / (len(y) - 1)), 0, len(y) - 1)
+    ix0 = np.floor(fx).astype(int)
+    iy0 = np.minimum(np.floor(fy).astype(int), len(y) - 2)
+    wx, wy = fx - ix0, fy - iy0
+    ix0, ix1 = np.mod(ix0, len(x)), np.mod(ix0 + 1, len(x))
+    z = lambda iy, ix: np.array(bathymetry['z'][iy, ix], dtype = np.double)
+    depth = -((1 - wy) * ((1 - wx) * z(iy0, ix0) + wx * z(iy0, ix1))
+              + wy * ((1 - wx) * z(iy0 + 1, ix0) + wx * z(iy0 + 1, ix1)))
     depth[depth <= 0] = np.nan
     c1 = (5.92 + 5.25 * np.sin(np.radians(lat)) ** 2) * 1e-3
     return ((1 - c1) - np.sqrt((1 - c1) ** 2 - 8.84e-6 * depth)) / 4.42e-6

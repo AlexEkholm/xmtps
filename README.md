@@ -456,6 +456,30 @@ xmtps-generate-summary-page.py -i "/data1/alamo/data/json/[0-9]+/[0-9]+_summary.
 
 ## Changelog
 
+### 2026-10-25
+
+Decoder daemon:
+
+- Startup: the active-float query selects only `DISTINCT id_instrument` instead of whole
+  `XFloatMail` rows (with their SBD data); it took 88 s instead of 248 s at the 2026-10-25
+  restart. The column it filters on (`iridium_position_datetime`) has no index, so it is still a
+  table scan.
+
+Build:
+
+- The Release makefiles are regenerated from the Debug ones with `-O2 -g` (they referenced Boost
+  sources that no longer exist and linked without the libraries). `XMfaMissionCfg.cpp` is built
+  with `-O1`: GCC did not finish it at `-O2` within an hour.
+- The build number is incremented with each commit (`build/hooks/pre-commit`) instead of with
+  each build.
+
+Python tools:
+
+- Bathymetry in the trajectory plots is interpolated bilinearly between the ETOPO2 grid cells
+  (it was the nearest cell, and the grid spacing taken from two float32 coordinates put it up to
+  a third of a cell off). ETOPO2 is read from `/data1/etopo2/` by default; `--etopo2` is an
+  alias of `-b/--bathymetry`.
+
 ### 2026-10-24
 
 Decoder daemon:
@@ -525,8 +549,9 @@ Python tools:
   `DTD`, changing at the start of descent of each dive; once a phase's cycle count is used up,
   `MPC` ≥ `MNM<n>`, the dive drifts in the next phase `MNS<n>`, since the reported phase is from
   before the switch) and the bathymetry at the GPS fixes as
-  a black line ("Bathymetry" in the legend). Depth comes from NOAA ETOPO2v2c (nearest 2′ cell),
-  converted to pressure with Saunders (1981). The pressure axis range is unchanged, so a
+  a black line ("Bathymetry" in the legend). Depth comes from NOAA ETOPO2v2c, interpolated
+  bilinearly between the 2′ grid cells and converted to pressure with Saunders (1981). The
+  pressure axis range is unchanged, so a
   seafloor deeper than the float's data is off the plot. The file is read from
   `/data1/etopo2/ETOPO2v2c_f4.nc` by default (`-b/--bathymetry/--etopo2 FILE`); without it the
   bathymetry line is left out with a warning.
