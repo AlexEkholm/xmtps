@@ -49,8 +49,10 @@ XMTPS is a C++11 project built with Eclipse CDT managed builds (`.cproject`, `De
 - libkml (`kmlbase`, `kmldom`, `kmlengine`)
 - pthreads
 
-The build number embedded in the binary comes from `build/buildNo.txt`, which
-`build/incrementBuild.sh` bumps as a build step.
+The build number embedded in the binary comes from `build/buildNo.txt`. It is incremented
+with each commit by the `build/hooks/pre-commit` hook (enable it in a clone with
+`git config core.hooksPath build/hooks`); building no longer changes it, so a binary reports
+the build number of the commit it was built from.
 
 The code uses POSIX APIs (`open`/`O_EXCL`, `getpid`, signals), so it builds on Linux only.
 

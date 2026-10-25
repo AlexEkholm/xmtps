@@ -84,7 +84,7 @@ pre-build:
 	-@echo ' '
 
 post-build:
-	-./../build/incrementBuild.sh; #cd ../doc;  doxygen doxy.cfg
+	-@echo "Build number: $(shell cat ../build/buildNo.txt) (incremented with each commit by build/hooks/pre-commit)"; #cd ../doc;  doxygen doxy.cfg
 	-@echo ' '
 
 .PHONY: all clean dependents main-build pre-build post-build

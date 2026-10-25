@@ -1,0 +1,8 @@
+#!/bin/sh
+# Increment the build number (build/buildNo.txt) with each commit.
+# Enable in a clone with: git config core.hooksPath build/hooks
+
+f="$(git rev-parse --show-toplevel)/build/buildNo.txt"
+n=$(tr -dc '0-9' < "$f" 2>/dev/null)
+echo $(( ${n:-0} + 1 )) > "$f"
+git add "$f"
