@@ -803,18 +803,16 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
           lout() << "Reprocessing active floats...";
 
 
-          // Get list of floats that have reported in the last 90 days.
+          // Get list of floats that have reported in the last 90 days. Only the instrument
+          // identifiers are selected; selecting whole messages took several minutes.
           ldbg() << "Selecting floats reporting in the last 90 days...";
-          xmsgs = XFloatMailMessage::SelectObjectsFromDatabase(
-              "msg_is_valid = 1 AND iridium_position_datetime >= (CURDATE() - INTERVAL 90 day)",
-              "id_instrument",
-              "id_instrument");
-          ldbg() << "Found " << xmsgs.size() << " floats reporting in the last 90 days.";
-
+          vector<unsigned int> active_ids = XFloatMailMessage::SelectInstrumentIdsFromDatabase(
+              "msg_is_valid = 1 AND iridium_position_datetime >= (CURDATE() - INTERVAL 90 day)");
+          lout() << "Found " << active_ids.size() << " floats reporting in the last 90 days.";
 
           // Add float identifiers to list of floats to reprocess.
-          for(auto it = xmsgs.begin(); it < xmsgs.end(); ++it)
-            reprocess_by_inst_ids_.insert(reprocess_by_inst_ids_.end(), (*it)->id_instrument());
+          reprocess_by_inst_ids_.insert(
+              reprocess_by_inst_ids_.end(), active_ids.begin(), active_ids.end());
 
         }
 

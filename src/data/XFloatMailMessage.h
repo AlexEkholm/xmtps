@@ -936,6 +936,38 @@ class XFloatMailMessage:
       return vector<shared_ptr<XFloatMailMessage> >();
     }
 
+    /** Query the distinct instrument identifiers of the mail messages in the SQL database.
+     *
+     *  Only the instrument identifier column is selected, so this is much faster than
+     *  selecting whole mail message objects (with their SBD data) to collect the instruments.
+     *
+     *  @exception  util::log::MessageException if an error occurs while querying the database.
+     *
+     *  @param[in]  where       The SQL select statement "where-condition" clause.
+     *
+     *  @return     The distinct instrument identifiers, in ascending order.
+     */
+    static vector<unsigned int> SelectInstrumentIdsFromDatabase(const string& where = "") {
+
+      vector<unsigned int> ids;
+
+      try {
+
+        shared_ptr<sql::ResultSet> res(sql_table_description_.executeSelectQuery(
+            "DISTINCT id_instrument",
+            sql_table_description_.table_name(),
+            where,
+            "",
+            "id_instrument"));
+
+        while(res && res->next())
+          ids.push_back(res->getUInt("id_instrument"));
+
+      }CATCH_BLOCK("Failed to query instrument identifiers from the database!")
+
+      return ids;
+    }
+
     /** Select a value from the SQL database table that contains the persisted mail message
      *  objects.
      *

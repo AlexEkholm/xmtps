@@ -492,6 +492,14 @@ public:
         return x;
     }
 
+    /** Get the name of this SQL database table.
+     *
+     *  @return         The name of the SQL database table.
+     */
+    const string& table_name() const {
+        return table_name_;
+    }
+
     /** Select objects from this SQL database table.
      *
      *  @param[in]      where       The SQL select statement where-condition clause.
