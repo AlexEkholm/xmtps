@@ -2894,6 +2894,22 @@ string XFloatDiveData::GenerateListingString() const {
         try {
 
           XMSG_SECTION("Pressure Correction");
+          if(is_pres_offs_valid() && pressure_offset_correction_enabled_list_file_) {
+            os << "# presOffset has been subtracted from the fall (F/f), drift (D/d), profile "
+                  "(PRO/pro, PRD/prd),\n"
+                  "# valve (VLV/vlv), pump (PMP/pmp) and rise (R/r) pressures in this listing:\n"
+                  "#     pres = rawPres - presOffset\n"
+                  "# To recover the raw pressures, add presOffset back: rawPres = pres + "
+                  "presOffset.\n"
+                  "# The surface pressures (SFC/sfc, SFD) are not corrected; they are what "
+                  "presOffset is\n"
+                  "# computed from. A corrected pressure outside the valid range is listed as "
+                  "-9.999 and\n"
+                  "# cannot be recovered.\n";
+          } else {
+            os << "# No pressure correction has been applied in this listing: all pressures "
+                  "are raw.\n";
+          }
           os << GeneratePressureCorrectionListingString() << endl;
 
         } CATCH_BLOCK("Failed to generate pressure correction listing string entry!")
@@ -3051,7 +3067,8 @@ string XFloatDiveData::GenerateListingString() const {
 
           try {
 
-            // Print surface pressure time-series message(s).
+            // Print surface pressure time-series message(s). The surface pressure is listed
+            // uncorrected: it is what the pressure offset correction is computed from.
             os << xmsg_surface_time_series_.GenerateListingString(
                    spg,
                    spo,
@@ -3059,7 +3076,7 @@ string XFloatDiveData::GenerateListingString() const {
                    sso,
                    stg,
                    sto,
-                   pres_correction)
+                   0)
                << endl;
 
           }CATCH_NOTHROW("Failed to generate surface pressure time-series listing entry!")
@@ -3500,29 +3517,35 @@ void XFloatDiveData::GetGainsAndOffsets(
 
 /** Compute this dive's surface pressure offset from the surface time-series data.
  *
- *  The offset is the mean of the surface pressure means (see
- *  @ref UpdateDerivedSurfaceDataFields()) of this dive and up to @p max_num_dives preceding dives,
- *  counting only dives whose surface pressure is valid. Each dive counts equally, regardless of its
- *  number of samples. The result is stored in the pressure offset fields (@c pres_offs,
+ *  The offset is the mean of the minimum surface pressures, after outliers are discarded (see
+ *  @ref UpdateDerivedSurfaceDataFields()), of this dive and up to @p max_num_dives preceding dives,
+ *  counting only dives whose surface pressure is valid and that have at least @p min_num_samples
+ *  surface pressure samples. Each counted dive counts equally, regardless of its number of samples. The result is stored in the pressure offset fields (@c pres_offs,
  *  @c pres_offs_num_dives, @c pres_offs_num_samples, @c pres_offs_valid), which the listing and
  *  PHY output use for the pressure offset correction.
  *
- *  The offset is only computed for instruments whose conductivity sensor needs the correction
- *  (WMO instrument types 866, 867 and 875). For SBE sensors (868, 873, 876) and unknown types the
- *  offset is left invalid; an unexpected type is logged as a warning. It is also left invalid if no
- *  dive has valid surface pressure data.
+ *  The offset is only computed for floats whose CTD needs the correction. The sensor type comes
+ *  from this dive's mission configuration message when it gives one: RBR sensors are corrected,
+ *  SBE sensors (which correct pressure onboard) are not. Otherwise the WMO instrument type in the
+ *  float's .meta file decides: 866, 867 and 875 are corrected; SBE sensors (868, 873, 876) and
+ *  unknown types are not, and an unexpected type is logged as a warning. The offset is also left
+ *  invalid if no dive has valid surface pressure data.
  *
  *  @note       Preceding dives are loaded with @ref XFloat::GetDiveData(), which may read them from
  *              the database.
  *
  *  @param[in]  max_num_dives   The maximum number of preceding dives to include (0 = none, and
  *                              the offset is not computed).
+ *  @param[in]  min_num_samples The minimum number of surface pressure samples a dive needs to be
+ *                              included; a dive with fewer gives too few samples for a reliable
+ *                              minimum.
  *
  *  @throw      util::log::MessageException if an error occurs.
  *
  *  @return     Always 0; read the result from the pressure offset fields.
  */
-float XFloatDiveData::ComputePressureOffsetFromSurfaceTimeSeries(unsigned int max_num_dives) {
+float XFloatDiveData::ComputePressureOffsetFromSurfaceTimeSeries(unsigned int max_num_dives,
+        int min_num_samples) {
 
   shared_ptr<XFloatDiveData> dive;
   shared_ptr<XFloat> xfloat;
@@ -3552,68 +3575,93 @@ float XFloatDiveData::ComputePressureOffsetFromSurfaceTimeSeries(unsigned int ma
       return 0;
     }
 
-    // Check instrument type.
-    if(!(xfloat = parent_instrument()) || !(meta = xfloat->metadata())) {
+    // Check the sensor type in the mission configuration message (0: RBR, 1: SBE).
+    bool sensor_type_known;
+    unsigned int sensor_type;
+    {
+      lock_guard<recursive_mutex> guard(mutex_);  // Get an exclusive lock.
+      sensor_type_known = xmsg_mission_cfg_.sensor_type_is_known();
+      sensor_type = xmsg_mission_cfg_.sensor_type();
+    }
+    if(sensor_type_known && sensor_type != 0) {
 
-      /* The instrument type is unknown. Do not compute surface pressure offset. */
+      /* SBE sensors correct pressure onboard. Do not compute surface pressure offset. */
+      ldbg() << "Not computing surface pressure offset: SBE sensor (mission configuration).";
       return 0.;
     }
-    switch(meta->wmo_instrument_type()) {
-      case XFLT_ID_UNKNOWN:
+    if(sensor_type_known) {
 
-        /* Do not compute surface pressure offset for unknown float types. */
+      /* RBR sensor: proceed with pressure offset computation. */
+      ldbg() << "Computing surface pressure offset: RBR sensor (mission configuration).";
+
+    } else {
+
+      // Otherwise check the instrument type in the metadata.
+      if(!(xfloat = parent_instrument()) || !(meta = xfloat->metadata())) {
+
+        /* The instrument type is unknown. Do not compute surface pressure offset. */
         return 0.;
+      }
+      switch(meta->wmo_instrument_type()) {
+        case XFLT_ID_UNKNOWN:
 
-      case 866:   // ALAMO, no coductivity sensor.
-      case 867:   // ALAMO, RBR coductivity sensor.
-      case 875:   // ALTO, RBR conductivity sensor.
+          /* Do not compute surface pressure offset for unknown float types. */
+          return 0.;
 
-        /* Do nothing (proceed with pressure offset computation). */
-        break;
+        case 866:   // ALAMO, no coductivity sensor.
+        case 867:   // ALAMO, RBR coductivity sensor.
+        case 875:   // ALTO, RBR conductivity sensor.
 
-      case 868:   // ALAMO, SBE conductivity sensor.
-      case 873:   // ALTO, unspecified conductivity sensor (all deployed units are SBE).
-      case 876:   // ALTO, SBE conductivity sensor (corrects pressure onboard).
+          /* Do nothing (proceed with pressure offset computation). */
+          break;
 
-        /* Do not compute surface pressure offset for SBE floats. */
-        return 0.;
+        case 868:   // ALAMO, SBE conductivity sensor.
+        case 873:   // ALTO, unspecified conductivity sensor (all deployed units are SBE).
+        case 876:   // ALTO, SBE conductivity sensor (corrects pressure onboard).
 
-      default:    // Unexpected float type
+          /* Do not compute surface pressure offset for SBE floats. */
+          return 0.;
 
-        /* Do not compute surface pressure offset for unknown float types. */
-        lwrn() << "Not computing surface pressure offset. "
-               << "Unknown WMO instrument type encountered: "
-               << meta->wmo_instrument_type()
-               << ".";
-        return 0.;
+        default:    // Unexpected float type
+
+          /* Do not compute surface pressure offset for unknown float types. */
+          lwrn() << "Not computing surface pressure offset. "
+                 << "Unknown WMO instrument type encountered: "
+                 << meta->wmo_instrument_type()
+                 << ".";
+          return 0.;
+      }
     }
 
-    // Collect data from current dive.
-    if(is_surface_pres_valid()) {
+    // Collect data from current dive: its minimum surface pressure, after outliers are discarded.
+    if(is_surface_pres_valid() && surface_pres_min() >= XMSG_SENS_MIN_PRES
+        && surface_pres_num_samples() >= min_num_samples) {
 
       // Get an exclusive lock.
       lock_guard<recursive_mutex> guard(mutex_);
 
-      ldbg() << "Acquiring surface pressure mean for dive current dive...";
+      ldbg() << "Acquiring minimum surface pressure for current dive...";
 
       num_dives++;
       num_samples += surface_pres_num_samples();
-      pres_sum += surface_pres_mean();
+      pres_sum += surface_pres_min();
 
     }
 
     // Collect data from previous dive(s).
     for(unsigned int i = 1; i <= max_num_dives && (dive_idx = id_dive() - i) >= 0; ++i) {
 
-      ldbg() << "Acquiring surface pressure mean for dive " << dive_idx << "...";
+      ldbg() << "Acquiring minimum surface pressure for dive " << dive_idx << "...";
 
       // Get data for dive.
       dive = parent_instrument()->GetDiveData(dive_idx, false);
 
       // Check surface pressure data validity.
-      if(!dive || !dive->is_surface_pres_valid()) {
+      if(!dive || !dive->is_surface_pres_valid()
+          || dive->surface_pres_min() < XMSG_SENS_MIN_PRES
+          || dive->surface_pres_num_samples() < min_num_samples) {
 
-        ldbg() << "Surface pressure data not valid for dive " << dive_idx << ".";
+        ldbg() << "Surface pressure data not valid, or too few samples, for dive " << dive_idx << ".";
         continue;
 
       }
@@ -3621,7 +3669,7 @@ float XFloatDiveData::ComputePressureOffsetFromSurfaceTimeSeries(unsigned int ma
       // Collect dive data.
       num_dives++;
       num_samples += dive->surface_pres_num_samples();
-      pres_sum += dive->surface_pres_mean();
+      pres_sum += dive->surface_pres_min();
 
     }
 

@@ -25,6 +25,11 @@
 
 /* Includes: */
 
+// std
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
 // local
 #include "AbstractXComposite.h"
 #include "XSurfaceData.h"
@@ -596,6 +601,55 @@ public:
 
         return val;
 
+    }
+
+    /** Get the minimum pressure sample, in dBar, after outliers are discarded.
+     *
+     *  A sample is an outlier if it is farther from the median of the samples than three times
+     *  the scaled median absolute deviation (1.4826 MAD, which estimates the standard deviation),
+     *  or than @p min_threshold if that is larger. The floor keeps quantized samples, whose MAD is
+     *  often zero, from being discarded. The result is the smallest sample that is not an outlier.
+     *
+     *  @param[in]  gain            The pressure sensor sensitivity scale factor, in LSB/dBar.
+     *  @param[in]  offs            The pressure sensor offset, in dBar.
+     *  @param[in]  min_threshold   The smallest outlier threshold, in dBar.
+     *
+     *  @return     The minimum pressure, in dBar, or @ref XMSG_SENS_BAD_PRES if there is no valid
+     *              pressure sample.
+     */
+    template<typename T = float> T PresMinWithoutOutliersAsFloat(uint16_t gain, uint16_t offs,
+            T min_threshold = 0.1) const {
+
+        std::vector<T> pres, dev;
+
+        for(size_t i = 0; i < NumPresSamples(); ++i) {
+
+            T val = SamplePresAsFloat<T>(i, gain, offs, 0);
+            if(val >= XMSG_SENS_MIN_PRES && val <= XMSG_SENS_MAX_PRES)
+                pres.push_back(val);
+        }
+
+        if(pres.empty())
+            return XMSG_SENS_BAD_PRES;
+
+        auto median = [](const std::vector<T>& x) {
+            size_t n = x.size();
+            return n % 2 ? x[n / 2] : (x[n / 2 - 1] + x[n / 2]) / 2;
+        };
+
+        std::sort(pres.begin(), pres.end());
+        T med = median(pres);
+        for(T val : pres)
+            dev.push_back(std::fabs(val - med));
+        std::sort(dev.begin(), dev.end());
+        T threshold = std::max((T) (3 * 1.4826) * median(dev), min_threshold);
+
+        // The samples are sorted, so the first one that is not an outlier is the minimum.
+        for(T val : pres)
+            if(std::fabs(val - med) <= threshold)
+                return val;
+
+        return XMSG_SENS_BAD_PRES;
     }
 
     /** Get the @f$i^{th}@f$ pressure sensor value, in raw counts

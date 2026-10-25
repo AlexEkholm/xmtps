@@ -64,6 +64,11 @@ class XMfaMissionCfg:
      */
     uint8_t sensor_type_;
 
+    /** Whether the last decoded message has a supported firmware layout, so that
+     *  @ref sensor_type_ was read from a known position.
+     */
+    bool fw_version_is_supported_ = false;
+
     /* Data Members - General Configuration: */
 
     /** The mission, dive, or cycle number for this mission configuration.
@@ -1013,6 +1018,11 @@ class XMfaMissionCfg:
     unsigned int sds() const { return sds_; }
     unsigned int sdt() const { return sdt_; }
     unsigned int sensor_type() const { return sensor_type_; }
+    /** Whether the sensor type is known: the message has a supported firmware layout and gives
+     *  sensor type 0 (RBR) or 1 (SBE). */
+    bool sensor_type_is_known() const {
+      return fw_version_is_supported_ && (sensor_type_ == 0 || sensor_type_ == 1);
+    }
     unsigned int set() const { return set_; }
     unsigned int sfn() const { return sfn_; }
     unsigned int sgt() const { return sgt_; }

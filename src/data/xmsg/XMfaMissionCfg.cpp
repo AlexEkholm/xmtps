@@ -283,6 +283,9 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
 
     ldbg() << "Decoding MFA mission configuration message...";
 
+    // Cleared by DecodeXMsgDataUnsupported() for firmware without a known layout.
+    fw_version_is_supported_ = true;
+
     switch(fw_ver) {
       case 0x02006200: // ALAMO Software version 0x02006200.
       case 0x02006300: // ALAMO Software version 0x02006300.
@@ -7100,6 +7103,8 @@ void XMfaMissionCfg::DecodeXMsgDataFw0A080031(uint8_t msg_idx, const vector<uint
 void XMfaMissionCfg::DecodeXMsgDataUnsupported(uint8_t msg_idx, const vector<uint8_t>& data) {
 
   const uint8_t* d = data.data();
+
+  fw_version_is_supported_ = false;
 
   { // Unsupported ALAMO software version.
 

@@ -624,7 +624,8 @@ class XFloatDiveData:
         uint16_t& sg,
         uint16_t& so) const;
 
-    float ComputePressureOffsetFromSurfaceTimeSeries(unsigned int max_num_dives);
+    float ComputePressureOffsetFromSurfaceTimeSeries(unsigned int max_num_dives,
+            int min_num_samples = 10);
 
     string GenerateListingString() const;
 
@@ -711,8 +712,10 @@ class XFloatDiveData:
      *
      *  Computes the surface pressure maximum, mean, minimum, number of samples and variance from
      *  the surface time series (see @ref xmsg_surface_time_series_), using the surface sensor
-     *  gains and offsets. These fields feed the surface pressure offset correction (see
-     *  @ref ComputePressureOffsetFromSurfaceTimeSeries()).
+     *  gains and offsets. The maximum, mean and variance are the statistics the float reports; the
+     *  minimum is the smallest surface pressure sample after outliers are discarded (see
+     *  AbstractXTimeSeriesDataComposite::PresMinWithoutOutliersAsFloat()). The minimum feeds the
+     *  surface pressure offset correction (see @ref ComputePressureOffsetFromSurfaceTimeSeries()).
      *
      *  The fields are set to @ref XMSG_SENS_BAD_PRES and marked invalid if the sensor gains and
      *  offsets are unknown, there is no surface data, or the mean surface pressure is outside
@@ -776,7 +779,7 @@ class XFloatDiveData:
         // Compute derived surface data fields.
         set_surface_pres_max(xmsg_surface_time_series_.PresMaxAsFloat(spg, spo));
         set_surface_pres_mean(xmsg_surface_time_series_.PresMeanAsFloat(spg, spo));
-        set_surface_pres_min(xmsg_surface_time_series_.PresMinAsFloat(spg, spo));
+        set_surface_pres_min(xmsg_surface_time_series_.PresMinWithoutOutliersAsFloat(spg, spo));
         set_surface_pres_num_samples(xmsg_surface_time_series_.pres_num_samples());
         set_surface_pres_variance(xmsg_surface_time_series_.PresVarAsFloat(spg));
 

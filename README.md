@@ -17,6 +17,7 @@ into JSON and generates the per-float plot pages and the fleet summary page.
   - [Configuration file options](#configuration-file-options)
   - [Example configuration file](#example-configuration-file)
   - [Float metadata](#float-metadata)
+  - [Surface pressure offset correction](#surface-pressure-offset-correction)
 - [Running](#running)
   - [Output files](#output-files)
 - [Listing files](#listing-files)
@@ -194,7 +195,7 @@ General:
 | `gen.stat` | `0` | Status files. |
 
 `[poc]` — surface pressure offset correction (applied only for sensor types that need it; see
-[Float metadata](#float-metadata)):
+[Surface pressure offset correction](#surface-pressure-offset-correction)):
 
 | Option | Default | Description |
 |---|---|---|
@@ -275,9 +276,33 @@ text (not RTF). The daemon uses, among others, the WMO ID, WMO instrument type, 
 sign as the degrees). A field that fails to parse is logged and skipped. DAC ID `9999` marks a
 placeholder file and is ignored.
 
-Supported WMO instrument types: 866, 867, 868 (ALAMO) and 873, 875, 876 (ALTO). The surface
-pressure offset correction is applied for RBR conductivity sensors (867, 875) and for floats
-without one (866), and is skipped for SBE sensors (868, 876) and for 873.
+Supported WMO instrument types: 866, 867, 868 (ALAMO) and 873, 875, 876 (ALTO). The instrument
+type decides whether the surface pressure offset correction is applied when the dive's mission
+configuration message does not give the sensor type (see below).
+
+### Surface pressure offset correction
+
+Floats with an RBR CTD report pressure without a surface offset correction, so XMTPS computes
+the offset from the pressure the float measures while it is at the surface and subtracts it from
+the dive's pressures. SBE CTDs correct pressure onboard and are not corrected again.
+
+- **Which floats**: the sensor type comes from the dive's mission configuration message (the
+  `MIS` line: 0 = RBR, corrected; 1 = SBE, not corrected), when its firmware layout is
+  supported. Otherwise the WMO instrument type in the float's `.meta` file decides: 866, 867 and
+  875 are corrected; 868, 873, 876, unknown types and floats without a `.meta` file are not.
+- **Offset**: for each dive, the minimum surface pressure sample after outliers are discarded
+  (samples farther from the median than 3 × 1.4826 × the median absolute deviation, or than
+  0.1 dBar if that is larger). The offset is the mean of these minima over the dive and up to
+  three preceding dives whose surface data is valid (a complete surface series, a GPS fix, and a
+  mean surface pressure within ±5 dBar) and that have at least 10 surface pressure samples, so
+  that the minimum is not taken from too few samples.
+- **Applied to**: the fall, drift, profile, valve, pump and rise pressures in the listing. The
+  surface time series (`SFC`, `sfc`, `SFD`) is listed uncorrected, since it is what
+  the offset is computed from. The `PRC` line gives the offset (`presOffset`), whether it is
+  valid, and the number of samples and dives it comes from. A note above it says whether this
+  listing's pressures are corrected: if so, `pres = rawPres - presOffset`, so the raw pressures
+  are recovered as `rawPres = pres + presOffset` (except samples listed as -9.999, which were out
+  of range after the correction).
 
 ## Running
 
@@ -345,7 +370,7 @@ so far. The Python tools (`xmtps-list2json.py`) parse these files.
 | `GPS` | GPS | GPS fixes: time, position, time to fix, satellites, SNR, HDOP, status. |
 | `IRI` | Iridium position | Position estimated from the Iridium sessions: weighted time and position, variance, error. |
 | `A` | Argo data | Mission phase, pressures, durations, cycle timing and sensor gains and offsets (`midx` 0–5). |
-| `PRC` | Pressure correction | Surface pressure offset applied to the profile, and the dives and samples it comes from. |
+| `PRC` | Pressure correction | Surface pressure offset (`presOffset`), whether it is valid, and the dives and samples it comes from; a note above it says whether it was subtracted from this listing's pressures and how to recover the raw ones (see [Surface pressure offset correction](#surface-pressure-offset-correction)). |
 | `F` / `f` | Fall time series | Descent: time, pressure, temperature, salinity and phase code (name after `#`). |
 | `D` / `d` | Drift data | Drift/park samples: time, pressure, temperature, salinity. |
 | `PRD` / `prd` | Profile sensor columns | Name, units and description of each `pro` column. |
@@ -719,6 +744,17 @@ Decoder daemon:
   connection is idle from startup to shutdown and was dropped by the server's idle timeout, so
   every save failed (seen at the 2026-10-25 restart after 10.8 h); the connection is now checked
   and replaced first, and if the SQL server is down one warning is logged instead.
+- Surface pressure offset correction: whether a float is corrected now comes from the sensor
+  type in its mission configuration message (RBR corrected, SBE not), with the `.meta` file's WMO
+  instrument type as the fallback; before, only the `.meta` file decided, so RBR floats without
+  one (all but 11678) were not corrected. The offset is the mean of each dive's minimum surface
+  pressure after outliers are discarded (it was the mean of the surface means), and the surface
+  time series is no longer corrected in the listing. Only dives with at least 10 surface pressure
+  samples count towards the offset, and the listing's Pressure Correction section notes whether
+  the correction was applied and how to recover the raw pressures. Tested on 979 messages of
+  11186 (RBR, now corrected by 0.12-0.20 dBar), 11498 (SBE, unchanged), 11678 (offset 0.42-0.52
+  instead of 0.45-0.61 dBar) and 9293 (no sensor type, unchanged), and on all 2718 messages of
+  9294 (238 of 246 dives corrected, by about the minimum surface pressure).
 
 Build:
 
