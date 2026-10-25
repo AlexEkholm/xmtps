@@ -562,11 +562,10 @@ Python tools:
   pressure as a thin dashed light grey step line (`DTD<n>` for the current mission phase `MPS`, or
   `DTD`, changing at the start of descent of each dive; once a phase's cycle count is used up,
   `MPC` ≥ `MNM<n>`, the dive drifts in the next phase `MNS<n>`, since the reported phase is from
-  before the switch) and the bathymetry at the GPS fixes as
-  a black line ("Bathymetry" in the legend). Depth comes from NOAA ETOPO2v2c, interpolated
-  bilinearly between the 2′ grid cells and converted to pressure with Saunders (1981). The
-  pressure axis range is unchanged, so a
-  seafloor deeper than the float's data is off the plot. The file is read from
+  before the switch) and the bathymetry at the GPS fixes as a thin black line ("Bathymetry
+  (ETOPO2)" in the legend). Depth comes from NOAA ETOPO2v2c, interpolated bilinearly between the
+  2′ grid cells and converted to pressure with Saunders (1981). The pressure axis range is
+  unchanged, so a seafloor deeper than the float's data is off the plot. The file is read from
   `/data1/etopo2/ETOPO2v2c_f4.nc` by default (`-b/--bathymetry/--etopo2 FILE`); without it the
   bathymetry line is left out with a warning.
 - `xmtps-aggregate-json.py` plotting is split into one function per plot group

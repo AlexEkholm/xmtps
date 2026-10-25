@@ -4439,9 +4439,6 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                             autorange=False,
                             range=rng['pres'],
                             ),
-                        legend=dict(
-                            title='Cycle Phase',
-                            ),
                         hoverlabel=dict(
                             font=dict(
                                 family='Consolas, monospace',
@@ -4475,10 +4472,10 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                         ]),
                     line=dict(
                         color='rgb(0,0,0)',
-                        width=2.0,
+                        width=1.5,
                         ),
                     mode='lines',
-                    name='Bathymetry',
+                    name='Bathymetry (ETOPO2)',
                     opacity=1.0,
                     ))
 
