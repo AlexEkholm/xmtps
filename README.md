@@ -464,6 +464,12 @@ Decoder daemon:
   `XFloatMail` rows (with their SBD data); it took 88 s instead of 248 s at the 2026-10-25
   restart. The column it filters on (`iridium_position_datetime`) has no index, so it is still a
   table scan.
+- `XMfaMissionCfg::DecodeXMsgData` (6,504 lines) and `GenerateListingString` (5,584 lines) are
+  split into one member function per firmware layout (`DecodeXMsgDataFw<version>`,
+  `GenerateListingStringFw<version>`, plus `…Unsupported` and `GenerateListingStringIncomplete`);
+  the two functions only dispatch on the firmware version. Decoding all 211,007 production
+  mission messages (78,694 dives, 93 firmware versions) gives byte-identical listings before and
+  after.
 
 Build:
 

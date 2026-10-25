@@ -729,6 +729,57 @@ class XMfaMissionCfg:
     void DecodeXMsgData(uint32_t fw_version, uint8_t msg_idx, const vector<uint8_t>& data);
     const string GenerateListingString(int whoi, int dive, int idx) const;
 
+  private:  /* Firmware-specific mission configuration decoding and listing: */
+
+    void DecodeXMsgDataFw02006200(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw02006900(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw03006500(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw03016700(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw03026100(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw04016100(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw04026200(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw04036100(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw04046100(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw04056300(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw04066100(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw05006100(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw05006101(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw06000000(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw06010300(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw06000100(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw06040900(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw06050100(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw06057700(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw06080500(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw07020200(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw08000000(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw08010000(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw0A050000(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw0A060231(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw0A060200(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw0A070101(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw0A080004(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataFw0A080031(uint8_t msg_idx, const vector<uint8_t>& data);
+    void DecodeXMsgDataUnsupported(uint8_t msg_idx, const vector<uint8_t>& data);
+    void GenerateListingStringFw02006200(ostringstream& os, int whoi, int dive, int idx) const;
+    void GenerateListingStringFw02006900(ostringstream& os, int whoi, int dive, int idx) const;
+    void GenerateListingStringFw04026200(ostringstream& os, int whoi, int dive, int idx) const;
+    void GenerateListingStringFw04056300(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw05006100(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw06000000(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw06050100(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw06057700(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw06080500(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw07020200(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw08000000(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw08010000(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw0A060231(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw0A050000(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw0A070101(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringFw0A080031(ostringstream& os, int whoi, int dive) const;
+    void GenerateListingStringIncomplete(ostringstream& os) const;
+    void GenerateListingStringUnsupported(ostringstream& os, int whoi, int dive) const;
+
   public:   /* Public Accessor Methods: */
 
     const ptime& ascent_start_time() const { return ascent_start_time_; }
