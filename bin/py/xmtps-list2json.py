@@ -461,12 +461,13 @@ def ProcessListingFile(fpath_list):
         PRO, pro     binned profile (pres, temp, conductivity-cell temp, saln, corrected saln)
         F/f, R/r     descent and ascent pressure time series with phase codes
         SFC, sfc     surface time series (pres, temp, saln)
-        pmp          pump records (pres, time, voltage, current, vacuum)
+        PRC          surface pressure offset correction (offset, valid flag, samples, dives)
+        pmp         pump records (pres, time, voltage, current, vacuum)
         WVS, wvs     wave spectra (wvm is ignored)
 
     Drift and profile samples get density and sigma0 from RhoLUT; temperatures and salinities at
-    or below the lookup table minimum become NaN. A, PMP, PRD/prd, IRI, SFD, PRC, SHX/shx, VLV/vlv
-    and XSV lines are ignored, and unknown lines are logged at debug level. A line that fails to
+    or below the lookup table minimum become NaN. A, PMP, PRD/prd, IRI, SFD, SHX/shx, VLV/vlv and
+    XSV lines are ignored, and unknown lines are logged at debug level. A line that fails to
     parse is logged as an error (raised with -H) and skipped. After parsing, Dive.PostProcess is
     called and the result is written with WriteJsonDiveDataFile.
     """
@@ -1006,6 +1007,16 @@ def ProcessListingFile(fpath_list):
                     continue
                     
                 if re.match('^PRC ', line):
+                    x = line.split()
+
+                    # SN dive midx nSam nDive valid presOffset
+                    dive_data.surface.pres_correction_num_samples = int(x[4])
+                    dive_data.surface.pres_correction_num_dives   = int(x[5])
+                    dive_data.surface.pres_correction_valid       = int(x[6]) == 1
+                    dive_data.surface.pres_correction             = float(x[7])
+
+                    del x
+
                     continue
              
                 # SBD message data:

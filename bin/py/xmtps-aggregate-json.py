@@ -371,7 +371,8 @@ def AggregateDiveData():
                                                  'dt_epoch', 
                                                  'dt_str', 
                                                  'pres',
-                                                 'temp', 
+                                                 'temp',
+                                                 'pres_corr',
                                                  ]),
                     'wave':      
                         pd.DataFrame(columns = [ 'dive', 
@@ -1025,6 +1026,12 @@ def AggregateDiveData():
                         logger.debug('Aggregating surface data for float {:04d}, dive {:d}...'.format(float_id, dive_num))
                         
                         surface_data = dive_data.surface
+
+                        # Surface pressure offset correction (PRC line); NaN if not valid, or for
+                        # JSON files written before it was parsed.
+                        pres_corr = getattr(surface_data, 'pres_correction', np.nan) \
+                            if getattr(surface_data, 'pres_correction_valid', False) else np.nan
+
                         df_profile = pd.DataFrame(
                             {
                                 'dive':             np.array([dive_data.dive_num] * surface_data.n, dtype='int'),
@@ -1033,6 +1040,7 @@ def AggregateDiveData():
                                 'dt_str':           np.array(surface_data.dt_str, dtype='str'),
                                 'pres':             np.array(surface_data.pres, dtype='float'),
                                 'temp':             np.array(surface_data.temp, dtype='float'),
+                                'pres_corr':        np.array([pres_corr] * surface_data.n, dtype='float'),
                             }
                         )
                         float_aggregate_data['surface'] = pd.concat([float_aggregate_data['surface'], df_profile], ignore_index=True)
@@ -1047,6 +1055,7 @@ def AggregateDiveData():
                                 'dt_str':           np.array([np.nan], dtype='str'),
                                 'pres':             np.array([np.nan], dtype='float'),
                                 'temp':             np.array([np.nan], dtype='float'),
+                                'pres_corr':        np.array([np.nan], dtype='float'),
                             }
                         )
                         float_aggregate_data['surface'] = pd.concat([float_aggregate_data['surface'], df_profile], ignore_index=True)
@@ -8866,7 +8875,8 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
     max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
 
     Plots the 'surface' data as surface_pres, surface_temp, surface_pres_avg, surface_temp_avg and
-    surface_sample_count (category 'surface').
+    surface_sample_count (category 'surface'). surface_pres_avg also shows the surface pressure
+    offset correction of each dive where it is valid.
 
     Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
     'surface' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
@@ -9200,7 +9210,34 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                     mode='lines',
                     name='mean',
                     ))
-                
+
+            # Surface pressure offset correction, for the dives where it is valid
+
+            if 'pres_corr' in df_dives.columns:
+                pres_corr = df_dives.groupby('dive')['pres_corr'].first().astype(float)
+                if pres_corr.notna().any():
+                    # Leave a gap at dives without a valid correction.
+                    pres_corr = pres_corr.reindex(range(int(pres_corr.index.min()), int(pres_corr.index.max()) + 1))
+                    figs['surface_pres_avg'].add_trace(go.Scatter(
+                        x=pres_corr.index.values,
+                        y=pres_corr.values,
+                        hovertemplate='<br>'.join([
+                            'correction = %{y:.2f} dBar',
+                            '<extra></extra>',
+                            ]),
+                        line=dict(
+                            color='rgb(0,0,255)',
+                            width=1.5,
+                            dash='dash',
+                            ),
+                        marker=dict(
+                            color='rgb(0,0,255)',
+                            size=4,
+                            ),
+                        mode='lines+markers',
+                        name='pres. correction',
+                        ))
+
             figs['surface_sample_count'].add_trace(go.Bar(
                 x=df_dives_gb.count().index.values,
                 y=df_dives_gb.count()['pres'],

@@ -1087,6 +1087,11 @@ class Surface:
             pres: pressure in dBar.
             temp: temperature in degC; NaN if not valid.
             saln: salinity in PSU; NaN if not valid.
+            pres_correction: surface pressure offset correction in dBar (the PRC line's
+                presOffset); NaN if the listing has no PRC line.
+            pres_correction_valid: whether the correction is valid (the PRC line's valid flag).
+            pres_correction_num_samples: number of surface samples the correction comes from.
+            pres_correction_num_dives: number of dives the correction comes from.
         """
         self.dt_ref           = DateTime()
         self.n                = num
@@ -1097,6 +1102,10 @@ class Surface:
         self.pres             = []
         self.temp             = []
         self.saln             = []
+        self.pres_correction             = np.nan
+        self.pres_correction_valid       = False
+        self.pres_correction_num_samples = -1
+        self.pres_correction_num_dives   = -1
 
     def PostProcess(self):
         """Rebase the sample times on the earliest sample and fill the time arrays for pickling.

@@ -3,7 +3,9 @@
 XMTPS is the WHOI Float Group daemon that receives Iridium Short Burst Data (SBD) telemetry from
 ALAMO and ALTO profiling floats, decodes it, stores it in MySQL, and writes the listing, PHY, KML,
 status and RAW files used downstream. A set of Python tools in `bin/py` turns the listing files
-into JSON and generates the per-float plot pages and the fleet summary page.
+into JSON and generates the per-float plot pages and the fleet summary page, which are published
+at [argo.whoi.edu/alamo](https://argo.whoi.edu/alamo/) (one page per float at
+`https://argo.whoi.edu/alamo/<serial>/`, e.g. [9294](https://argo.whoi.edu/alamo/9294/)).
 
 ## Contents
 
@@ -532,6 +534,9 @@ The installed copies live in `/etc/systemd/system/`. After installing or changin
 
 ## Python tools (`bin/py`)
 
+The plot pages these tools generate are published at
+[argo.whoi.edu/alamo](https://argo.whoi.edu/alamo/).
+
 Requires Python 3 with `numpy`, `scipy`, `pandas`, `plotly` (plus `kaleido` for PNG export),
 `jsonpickle`, `geographiclib`, `pytz`, `python-dateutil`, `Pillow` and `yattag`; see
 [Versions](#versions) for the versions production uses.
@@ -648,7 +653,7 @@ part of the format (`json_vers`, currently `0.11`, identifies it). Missing value
 | `descent`, `ascent` | `Descent`, `Ascent` | Fall and rise time series: `pres`, `dt_epoch`/`dt_str`, `dt_ref` (the series start) and `dt_ref_delta_sec`, `rate` (dBar/s), `phase_code`. |
 | `drift` | `Drift` | Drift samples: `pres`, `temp`, `saln`, `dens`, `sigma0` and their times (measured when the float sends drift times, otherwise estimated between descent and ascent). |
 | `profile` | `Profile` | Binned profile: `pres`, `temp`, `tcnd` (second temperature channel), `saln`, `saln_corr` (dynamically corrected salinity, NaN if not sent), `dens`, `sigma0`. |
-| `surface` | `Surface` | Surface time series: `pres`, `temp`, `saln` and times. |
+| `surface` | `Surface` | Surface time series: `pres`, `temp`, `saln` and times; and the surface pressure offset correction from the `PRC` line: `pres_correction` (dBar, NaN without a `PRC` line), `pres_correction_valid`, `pres_correction_num_samples`, `pres_correction_num_dives`. |
 | `pump` | `Pump` | Pump actions: `pres`, `time` (s), `volt`, `curr`, `curr_adj`, `vac`, `power`, `energy`. |
 | `gps`, `sbd` | lists of `Gps`, `Sbd` | GPS fixes and the dive's SBD messages (position, CEP, MOMSN, packet ID, size). |
 | `wave` | `Wave` | Wave spectra (`Szz_g` … in g²/Hz, `Szz` … in m²/Hz), directional moments and derived values: significant wave height `swh` (m), periods (s), mean direction `mwd` (°). |
@@ -673,7 +678,7 @@ Read one with `pandas.read_json(path, orient="split")`.
 | `_profile` | profile bin | `pres`, `temp`, `tcnd`, `saln`, `saln_corr`, `dens`, `sigma0` |
 | `_descent`, `_ascent` | time-series sample | `pres`, `dt_epoch`, `dt_ref_delta_sec`, `dt_str`, `phase_code`, `rate` |
 | `_drift` | drift sample | `pres`, `temp`, `saln`, `dens`, `sigma0`, `dt_epoch`, `dt_ref_delta_sec`, `dt_str` |
-| `_surface` | surface sample | `dt_epoch`, `dt_str`, `pres`, `temp`, `dt_ref_delta_sec` |
+| `_surface` | surface sample | `dt_epoch`, `dt_str`, `pres`, `temp`, `dt_ref_delta_sec`, `pres_corr` (the dive's valid pressure correction, else NaN) |
 | `_pump` | pump action | `pres`, `time`, `volt`, `curr`, `curr_adj`, `vac`, `power`, `energy` |
 | `_gps` | GPS fix | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `idx`, `ttf_sec`, `nsat`, `snr_min`, `snr_avg`, `snr_max`, `hdop` |
 | `_sbd` | SBD message | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `size_b`, `momsn`, `mtmsn`, `pid` |
@@ -766,6 +771,12 @@ Build:
 
 Python tools:
 
+- The average surface pressure plot shows each dive's surface pressure offset correction (the
+  listing's `PRC` line, when valid) as a blue dashed line. `xmtps-list2json.py` parses the `PRC`
+  line into the dive JSON (`Surface.pres_correction`, ...) and `xmtps-aggregate-json.py` carries
+  it into the aggregated surface table (`pres_corr`). Older dive JSON files simply have no
+  correction until they are rewritten.
+- The README links the published plot pages at argo.whoi.edu/alamo.
 - Bathymetry in the trajectory plots is interpolated bilinearly between the ETOPO2 grid cells
   (it was the nearest cell, and the grid spacing taken from two float32 coordinates put it up to
   a third of a cell off). ETOPO2 is read from `/data1/etopo2/` by default; `--etopo2` is an
