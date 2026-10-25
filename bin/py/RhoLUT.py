@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Apr 15 13:01:49 2022
+"""Look up seawater density and sigma0 from a salinity-temperature-pressure table.
 
-@author: aekholm
+The tables rho_lut (in-situ density) and sigma0_lut (potential density referenced to the
+surface) hold density minus 1000 kg/m^3 on the grid S (salinity, 0-39 PSU in steps of 1),
+T (temperature, -5-39 degC in steps of 1) and P (pressure, 0-2900 dBar in steps of 100), indexed
+[S][T][P]. GetRhoFromLut and GetSigma0FromLut interpolate them trilinearly. MIN_/MAX_SALN,
+MIN_/MAX_TEMP and MIN_/MAX_PRES are the grid limits.
+
+Author: aekholm
 """
 
 import numpy as np
@@ -3801,6 +3806,20 @@ _GetRhoFromLut = RegularGridInterpolator((S, T, P), rho_lut)
 _GetSigma0FromLut = RegularGridInterpolator((S, T, P), sigma0_lut)
 
 def GetRhoFromLut(saln, temp, pres):
+    """Return the in-situ density minus 1000 kg/m^3, interpolated from rho_lut.
+
+    Interpolates trilinearly in salinity, temperature and pressure and rounds to 3 decimals.
+    Pressures below MIN_PRES are treated as MIN_PRES.
+
+    Args:
+        saln: salinity (PSU).
+        temp: temperature (degC).
+        pres: pressure (dBar).
+
+    Returns:
+        The density anomaly in kg/m^3, or None if an input is NaN, the salinity or temperature
+        is outside the table, or the pressure is above MAX_PRES.
+    """
     
     if saln > MAX_SALN or saln < MIN_SALN or np.isnan(saln):
         return None
@@ -3815,6 +3834,20 @@ def GetRhoFromLut(saln, temp, pres):
     
     
 def GetSigma0FromLut(saln, temp, pres):
+    """Return sigma0, the potential density minus 1000 kg/m^3, interpolated from sigma0_lut.
+
+    Interpolates trilinearly in salinity, temperature and pressure and rounds to 3 decimals.
+    Pressures below MIN_PRES are treated as MIN_PRES.
+
+    Args:
+        saln: salinity (PSU).
+        temp: in-situ temperature (degC).
+        pres: pressure (dBar).
+
+    Returns:
+        sigma0 in kg/m^3, or None if an input is NaN, the salinity or temperature is outside the
+        table, or the pressure is above MAX_PRES.
+    """
     
     if saln > MAX_SALN or saln < MIN_SALN or np.isnan(saln):
         return None

@@ -1,10 +1,20 @@
 #!/usr/bin/python3
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-"""
-Created on Mon Sep 26 14:13:17 2022
+"""Generate the ALAMO/ALTO float summary page from aggregate JSON summary files.
 
-@author: aekholm
+Reads the per-float <id>_summary.json files written by xmtps-aggregate-json.py (given as files
+and/or directories, searched recursively and filtered by the -i regular expressions), ignoring
+files whose JSON version is not JSON_VERSION. Writes <output>/index.html with an orthographic
+map of the latest float positions coloured by status (Plotly) and a sortable table (DataTables)
+with one row per float: ID, WMO, type and CTD, firmware, deployment date, age, distance
+profiled, status (active, overdue, archived) and the most recent cycle. The page is always
+rebuilt from all matching summary files; the output directory must exist.
+
+Example:
+    xmtps-generate-summary-page.py -i"/data1/alamo/data/json/[0-9]+/[0-9]+_summary.json" -o/data1/alamo/data/plots2 /data1/alamo/data/json
+
+Author: aekholm
 """
 
 import argparse
@@ -48,6 +58,11 @@ Function Definitions:
 
 
 def ProcessDirectory(dpath):
+    """Read every summary file in a directory and its subdirectories into float_map.
+
+    Files are read in sorted order with ProcessJsonSummaryFile if they match an -i pattern (when
+    given). Empty directories are ignored. Errors are logged, or raised with -H.
+    """
     
     dpath = re.sub('\\\\', '/', dpath)
     
@@ -108,6 +123,13 @@ def ProcessDirectory(dpath):
         logger.error(errstr)
               
 def ProcessJsonSummaryFile(fpath):
+    """Decode one <id>_summary.json file with jsonpickle and store it in float_map.
+
+    The summary is stored under its WHOI serial number (summary['id'].whoi). Files not matching an
+    -i pattern (when given) are ignored, and files with a JSON version other than JSON_VERSION
+    are ignored with a warning. Errors, including summaries without 'id' or 'json_vers', are
+    logged, or raised with -H.
+    """
     
     global float_map
         
@@ -173,6 +195,16 @@ def ProcessJsonSummaryFile(fpath):
         logger.error(errstr)
         
 def WriteSummaryFile(dpath):
+    """Write the summary page <dpath>/index.html from float_map and summary_plot.
+
+    The page embeds the position map from WriteSummaryPlots and a DataTables table with one row
+    per float, most recent report first; floats without a completed cycle or without profiled
+    distance are left out. A float is ACTIVE if it reported within 30 days, OVERDUE within 180
+    days and ARCHIVED otherwise. Inline JavaScript adds elapsed times ('3 hours ago') to the
+    deployment and last-report dates and handles the auto-refresh checkbox (URL parameter 'r',
+    in seconds; 1 means 60, others are at least 10). Errors are logged, or raised with -H; a
+    failed row is skipped.
+    """
     
         
     global float_map
@@ -605,6 +637,13 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
         logger.error(errstr)
    
 def WriteSummaryPlots(dpath):
+    """Build the position map for the summary page and store its HTML in summary_plot.
+
+    Plots the latest valid GPS position of each float on an orthographic globe with the tropics
+    and polar circles, coloured and sized by time since the last report (green within 30 days,
+    blue within 180 days, red otherwise). The HTML is a div that loads plotly.js from the CDN.
+    Nothing is written to dpath, which is unused. Errors are logged, or raised with -H.
+    """
     
         
         

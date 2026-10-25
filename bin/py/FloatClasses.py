@@ -1,10 +1,20 @@
 #!/usr/bin/python3
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Sep 21 15:11:38 2021
+"""Data classes for one float dive, shared by the XMTPS Python tools.
 
-@author: aekholm
+xmtps-list2json.py parses a decoder listing file into a Dive object (its ascent and descent
+pressure time series, drift and profile CTD samples, GPS fixes, SBD messages, pump runs, surface
+samples, wave spectra, mission parameters and engineering messages), calls Dive.PostProcess() and
+pickles the result to a per-dive JSON file with jsonpickle. xmtps-aggregate-json.py unpickles
+those files, groups the dives into Float objects and aggregates them; it also uses
+CompositePosition and PositionVector to combine and compare positions.
+
+Because the objects are pickled, the attribute names and types are part of the JSON format: the
+PostProcess() methods convert numpy arrays to lists and remove helper attributes before pickling.
+Times are UTC; DateTime holds them as seconds since 1970-01-01T00:00:00Z and as ISO 8601 strings.
+
+Author: aekholm (created 2021-09-21)
 """
 
 import datetime
@@ -21,6 +31,19 @@ Helper functions
 """
 
 def RollingAverage(array, N: int ):
+    """Return the centred N-point moving average of a 1-D array, rounded to 5 decimals.
+
+    The array is zero padded with N//2 values at each end and averaged with a cumulative sum, so
+    the first and last N//2 outputs are biased toward zero. For odd N the result has the length
+    of the input (for even N it has one element more). A NaN propagates to every later output.
+
+    Args:
+        array: 1-D array of values (e.g. a spectrum).
+        N: window length in samples; N <= 1 returns the input unchanged (and unrounded).
+
+    Returns:
+        The smoothed numpy array.
+    """
 
     if N > 1:
                 
@@ -39,11 +62,26 @@ Base classes:
 
 class DateTime:
     
-    """
-    A wrapper class for date/time
+    """A UTC date/time held both as seconds since epoch and as an ISO 8601 string.
+
+    Attributes:
+        dt_epoch: seconds since 1970-01-01T00:00:00Z, or -1 if unset or invalid.
+        dt_str: ISO 8601 string (e.g. '2021-09-21T15:11:38Z'), or '' if unset or invalid.
+
+    Only times between epoch 1262322000 and 2209006800 (2010-01-01 and 2040-01-01, at 05:00Z)
+    are accepted; anything outside that range is stored as the unset values above.
     """
     
     def __init__(self, dt = None, dt_epoch: float = None, dt_str: str = None):
+        """Initialize from the first usable argument: dt, then dt_epoch, then dt_str.
+
+        Args:
+            dt: another DateTime to copy.
+            dt_epoch: seconds since epoch; used only if > 0.
+            dt_str: ISO 8601 date/time string; used only if non-empty.
+
+        With no usable argument the object is unset (dt_epoch -1, dt_str '').
+        """
         
         self.dt_epoch = None
         self.dt_str = None
@@ -62,6 +100,7 @@ class DateTime:
         self.dt_str = ''
         
     def to_datetime(self):
+        """Return dt_str parsed as a datetime.datetime, or None if it is not valid ISO 8601."""
         dt = None
         try: 
             dt = parser.isoparse(self.dt_str)
@@ -70,6 +109,13 @@ class DateTime:
         return dt
         
     def dt_from_iso8601_str(self, dt_str):
+        """Set the time from an ISO 8601 string and return self.
+
+        dt_epoch is the parsed time rounded to whole seconds, and dt_str keeps the string as
+        given. A string without a time zone is interpreted as local time by
+        datetime.timestamp(). If the string can't be parsed or the time is outside the accepted
+        range (see the class docstring), the object is set to dt_epoch -1 and dt_str ''.
+        """
         self.dt_str = dt_str
         dt = self.to_datetime()
                 
@@ -95,6 +141,12 @@ class DateTime:
         return self
             
     def dt_from_epoch(self, dt_epoch):
+        """Set the time from seconds since epoch and return self.
+
+        dt_epoch is stored as given (not rounded) and dt_str is formatted as
+        'YYYY-MM-DDThh:mm:ssZ' in UTC. If the value can't be converted or is outside the accepted
+        range (see the class docstring), the object is set to dt_epoch -1 and dt_str ''.
+        """
     
         self.dt_epoch = dt_epoch
         try:
@@ -118,6 +170,7 @@ class DateTime:
         return self
         
     def from_dt(self, dt):
+        """Copy dt_epoch and dt_str from another DateTime; do nothing if dt is not a DateTime."""
         
         if dt is not None and isinstance(dt, DateTime):
             # self.dt_from_epoch(dt.dt_epoch)
@@ -125,10 +178,23 @@ class DateTime:
             self.dt_str = dt.dt_str
         
     def is_valid(self):
+        """Return True if dt_epoch is within the accepted range (2010-01-01 to 2040-01-01)."""
     
         return (self.dt_epoch >= 1262322000) and (self.dt_epoch <= 2209006800)
     
     def duration_to_hhmmss_str(duration_s: float, units = True):
+        """Return a duration in seconds formatted as 'h:mm:ss' (one hour or more) or 'mm:ss'.
+
+        This takes no self: call it on the class, as DateTime.duration_to_hhmmss_str(x).
+        Seconds are truncated, not rounded.
+
+        Args:
+            duration_s: duration in seconds; NaN gives ''.
+            units: if True, append ' [hh:mm:ss]' or ' [mm:ss]'.
+
+        Raises:
+            Exception: if the duration can't be formatted (e.g. it is not a number).
+        """
     
         dstr = ''
         
@@ -170,25 +236,54 @@ class DateTime:
             
     
 class Position(DateTime):
+    """A time-stamped geographic position with its uncertainty."""
     
     def __init__(self, dt: DateTime = None, lat: float = np.nan, lon: float = np.nan, cep_km: float = np.nan):
+        """Initialize the position.
+
+        Args:
+            dt: time of the position (copied); unset if None.
+            lat: latitude in decimal degrees north.
+            lon: longitude in decimal degrees east.
+            cep_km: circular error probable in km; NaN if unknown.
+        """
         DateTime.__init__(self, dt)
         self.lat    = lat
         self.lon    = lon
         self.cep_km = cep_km
         
     def pos_from_iso6709_str(self, string):
+        """Set lat and lon (decimal degrees) from an ISO 6709 string such as '+41.5246-070.6711'.
+
+        Raises AttributeError if the string contains no signed latitude/longitude pair.
+        """
         (self.lat, self.lon) = re.search('([+-][\\d.]+)([+-][\\d.]+)', string).groups()
         self.lat = float(self.lat)
         self.lon = float(self.lon)
         
     def is_valid(self):
+        """Return True if the time is valid, lat/lon are in range and cep_km is positive.
+
+        A position with an unknown (NaN) or sentinel (e.g. -9) cep_km is therefore invalid.
+        """
     
         return DateTime.is_valid(self) and (self.lat >= -90) and (self.lat <= 90) and (self.lon >= -180) and (self.lon <= 180) and (self.cep_km > 0)
    
 class PositionVector:
+    """The displacement from one position to a later one: distance, bearing and speed."""
 
     def __init__(self, pos1: Position = Position(), pos2: Position = Position, compute = False):
+        """Initialize the vector from pos1 to pos2, computing it now if compute is True.
+
+        Attributes:
+            dist_m: geodesic (WGS84) distance in metres, rounded to 1 m.
+            azi: initial azimuth at pos1 in degrees clockwise from north, [0, 360), to 0.1.
+            duration_s: pos2 time minus pos1 time, in seconds.
+            speed_mps: dist_m / duration_s in m/s, rounded to 4 decimals.
+            pos1, pos2: the start and end positions.
+
+        The four results are NaN until compute() is called with two valid positions.
+        """
         self.dist_m = np.nan
         self.azi = np.nan
         self.duration_s = np.nan
@@ -202,6 +297,12 @@ class PositionVector:
         
 
     def compute(self):
+        """Compute dist_m, azi, duration_s and speed_mps from pos1 and pos2.
+
+        Uses the WGS84 inverse geodesic problem (geographiclib). If either position is invalid
+        (see Position.is_valid), all four results are set to NaN and self is returned; otherwise
+        returns None. Equal times raise ZeroDivisionError.
+        """
     
         if (not self.pos1.is_valid()) or (not self.pos2.is_valid()):
             self.dist_m = np.nan
@@ -224,8 +325,25 @@ class PositionVector:
         self.azi = round(self.azi,1)
         
 class PresTimeSeries:
+    """A pressure time series (the ascent or descent pressure/time samples of a dive)."""
     
     def __init__(self, num: int = 0):
+        """Initialize an empty time series.
+
+        Attributes:
+            dt_ref: reference time (DateTime); the listing's F/R line time while parsing, the
+                earliest sample time after PostProcess().
+            n: number of samples.
+            dt_ref_delta_sec: sample times in seconds after dt_ref.
+            dt: sample times as DateTime objects; filled while parsing and removed by
+                PostProcess().
+            dt_epoch: sample times in seconds since epoch (filled by PostProcess()).
+            dt_str: sample times as ISO 8601 strings (filled by PostProcess()).
+            pres: pressures in dBar.
+            rate: pressure rates in dBar/s, positive for decreasing pressure (filled by
+                PostProcess()).
+            phase_code: phase code of each sample, as listed.
+        """
         self.dt_ref           = DateTime()
         self.n                = num
         self.dt_ref_delta_sec = []
@@ -237,6 +355,25 @@ class PresTimeSeries:
         self.phase_code       = []
         
     def PostProcess(self):
+        """Insert midpoints, compute pressure rates and fill the time arrays for pickling.
+
+        dt_ref is reset to the earliest sample time and dt_ref_delta_sec recomputed from it.
+        With two or more samples, a midpoint (mean pressure, rounded to 0.01 dBar, and mean time,
+        rounded to 0.1 s) is inserted between each pair of samples, so n becomes 2n-1. Rates in
+        dBar/s (rounded to 4 decimals; positive when pressure decreases) are:
+
+        - at a midpoint: the difference between its two neighbouring samples;
+        - at an original sample: the difference between the midpoints either side of it;
+        - NaN at the first and last sample.
+
+        Where the two times are equal, the rate of the previous point is repeated. A midpoint
+        gets phase code 10 after a sample with code 1, 2, 3 or 10, 12 after 6 or 12, 13 after
+        7 or 13, and -1 otherwise. Finally dt_epoch and dt_str are filled from dt_ref and
+        dt_ref_delta_sec and the dt attribute is deleted.
+
+        With no samples, dt_ref is unset and dt deleted. With one sample, nothing else is done:
+        dt is kept and dt_epoch, dt_str and rate stay empty.
+        """
         if not len(self.dt):
             self.dt_ref         = DateTime()
             del self.__dict__["dt"]
@@ -324,8 +461,16 @@ class PresTimeSeries:
             del self.__dict__["dt"]
                 
 class EngineeringData:
+    """Base class for the dive-phase engineering messages (descent, drift, ascent, surface)."""
     
     def __init__(self, dt_start = DateTime(), vac0 = -9.99, vac1 = -9.99):
+        """Initialize the attributes common to the dive-phase engineering messages.
+
+        Args:
+            dt_start: start time of the dive phase (DateTime).
+            vac0: case vacuum at the start of the phase, in inHg; -9.99 if not reported.
+            vac1: case vacuum at the end of the phase, in inHg; -9.99 if not reported.
+        """
         self.dt_start = dt_start
         self.vac0     = vac0               
         self.vac1     = vac1
@@ -335,24 +480,49 @@ Dive Data classes:
 """
 
 class Ascent(PresTimeSeries):
+    """Ascent pressure time series (the listing's R and r lines)."""
     
     def __init__(self, num: int = 0):
         PresTimeSeries.__init__(self, num)
         
     def PostProcess(self):
+        """Post-process as PresTimeSeries.PostProcess() (returns None)."""
         super().PostProcess()
         
 class Descent(PresTimeSeries):
+    """Descent pressure time series (the listing's F and f lines)."""
     
     def __init__(self, num: int = 0):
         PresTimeSeries.__init__(self, num)
         
     def PostProcess(self):
+        """Post-process as PresTimeSeries.PostProcess() (returns None)."""
         super().PostProcess()
         
 class Dive:
+    """All the data decoded from one dive's listing file; the object pickled to a dive's JSON."""
     
     def __init__(self, json_vers = "?"):
+        """Initialize an empty dive.
+
+        Attributes:
+            json_vers: version of the JSON format that wrote the object.
+            id: float identifiers (FloatId).
+            list_file: the listing file the dive was read from (File).
+            dive_num: dive number; -999 until read from the LIS line (negative numbers are
+                pre-deployment dives).
+            ascent, descent: pressure time series (Ascent, Descent).
+            drift: drift CTD samples (Drift).
+            engineering: engineering messages (Engineering).
+            gps: GPS fixes ([Gps]).
+            mission: mission configuration (MissionParameters).
+            profile: profile CTD bins (Profile).
+            pump: pump runs (Pump).
+            sbd: Iridium SBD messages ([Sbd]).
+            surface: surface CTD samples (Surface).
+            wave: wave spectra (Wave), or None; the attribute is deleted by PostProcess() if
+                the dive has no wave data.
+        """
         self.json_vers   = json_vers
         self.id          = FloatId()
         self.list_file   = File()
@@ -370,6 +540,13 @@ class Dive:
         self.wave        = None
    
     def PostProcess(self):
+        """Post-process every part of the dive and set the drift sample times, before pickling.
+
+        Drift sample times are the measured ones if every sample has one (see
+        Drift.HasMeasuredDatetimes); otherwise, if there are ascent and descent samples, they are
+        estimated by spacing the samples evenly between the last descent sample time and the
+        first ascent sample time (Drift.EstimateDatetimes).
+        """
         self.ascent.PostProcess()
         self.descent.PostProcess()
         self.drift.PostProcess()
@@ -390,8 +567,25 @@ class Dive:
                 )
 
 class Drift:
+    """CTD samples taken while the float drifts at its park depth (the listing's D/d lines)."""
     
     def __init__(self, num_samples = 0):
+        """Initialize num_samples drift samples, all NaN.
+
+        Attributes:
+            dt_epoch: sample times in seconds since epoch; NaN where not measured.
+            dt_str: sample times as ISO 8601 strings; NaN until set.
+            dt_ref: time of the first sample (DateTime) once times are set.
+            dt_ref_delta_sec: sample times in seconds after dt_ref.
+            pres: pressure in dBar.
+            temp: temperature in degC.
+            saln: salinity in PSU.
+            dens: in-situ density in kg/m^3 (RhoLUT lookup; NaN outside its table).
+            sigma0: potential density minus 1000, in kg/m^3 (RhoLUT lookup; NaN outside it).
+            n: number of samples.
+
+        The CTD and density arrays are numpy arrays until PostProcess() converts them to lists.
+        """
         self.dt_epoch         = [np.nan] * num_samples
         self.dt_str           = [np.nan] * num_samples
         self.dt_ref           = DateTime()
@@ -404,10 +598,25 @@ class Drift:
         self.n                = num_samples
         
     def HasMeasuredDatetimes(self):
-        """True if every drift sample has a time from the listing's dtm lines."""
+        """Return True if every drift sample has a measured time.
+
+        Measured times come from the time column of the d lines (relative to the drift start on
+        the D line), sent only by floats with the drift-times message.
+        """
         return self.n > 0 and all(x == x for x in self.dt_epoch)   # x == x is False for NaN
 
     def EstimateDatetimes(self, epoch_start, epoch_end):
+        """Estimate the sample times by spacing the samples evenly between two times.
+
+        The n samples are placed at the interior points of n+2 evenly spaced times from
+        epoch_start to epoch_end (so neither end time is used), rounded to whole seconds, and
+        set with SetDatetimes(). With no samples, the time attributes are set to empty lists
+        (dt_ref too).
+
+        Args:
+            epoch_start: start of the drift (the last descent sample time), seconds since epoch.
+            epoch_end: end of the drift (the first ascent sample time), seconds since epoch.
+        """
 
         if self.n == 0:
             self.dt_epoch = []
@@ -419,6 +628,11 @@ class Drift:
         self.SetDatetimes(np.round(np.linspace(epoch_start, epoch_end, self.n+2)[1:-1], 0).tolist())
 
     def SetDatetimes(self, dt_epoch):
+        """Set the sample times from a sequence of seconds since epoch.
+
+        Fills dt_epoch and dt_str, sets dt_ref to the first sample's time and dt_ref_delta_sec
+        to each sample's seconds after it. dt_epoch must not be empty.
+        """
 
         self.dt_epoch = list(dt_epoch)
         self.dt_str = [ DateTime().dt_from_epoch(x).dt_str for x in self.dt_epoch ]
@@ -426,6 +640,7 @@ class Drift:
         self.dt_ref_delta_sec = [ x - self.dt_ref.dt_epoch for x in self.dt_epoch ]
         
     def PostProcess(self):
+        """Convert the CTD and density arrays to lists for pickling (times are set by Dive)."""
         self.pres     = self.pres.tolist()
         self.temp     = self.temp.tolist()
         self.saln     = self.saln.tolist()
@@ -433,15 +648,28 @@ class Drift:
         self.sigma0   = self.sigma0.tolist()
         
 class Engineering():
-    """Engineering data for one dive, one object per listing section (E07-E0C, BIT E05/E06).
+    """Engineering data for one dive, one object per listing section.
 
-    Each section object has an attribute for every column of every engineering message
-    version, named with its units; the ENG_COLUMNS table in xmtps-list2json.py maps listing
-    columns to these attributes. Attributes that a float's message version does not report
-    keep their default (NaN, '' or an unset DateTime).
+    The sections are descent (E07), drift (E08), ascent (E09), surface (E0A), ice (E0C) and the
+    built-in test (BIT, E05 passed / E06 failed). Each section object has an attribute for every
+    column of every version of its engineering message; the ENG_COLUMNS table in
+    xmtps-list2json.py maps listing columns to these attributes. Physical quantities are named
+    with their units (e.g. _dbar, _degc, _psu, _v, _a, _s, _inhg, _counts); identifiers, counts
+    and status fields such as version, seeks, mode, results and the vac0/vac1 vacuums (inHg)
+    are not. Attributes that a float's message version does not report keep their default:
+    NaN, '', an unset DateTime, or -9.99 for vac0/vac1.
     """
 
     def __init__(self):
+        """Initialize empty section objects, the error list and the extra-column dictionary.
+
+        Attributes:
+            ascent, descent, drift, surface, ice, bit: the section objects.
+            errors: one dict per engineering error (e0x) line, with 'section', 'idx', 'code'
+                and, where the line has one, 'dt_str' (surface v0x10 error lines have no
+                date-time).
+            extra: {section: {column: value}} for listing columns not in ENG_COLUMNS.
+        """
         self.ascent  = EngineeringAscent()
         self.descent = EngineeringDescent()
         self.drift   = EngineeringDrift()
@@ -455,6 +683,10 @@ class EngineeringDescent(EngineeringData):
     """Descent engineering message (E07, versions 0x10-0x11)."""
 
     def __init__(self, dt_start = None, vac0 = -9.99, vac1 = -9.99):
+        """Initialize every attribute to its not-reported default (dt_start None: unset).
+
+        The trailing comments give each attribute's listing column, units and message versions.
+        """
         EngineeringData.__init__(self, dt_start if dt_start else DateTime(), vac0, vac1)
         self.version                         = ''       # engVer
         # dt_start: start-of-descent; vac0, vac1: case vacuum at start/end (inHg), v0x11
@@ -474,6 +706,10 @@ class EngineeringDrift(EngineeringData):
     """Park/drift engineering message (E08, versions 0x10-0x12)."""
 
     def __init__(self, dt_start = None, vac0 = -9.99, vac1 = -9.99):
+        """Initialize every attribute to its not-reported default (dt_start None: unset).
+
+        The trailing comments give each attribute's listing column, units and message versions.
+        """
         EngineeringData.__init__(self, dt_start if dt_start else DateTime(), vac0, vac1)
         self.version                         = ''       # engVer
         # dt_start: start-of-drift; vac0, vac1: case vacuum at start/end (inHg), v0x11+
@@ -492,6 +728,10 @@ class EngineeringAscent(EngineeringData):
     """Ascent engineering message (E09, versions 0x10-0x12)."""
 
     def __init__(self, dt_start = None, vac0 = -9.99, vac1 = -9.99):
+        """Initialize every attribute to its not-reported default (dt_start None: unset).
+
+        The trailing comments give each attribute's listing column, units and message versions.
+        """
         EngineeringData.__init__(self, dt_start if dt_start else DateTime(), vac0, vac1)
         self.version                         = ''       # engVer
         # dt_start: start-of-ascent; vac0, vac1: case vacuum at start/end (inHg), v0x11+
@@ -504,6 +744,10 @@ class EngineeringSurface(EngineeringData):
     """Surface engineering message (E0A, versions 0x10-0x14)."""
 
     def __init__(self, dt_start = None, vac0 = -9.99, vac1 = -9.99):
+        """Initialize every attribute to its not-reported default (dt_start None: unset).
+
+        The trailing comments give each attribute's listing column, units and message versions.
+        """
         EngineeringData.__init__(self, dt_start if dt_start else DateTime(), vac0, vac1)
         self.version                         = ''       # engVer
         # dt_start: start-of-surface; vac0, vac1: case vacuum at start/end (inHg), v0x11+
@@ -550,6 +794,10 @@ class EngineeringIce:
     """Ice engineering message (E0C, versions 0x10-0x11)."""
 
     def __init__(self):
+        """Initialize every attribute to its not-reported default.
+
+        The trailing comments give each attribute's listing column, units and message versions.
+        """
         self.version                         = ''       # engVer
         self.mode                            = np.nan   # mode
         self.ice_status                      = np.nan   # ice-status
@@ -566,6 +814,10 @@ class EngineeringBit:
     """Built-in test messages (E05 passed / E06 failed; BIT versions 6-8 and 9-11)."""
 
     def __init__(self):
+        """Initialize every attribute to its not-reported default.
+
+        The trailing comments give each attribute's listing column, units and message versions.
+        """
         self.version                         = np.nan   # BITVer
         self.sw_version                      = ''       # SWVer (v6-8) / FWVer (v9-11)
         self.results                         = ''       # BITResults
@@ -621,27 +873,52 @@ class EngineeringBit:
         self.oil_pump_power_max_w            = np.nan   # powerMax (W), v9-11
 
 class File:
+    """A file the data was read from."""
     
     def __init__(self):
+        """Initialize path (the file path, '') and mtime (its modification time, a DateTime)."""
         self.path = ''
         self.mtime = DateTime()
 
 class FloatId:
+    """The identifiers of a float; -1 where unknown."""
    
     def __init__(self, whoi = -1, dac = -1, wmo = -1):
+        """Initialize the identifiers.
+
+        Args:
+            whoi: WHOI float serial number (the listing's SN).
+            dac: Argo data assembly centre number, as listed on the LIS line.
+            wmo: WMO platform number.
+        """
         self.whoi = whoi
         self.dac  = dac
         self.wmo  = wmo
         
 class Float: 
+    """One float and its dives, as grouped by xmtps-aggregate-json.py."""
         
     def __init__(self, float_id = FloatId()):
+        """Initialize with the float's FloatId (id) and an empty list of Dive objects (dives)."""
         self.dives = []
         self.id = float_id
    
 class Gps(Position):
+    """A GPS fix (the listing's GPS line); -1 (or -9 for hdop) where not set."""
     
     def __init__(self):
+        """Initialize an empty fix.
+
+        Attributes:
+            idx: index of the fix in the listing.
+            ttf_sec: time to fix, in seconds.
+            nsat: number of satellites used.
+            snr_min, snr_avg, snr_max: minimum, mean and maximum satellite SNR (dB-Hz).
+            hdop: horizontal dilution of precision.
+
+        Time, lat, lon and cep_km are inherited from Position; cep_km is set by
+        EstimateUncertainty().
+        """
         Position.__init__(self)
         self.idx      = -1
         self.ttf_sec  = -1
@@ -652,6 +929,13 @@ class Gps(Position):
         self.hdop     = -9.
 
     def EstimateUncertainty(self):
+        """Estimate the fix's circular error probable (cep_km) from its quality fields.
+
+        Starts from 6.66 m and adds 16.66 m per unit of HDOP above 1, 26.66 m times the square
+        of the number of satellites below 6, and 1.666 m per dB of mean SNR below 25. The result
+        is in km, rounded to 1 m. If the time or position is invalid, cep_km is set to -9 (which
+        makes the fix invalid).
+        """
         
         self.cep_km = 0.00666
         
@@ -668,8 +952,14 @@ class Gps(Position):
         self.cep_km = round(self.cep_km, 3)
 
 class MissionParameters:
+    """The mission configuration reported for a dive (the listing's mission lines)."""
 
     def __init__(self, fwver = '', ctdtype= ''):
+        """Initialize with the firmware version (fwver) and CTD type (ctdtype) strings.
+
+        cfgver, parameters and entries are described by their trailing comments; parameters
+        values are floats where numeric, otherwise strings.
+        """
         self.fwver = fwver
         self.ctdtype = ctdtype
         self.cfgver = ''            # mission configuration message version (MIS line)
@@ -677,8 +967,23 @@ class MissionParameters:
         self.entries = []           # [{'section', 'idx', 'name', 'value', 'units'}]
 
 class Profile:
+    """The binned CTD profile measured during the ascent (the listing's P/p lines)."""
     
     def __init__(self, num_bins = 0):
+        """Initialize num_bins profile bins, all NaN.
+
+        Attributes:
+            pres: pressure in dBar.
+            temp: temperature in degC.
+            tcnd: temperature of the conductivity cell sensor (temp2 column) in degC, if sent.
+            saln: salinity in PSU.
+            saln_corr: dynamically corrected salinity in PSU, if sent.
+            dens: in-situ density in kg/m^3 (RhoLUT lookup; NaN outside its table).
+            sigma0: potential density minus 1000, in kg/m^3 (RhoLUT lookup).
+            n: number of bins.
+
+        The arrays are numpy arrays until PostProcess() converts them to lists.
+        """
         self.pres      = np.empty(num_bins)
         self.pres[:]   = np.nan
         self.temp      = np.empty(num_bins)
@@ -695,6 +1000,7 @@ class Profile:
         self.n         = num_bins
         
     def PostProcess(self):
+        """Convert the profile arrays to lists for pickling."""
     
         self.pres   = self.pres.tolist()
         self.temp   = self.temp.tolist()
@@ -705,8 +1011,22 @@ class Profile:
         self.sigma0 = self.sigma0.tolist()
 
 class Pump:
+    """The oil pump runs of a dive (the listing's pmp lines), one list entry per run."""
     
     def __init__(self):
+        """Initialize empty lists of pump runs.
+
+        Attributes:
+            pres: pressure at the run, in dBar.
+            time: pump run time, in seconds.
+            volt: pump voltage, in V.
+            curr: pump current, in A.
+            curr_adj: adjusted current, in A (computed by PostProcess()).
+            vac: case vacuum after pumping, in inHg.
+            power: power, in W (computed by PostProcess()).
+            energy: energy, in J (computed by PostProcess()).
+            n: number of runs; -1 until PostProcess().
+        """
         self.pres = []
         self.time = []
         self.volt = []
@@ -718,6 +1038,11 @@ class Pump:
         self.n = -1
         
     def PostProcess(self):
+        """Set n and compute the adjusted current, power and energy of each pump run.
+
+        curr_adj = curr * 12 / volt / 0.85 (A, rounded to 3 decimals; NaN if volt is 0),
+        power = volt * curr_adj (W, 3 decimals) and energy = power * time (J, 2 decimals).
+        """
         self.n = len(self.pres)
         
         self.curr_adj = [ round(c * 12 / v / 0.85, 3) if v else np.nan for (c, v) in zip(self.curr, self.volt) ]
@@ -725,8 +1050,19 @@ class Pump:
         self.energy = [ round(p * t, 2) for (p, t) in zip(self.power, self.time) ] 
    
 class Sbd(Position):
+    """An Iridium SBD message (the listing's SBD line), positioned by the Iridium network."""
 
     def __init__(self):
+        """Initialize an empty message; -1 where not set.
+
+        Attributes:
+            size_b: message size in bytes.
+            momsn: mobile-originated message sequence number.
+            mtmsn: mobile-terminated message sequence number.
+            pid: packet identifier.
+
+        The time, lat, lon and cep_km (Iridium CEP radius in km) are inherited from Position.
+        """
         Position.__init__(self)
         # self.idx      = -1
         self.size_b   = -1
@@ -735,8 +1071,23 @@ class Sbd(Position):
         self.pid      = -1
         
 class Surface:
+    """CTD samples taken at the surface (the listing's SFC/sfc lines)."""
     
     def __init__(self, num: int = 0):
+        """Initialize an empty time series.
+
+        Attributes:
+            dt_ref: reference time (DateTime); the SFC line time while parsing, the earliest
+                sample time after PostProcess().
+            n: number of samples.
+            dt_ref_delta_sec: sample times in seconds after dt_ref.
+            dt: sample times as DateTime objects; removed by PostProcess().
+            dt_epoch: sample times in seconds since epoch (filled by PostProcess()).
+            dt_str: sample times as ISO 8601 strings (filled by PostProcess()).
+            pres: pressure in dBar.
+            temp: temperature in degC; NaN if not valid.
+            saln: salinity in PSU; NaN if not valid.
+        """
         self.dt_ref           = DateTime()
         self.n                = num
         self.dt_ref_delta_sec = []
@@ -748,6 +1099,12 @@ class Surface:
         self.saln             = []
 
     def PostProcess(self):
+        """Rebase the sample times on the earliest sample and fill the time arrays for pickling.
+
+        dt_ref becomes the earliest sample time, dt_ref_delta_sec is recomputed from it, and
+        dt_epoch and dt_str are filled; the dt attribute is deleted. With no samples, dt_ref is
+        unset and dt deleted.
+        """
         
         # self.pres = np.array(self.pres).tolist()
         # self.temp = np.array(self.temp).tolist()
@@ -767,8 +1124,38 @@ class Surface:
         del self.__dict__["dt"]
               
 class Wave: 
+    """Surface wave spectra measured by the float's accelerometer, and the wave statistics.
+
+    The listing's WVS line gives the sample rate and FFT length; each wvs line gives one
+    frequency bin of the acceleration auto-spectra Szz (vertical), Syy and Sxx (horizontal),
+    the horizontal co-spectrum Cxy and the quadrature spectra Qzx and Qzy, in g^2/Hz.
+    PostProcess() turns them into displacement spectra (m^2/Hz), directional coefficients and
+    bulk statistics. Attributes ending in _g are acceleration spectra (g^2/Hz), the raw_ ones
+    as received.
+    """
 
     def __init__(self, fsam: float = -1, slen: int = -1):
+        """Initialize slen//2 frequency bins with NaN spectra and statistics.
+
+        Args:
+            fsam: accelerometer sample rate, in Hz.
+            slen: FFT length (samples per spectral segment).
+
+        Attributes:
+            raw_freq, freq: bin frequencies k * fsam / slen for k = 1 .. slen//2, in Hz.
+            raw_Szz_g .. raw_Qzy_g: the spectra as received (set by PostProcess()).
+            Szz_g .. Qzy_g: acceleration spectra, filled from the wvs lines.
+            Szz .. Qzy: displacement spectra in m^2/Hz (computed by PostProcess()).
+            a0, a1, a2, b1, b2: Longuet-Higgins directional Fourier coefficients.
+            r1, r2: directional spreading parameters, in [0, 1].
+            theta1: mean wave direction per frequency, in degrees.
+            theta2: principal wave direction per frequency, in degrees.
+            wavenumber: deep-water wavenumber per frequency, in rad/m.
+            moment: spectral moments m0, m1, m2 of Szz.
+            swh: significant wave height, in m.
+            mwd: mean wave direction, in degrees.
+            period_peak, period_avg, period_zero: peak, mean and zero-crossing periods, in s.
+        """
         self.slen = slen
         flen = slen//2
         
@@ -869,6 +1256,43 @@ class Wave:
         self.period_zero    = np.nan            # Zero-crossing
         
     def PostProcess(self, freq_min: float = 0.0625, interpolate = True, rolling_average: int = 3):
+        """Compute displacement spectra, directional coefficients and wave statistics.
+
+        Does nothing if slen < 1. Otherwise:
+
+        1. Keep the received acceleration spectra in the raw_ attributes.
+        2. If interpolate, interpolate the acceleration spectra linearly onto 0.030 to 1.250 Hz
+           in 0.005 Hz steps (this becomes freq); values outside the received band are 0.
+        3. For the vertical spectrum only, zero values below 0.0005 g^2/Hz and multiply by
+           1 + y(f), a nonlinear response correction with coefficients a, b, c, d: y is -1
+           below f = b, rises as (a+1) sin^2 to a at b+c, then falls as a cos^2 to 0 at b+c+d.
+        4. Convert to displacement spectra in m^2/Hz by multiplying by g^2 / (2 pi f)^4 and
+           compute the deep-water wavenumber (2 pi f)^2 / g in rad/m.
+        5. Smooth the displacement spectra with a rolling_average-point RollingAverage.
+        6. Reject the spectra (set all displacement spectra to NaN) if any acceleration
+           auto-spectrum exceeds 0.09 g^2/Hz at or below 0.05 Hz (low-frequency noise) or
+           0.3 g^2/Hz anywhere, or any displacement auto-spectrum at or above freq_min exceeds
+           300 m^2/Hz or the vertical one is NaN.
+        7. Compute the moments m0, m1, m2 of Szz (summed up to the first NaN bin) and the peak
+           bin, and the directional coefficients: a0 = Szz / pi,
+           a1, b1 = Qzx, Qzy / sqrt(Szz (Sxx + Syy)), a2 = (Sxx - Syy) / (Sxx + Syy),
+           b2 = 2 Cxy / (Sxx + Syy), r1, r2 their magnitudes, theta1 = atan2(a1, b1) and
+           theta2 = atan2(a2, b2) (NaN angles become 0).
+        8. If m0 > 0: swh = 4 sqrt(m0) (m), period_peak = 1 / f_peak, period_avg = m0 / m1 and
+           period_zero = sqrt(m0 / m2) (s), and mwd is the mean of the theta1 directions
+           weighted by sqrt(Szz) over freq_min to 0.6 Hz. Angles are converted to whole
+           degrees in [0, 360). If m0 is not positive, the spectra, coefficients, moments and
+           statistics are set to NaN and the angles to 0.
+        9. Round everything and convert the arrays to lists for pickling.
+
+        Args:
+            freq_min: lowest frequency, in Hz, used for the 300 m^2/Hz check and for mwd.
+            interpolate: if True, interpolate the spectra onto the fixed frequency grid.
+            rolling_average: rolling average window, in bins; 1 or less for none.
+
+        Raises:
+            Exception: 'Failed to post-process wave data.' if any step fails.
+        """
     
         g = 9.80665 # m s^-2
         pi = math.pi
@@ -1279,8 +1703,23 @@ Composite classes
 """        
 
 class CompositePosition(Position):
+    """A position combined from several positions close in time (e.g. Iridium SBD positions).
+
+    xmtps-aggregate-json.py groups a float's SBD positions that fall within a time window, then
+    uses the composite to fill in profile positions for dives without a GPS fix. The inherited
+    time, lat, lon and cep_km hold the combined result (see compute()).
+    """
 
     def __init__(self, pos: Position = None, compute = True):
+        """Initialize, adding pos (and computing the composite if compute) if given.
+
+        Attributes:
+            dive: dive number the composite is assigned to; NaN until set by the caller.
+            dt_epoch_min, dt_epoch_max: earliest and latest time of the added positions, in
+                seconds since epoch (9999999999 and -1 while empty).
+            num_pos: number of valid positions used by the last compute().
+            positions: the added Position objects.
+        """
         Position.__init__(self)
         self.dive = np.nan
         self.dt_epoch_min = 9999999999
@@ -1292,6 +1731,12 @@ class CompositePosition(Position):
             self.add_position(pos = pos, compute = compute)
         
     def add_position(self, pos: Position, compute = True):
+        """Add a position, update dt_epoch_min/max, recompute if compute, and return self.
+
+        Invalid positions are added too (and count toward dt_epoch_min/max) but compute()
+        ignores them. Raises Exception('Failed to append position.') on any error, including a
+        failed compute().
+        """
         
         try: 
     
@@ -1310,6 +1755,18 @@ class CompositePosition(Position):
         return self
                 
     def compute(self):
+        """Combine the valid positions into one, weighting each by 1 / cep_km^2, and return self.
+
+        Each valid position (see Position.is_valid) is converted to a unit vector on the
+        sphere; the weighted mean vector is converted back to lat/lon (degrees, rounded to 4
+        decimals), so the average is correct across the dateline. The time is the weighted mean
+        time (whole seconds since epoch) and cep_km = sqrt(1 / sum(1 / cep_km^2)), rounded to
+        1 m, as for independent estimates. num_pos is set to the number of positions used.
+
+        Raises:
+            Exception: 'Failed to compute composite position.' if there are no valid positions
+                or the computation fails.
+        """
         
         try: 
         

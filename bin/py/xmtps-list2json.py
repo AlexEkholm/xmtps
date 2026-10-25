@@ -1,10 +1,23 @@
 #!/usr/bin/python3
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Sep  1 14:37:00 2021
+"""Convert XMTPS decoder listing files into per-dive JSON files.
 
-@author: aekholm
+Parses listing files (lis<SN>-<dive>.txt, see "Listing files" in the XMTPS README) line by line
+into a FloatClasses Dive object: float IDs, GPS fixes, SBD messages, mission configuration,
+engineering data, drift, profile, descent, ascent and surface time series, pump records and wave
+spectra. Density and sigma0 are added to the drift and profile samples from RhoLUT. Each dive is
+written with jsonpickle to <output>/<serial>/dives/<serial>_<dive>.json, creating the dives
+directory if needed.
+
+Inputs are listing files and/or directories (subdirectories only with -r), filtered by the -i
+include and -x exclude regular expressions. Unless -f is given, a listing is skipped when its
+JSON file is newer than it, and with -s whenever its JSON file exists.
+
+Example:
+    xmtps-list2json.py -v -i"/data1/alamo/data/list/(908|909|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" -x"/\\..*" -o/data1/alamo/data/json /data1/alamo/data/list/<id>
+
+Author: aekholm
 """
 
 import warnings
@@ -140,6 +153,12 @@ Function Definitions:
 """
 
 def ProcessDirectory(dpath):
+    """Process every listing file in a directory, descending into subdirectories with -r.
+
+    Files are processed in sorted order with ProcessListingFile, which applies the -i and -x
+    filters; subdirectories matching an -x pattern are skipped. Empty directories are ignored with
+    a warning. Errors are logged, or raised with -H.
+    """
 
     dpath = re.sub('\\\\', '/', dpath)
     
@@ -348,7 +367,12 @@ ENG_COLUMNS = {
     }
 
 def ParseValue(s):
-    """Convert a listing field to an int or float where possible; otherwise keep the string."""
+    """Convert a listing field to an int or float where possible; otherwise keep the string.
+
+    Only plain integers ('42', '-7') and decimal numbers with a decimal point ('1.5', '.5', '2.',
+    '1.5e3') are converted. Anything else stays a string, including hex values ('0x10'),
+    exponents without a decimal point ('1e5'), 'nan' and 'inf'.
+    """
     if re.fullmatch(r'[+-]?\d+', s):
         return int(s)
     if re.fullmatch(r'[+-]?(\d+\.\d*|\.\d+)([eE][+-]?\d+)?', s):
@@ -356,10 +380,15 @@ def ParseValue(s):
     return s
 
 def HeaderFields(names_line, units_line):
-    """Return (name, units) for the columns of an engineering header after 'SN dive midx'.
+    """Return the (name, unit) pairs for the columns of an engineering header after 'SN dive midx'.
 
-    The listing right-aligns each unit under its column name, so units are matched to names by
-    the right edge of their text.
+    The listing right-aligns each unit under its column name, so a unit is matched to a name when
+    the right edges of their text are within 2 characters; the unit is '' when none is. Units are
+    returned without their parentheses, e.g. 'dBar' for '(dBar)'.
+
+    Args:
+        names_line: the '#      SN dive midx ...' (or 'idx') header line.
+        units_line: the units line under it, or None.
     """
     names = [(m.group(), m.end()) for m in re.finditer(r'\S+', names_line[1:])][3:]
     units = [(m.group().strip('()'), m.end()) for m in re.finditer(r'\S+', units_line[1:])] \
@@ -370,9 +399,24 @@ def ParseEngineeringLine(engineering, line, header, units_line, group):
     """Store one engineering (E0x) or engineering error (e0x) listing line.
 
     Each column is stored in the section object's attribute given by ENG_COLUMNS (looked up by
-    'sub-group/name', then 'name|units', then 'name'); date/time attributes get a DateTime.
-    Columns not in ENG_COLUMNS go into engineering.extra[section]. Error lines go into
-    engineering.errors.
+    'sub-group/name', then 'name|unit', then 'name'); date/time attributes get a DateTime.
+    Columns not in ENG_COLUMNS go into engineering.extra[section]; when a column name is already
+    there (e.g. 'pres' in dBar and in counts), the key gets a '_<unit>' suffix ('pres_counts').
+    Error lines ('e0x SN dive idx date-time err-code', but surface engineering v0x10 error lines
+    have no date-time) go into engineering.errors as dicts with 'section', 'idx' and one entry per
+    column of their header ('date-time' stored as 'dt_str', 'err-code' as 'code').
+
+    Args:
+        engineering: the Dive's engineering object to fill in.
+        line: the listing line.
+        header: the latest '#      SN dive midx ...' (or 'idx') header line, or None.
+        units_line: the units line under the header, or None.
+        group: the current '# --- Name ---' sub-group name ('' outside one), used for the
+            'sub-group/name' keys of ENG_COLUMNS.
+
+    Raises:
+        Exception: if the number of data fields does not match the header; the caller logs this
+            at debug level and skips the line.
     """
     x = line.split('#', 1)[0].split()
     section = ENG_SECTIONS.get(x[0].upper(), x[0].lower())
@@ -401,6 +445,31 @@ def ParseEngineeringLine(engineering, line, header, units_line, group):
             extra[key] = ParseValue(value)
 
 def ProcessListingFile(fpath_list):
+    """Parse one listing file into a Dive object and write its JSON file.
+
+    The file is skipped unless it matches an -i pattern (when given) and no -x pattern. Comment
+    lines are not stored, but the parser remembers the latest data-table column header
+    ('SN dive sampleIdx|idx nSam|nSam ...'), engineering header ('SN dive midx|idx ...') and its
+    units line, and '# --- Name ---' sub-group. Data lines by tag:
+
+        LIS          serial, dive number, DAC and WMO IDs; without -f, stop here if the dive's
+                     JSON file is newer than the listing (or exists at all, with -s)
+        MIS, m       mission configuration and firmware versions, CTD type, parameters
+        E0x, e0x     engineering sections and errors (ParseEngineeringLine)
+        GPS, SBD     GPS fixes (with estimated uncertainty) and SBD message metadata
+        D, d         drift samples (pres, temp, saln, sample times when the float sends them)
+        PRO, pro     binned profile (pres, temp, conductivity-cell temp, saln, corrected saln)
+        F/f, R/r     descent and ascent pressure time series with phase codes
+        SFC, sfc     surface time series (pres, temp, saln)
+        pmp          pump records (pres, time, voltage, current, vacuum)
+        WVS, wvs     wave spectra (wvm is ignored)
+
+    Drift and profile samples get density and sigma0 from RhoLUT; temperatures and salinities at
+    or below the lookup table minimum become NaN. A, PMP, PRD/prd, IRI, SFD, PRC, SHX/shx, VLV/vlv
+    and XSV lines are ignored, and unknown lines are logged at debug level. A line that fails to
+    parse is logged as an error (raised with -H) and skipped. After parsing, Dive.PostProcess is
+    called and the result is written with WriteJsonDiveDataFile.
+    """
 
     #global float_map
 
@@ -1062,6 +1131,11 @@ def ProcessListingFile(fpath_list):
 
         
 def WriteJsonDiveDataFile(dive_data):
+    """Write a Dive object to <output>/<serial>/dives/<serial>_<dive>.json with jsonpickle.
+
+    The dives directory is created if it does not exist. The serial and dive number are formatted
+    with at least 4 digits. Errors are logged, or raised with -H.
+    """
     
     # Check dive data object
     

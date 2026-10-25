@@ -509,6 +509,8 @@ Python tools:
   (it was the nearest cell, and the grid spacing taken from two float32 coordinates put it up to
   a third of a cell off). ETOPO2 is read from `/data1/etopo2/` by default; `--etopo2` is an
   alias of `-b/--bathymetry`.
+- Docstrings for all modules, classes and functions of the Python tools (module docstrings with
+  usage examples replace the editor templates; inaccurate ones corrected); no code changed.
 
 ### 2026-10-24
 

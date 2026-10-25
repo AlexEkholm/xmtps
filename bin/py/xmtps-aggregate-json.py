@@ -1,10 +1,39 @@
 #!/usr/bin/python3
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-"""
-Created on Thu Apr  7 13:50:06 2022
+"""Aggregate per-dive JSON files into per-float JSON files, plots and an HTML index page.
 
-@author: aekholm
+Reads the per-dive JSON files written by xmtps-list2json.py (jsonpickle-encoded Dive objects from
+FloatClasses.py; files whose json_vers differs from JSON_VERSION are ignored), groups the dives by
+float (WHOI id) and, for each float:
+
+    1. aggregates the dives into pandas DataFrames (ascent, descent, drift, profile, pump, surface,
+       GPS, SBD, wave, engineering, mission parameters, ...) and derives profile positions,
+       composite Iridium positions, submerged and surface displacements, cycle timings and a
+       summary (AggregateDiveData);
+    2. writes the aggregate JSON files to <output>/<id>/, e.g. <id>_summary.json,
+       <id>_profile.json, <id>_profile_position.json, <id>_mission.json,
+       <id>_engineering_data.json and <id>_gps.json (WriteAggregateJsonFiles; DataFrames in
+       pandas 'split' orientation, the summary jsonpickle-encoded);
+    3. if a plot directory is given (-p), writes the Plotly plots of each plot group in
+       PLOT_WRITERS to <plots>/<id>/ as <id>_<plot>.html, <id>_<plot>.png,
+       <id>_<plot>_small.png and <id>_<plot>_thumb.png, and an index.html page linking them
+       (WritePlotFiles, WritePlotImageFiles, WriteHtmlFile).
+
+Paths on the command line may be directories (ProcessDirectory; with -r also their
+subdirectories) or single JSON files (ProcessJsonListingFile). Only files matching an -i regex are
+read. A directory is skipped when it holds a .lastprocessed file and none of its included files
+has a modification time newer than the time stored in it (-f processes it regardless). The new
+.lastprocessed files are written only after all aggregate and plot files have been written
+(WriteLastProcessedFiles), so a run that is interrupted or halted on an error is retried on the
+next run. Errors are logged and processing continues, unless -H (--halt-on-error) is given.
+
+Example (as run in production):
+
+    xmtps-aggregate-json.py -v -i"/data1/alamo/data/json/[0-9]+/dives/[0-9]+_-?[0-9]+.json"
+        -o/data1/alamo/data/json -p/data1/alamo/data/plots2 /data1/alamo/data/json/<id>/dives
+
+Author: aekholm (created 2022-04-07)
 """
 
 import warnings
@@ -62,9 +91,19 @@ bathymetry = None
 def BathymetryPressure(lat, lon):
     """Return the seafloor pressure (dBar) from ETOPO2 at each position, NaN on land.
 
-    Interpolates bilinearly between the four surrounding grid cell centres (longitude wraps at
-    the dateline) and uses the Saunders (1981) depth-to-pressure conversion. Returns None if the
-    bathymetry file can't be read.
+    Reads the ETOPO2 netCDF file named by the global args.bathymetry (-b) on the first call and
+    caches the open dataset in the global bathymetry; a failure to read it is logged once and
+    cached too, so this and all later calls return None. Interpolates the elevation bilinearly
+    between the four surrounding grid cell centres (longitude wraps at the dateline; latitude is
+    clamped to the grid) and converts depth to pressure with Saunders (1981).
+
+    Args:
+        lat: Latitudes in degrees north (scalar or array-like).
+        lon: Longitudes in degrees east (scalar or array-like, any 360-degree range).
+
+    Returns:
+        A NumPy array of seafloor pressures in dBar, NaN where the interpolated elevation is at or
+        above sea level, or None if the bathymetry file can't be read.
     """
     global bathymetry
     if bathymetry is None:
@@ -189,6 +228,25 @@ Function Definitions:
 """
 
 def AggregateDiveData():
+    """Aggregate the dives of each float in float_map into float_aggregate_map.
+
+    For each float, concatenates the per-dive data into pandas DataFrames, one per key: 'ascent',
+    'descent', 'drift', 'profile', 'pump', 'surface', 'gps', 'sbd', 'engineering', and 'wave' and
+    'wave_spectra' (both removed when either is empty). 'mission', 'engineering_data' (all
+    engineering values, one row per dive, columns no dive reports dropped) and
+    'engineering_errors' are added only when some dive JSON has those fields. It then derives
+    'profile_position' (the dive's first GPS fix with idx 0 or 2, else the next dive's fix with
+    idx 1, else the surface start time without a position), 'iridium_position' (composite
+    positions of the SBD messages within a CPOS_SPAN_SECONDS window, also used for profiles
+    without a GPS fix when their CEP is at most CPOS_MAX_CEP_KM), 'displacement_submerged',
+    'displacement_surface', 'cycle_timing', and the 'summary' dict (startup, deployment and
+    latest GPS fix and SBD message, firmware version, CTD type, age, latest cycle, duration,
+    depth, ...). 'id' holds the float's id object.
+
+    A failure for one dive or data type is logged and skipped, and a failure for one float leaves
+    it out of float_aggregate_map; with --halt-on-error (-H) either raises instead. Any exception
+    that escapes is re-raised as 'Failed to aggregate dive data.'
+    """
     
     global float_map
     global float_aggregate_map
@@ -1589,6 +1647,20 @@ def AggregateDiveData():
         raise Exception('Failed to aggregate dive data.')    
     
 def ProcessDirectory(dpath):
+    """Read the included JSON files in a directory into float_map, unless none has changed.
+
+    Collects the files in dpath that match an --include (-i) regex (all files without -i) and,
+    with --recursive (-r), first processes the subdirectories that match no --exclude (-x) regex.
+    If the directory holds a .lastprocessed file and no collected file is newer than the
+    modification time stored in it, the directory is skipped (unless --force, -f); an unreadable
+    .lastprocessed file is logged and the directory processed. Otherwise each file is read with
+    ProcessJsonListingFile, and the newest modification time of the files read is queued in
+    lastprocessed_pending, to be written by WriteLastProcessedFiles once all output is written.
+    Errors are logged and swallowed unless --halt-on-error (-H) is given.
+
+    Args:
+        dpath: Directory path; backslashes are converted to forward slashes.
+    """
 
     dpath = re.sub('\\\\', '/', dpath)
     
@@ -1735,6 +1807,12 @@ def ProcessDirectory(dpath):
     logger.debug('Processed directory: ' + dpath + ' ')
 
 def WriteLastProcessedFiles():
+    """Write the .lastprocessed files queued in lastprocessed_pending.
+
+    Each file gets the newest modification time (seconds since the epoch) of the JSON files read
+    from its directory. Called after the aggregate and plot files have been written. A failure is
+    logged and swallowed unless --halt-on-error (-H) is given.
+    """
 
     for fpath_lproc, lproc in lastprocessed_pending:
 
@@ -1750,6 +1828,21 @@ def WriteLastProcessedFiles():
             logger.error(errstr)
 
 def ProcessJsonListingFile(fpath):
+    """Read one per-dive JSON file and add its Dive object to float_map.
+
+    Skips the file if it doesn't exist, doesn't match an --include (-i) regex, or has a json_vers
+    other than JSON_VERSION. Records the path (with the --strip-path, -S, regex removed) in
+    dive.json_file, sets dive.list_file.mtime to the file's modification time, and appends the
+    dive to the Float of its WHOI id, creating the Float if needed and updating its DAC and WMO
+    ids. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+
+    Args:
+        fpath: Path of a JSON file written by xmtps-list2json.py.
+
+    Returns:
+        The file's modification time (seconds since the epoch), or None if it was skipped or
+        failed.
+    """
     
     global float_map
     
@@ -1836,6 +1929,20 @@ def ProcessJsonListingFile(fpath):
     return None 
         
 def WriteAggregateJsonFiles():
+    """Write the aggregate JSON files of each float in float_aggregate_map.
+
+    Writes each DataFrame of the float's aggregate data that is present to
+    <output>/<id>/<id>_<key>.json (--output, -o; the float directory is created if needed) in
+    pandas 'split' orientation without the index: ascent, descent, drift, engineering, mission,
+    engineering_data, engineering_errors, gps, profile, profile_position, pump, sbd, surface, wave,
+    wave_spectra, iridium_position, displacement_submerged, displacement_surface and
+    cycle_timing. The summary dict is written jsonpickle-encoded to <id>_summary.json; a failure
+    to write it is logged and swallowed unless --halt-on-error (-H) is given. Floats without a
+    valid 'id' are logged and skipped.
+
+    Raises:
+        Exception: If the output directory doesn't exist, or on any other failure.
+    """
     
     global float_aggregate_map
     
@@ -2093,6 +2200,18 @@ def WriteAggregateJsonFiles():
         raise Exception('Failed to write aggregate JSON files.')
  
 def WriteHtmlFile(float_id):
+    """Write the index.html page of one float's plots to <plots>/<id>/index.html.
+
+    The page has a fixed navigation pane, sections of small plot images (each linking to its
+    interactive HTML plot) for profile, wave (only when there is wave data), drift, surface,
+    ascent, descent, hydraulic system and satcom data, and a "Figure Files" table listing every
+    figure with its thumbnail, category and the sizes of its HTML and PNG files. It is built from
+    the figure metadata that WritePlotFiles stores in float_aggregate_map[float_id]['figures']. A
+    failure is logged and swallowed unless --halt-on-error (-H) is given.
+
+    Args:
+        float_id: WHOI id of the float (a key of float_aggregate_map).
+    """
 
     global float_aggregate_map
 
@@ -2662,7 +2781,17 @@ def WriteHtmlFile(float_id):
         logger.error(errstr)
 
 def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the geographic position plots for one float; return their figure metadata."""
+    """Write the geographic position plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'profile_position', 'gps', 'iridium_position' and 'sbd' data as position_globe,
+    position, position_all and position_gps (category 'position').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'profile_position' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -3752,7 +3881,18 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
 
 
 def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the submerged displacement plots for one float; return their figure metadata."""
+    """Write the submerged displacement plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'displacement_submerged' data as displacement_submerged and
+    displacement_submerged_velocity (category 'displacement').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'displacement_submerged' data. A failure is logged and swallowed unless --halt-on-error (-H) is
+    given.
+    """
     
     figs_meta = []
     
@@ -4049,7 +4189,18 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
 
 
 def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the surface displacement plots for one float; return their figure metadata."""
+    """Write the surface displacement plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'displacement_surface' data as displacement_surface and displacement_surface_velocity
+    (category 'displacement').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'displacement_surface' data. A failure is logged and swallowed unless --halt-on-error (-H) is
+    given.
+    """
     
     figs_meta = []
     
@@ -4344,7 +4495,32 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
 
 
 def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the pressure-time trajectory plots for one float; return their figure metadata."""
+    """Write the pressure-time trajectory plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data and dpath_float.
+
+    Plots the 'ascent', 'descent', 'drift' and 'surface' pressures of dives 1 and later, with the
+    GPS fixes and SBD messages at the surface, as trajectory (category 'trajectory'; size figWideL
+    if the deepest pressure is over 500 dBar, else figWide). Out-of-range pressures are set to NaN
+    in the aggregate DataFrames themselves, so later plot groups see them as NaN.
+
+    The drift target line is the target drift pressure DTD<MPS> of each dive's mission phase MPS
+    from the 'mission' data (DTD0 or DTD on firmware without phases; MPS outside 0-9, such as 255
+    before a mission is loaded, and targets outside 0-7000 dBar are ignored). The phase is
+    reported from before the dive's phase switch, so when MPC >= MNM<MPS> the phase rolls over to
+    the next phase MNS<MPS>. The line is one stepped line for dives 1 and later, changing at the
+    start of each dive's descent and ending at the start of the last dive's ascent (or its last
+    drift sample); dives without mission parameters keep the previous target.
+
+    The bathymetry line, labelled "Bathymetry (ETOPO2)", is the seafloor pressure at the GPS fixes
+    of dives 1 and later, interpolated bilinearly from ETOPO2 (--bathymetry, -b) by
+    BathymetryPressure; it is left out if the bathymetry file can't be read.
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'ascent' and no 'descent' data. A failure is logged and swallowed unless --halt-on-error (-H) is
+    given.
+    """
     
     figs_meta = []
     
@@ -4739,7 +4915,17 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
 
 
 def WriteCycleTimingPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the cycle timing plots for one float; return their figure metadata."""
+    """Write the cycle timing plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data and dpath_float.
+
+    Plots the 'cycle_timing' data as cycle_timing, the stacked duration of each cycle phase per dive
+    (category 'cycle_timing').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'cycle_timing' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -4929,7 +5115,18 @@ def WriteCycleTimingPlots(float_id, float_aggregate_data, dpath_float, dives, ma
 
 
 def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the aggregate profile plots for one float; return their figure metadata."""
+    """Write the aggregate profile plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'profile' data (with 'profile_position' for the profile times) as profile_temp,
+    profile_saln, profile_dens, profile_sigma0, profile_ts and profile_num_bins (category
+    'profile').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'profile' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -5345,7 +5542,18 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
 
 
 def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the aggregate profile contour plots for one float; return their figure metadata."""
+    """Write the aggregate profile contour plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Regrids the 'profile' data (with 'profile_position' for the profile times) and plots it as
+    profile_contour_temp, profile_contour_saln, profile_contour_dens and profile_contour_sigma0
+    (category 'profile_contour').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'profile' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -5873,7 +6081,17 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
 
 
 def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the aggregate ascent plots for one float; return their figure metadata."""
+    """Write the aggregate ascent plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'ascent' data as ascent, ascent_rate_v_pres, ascent_rate_v_time, ascent_rate_avg and
+    ascent_sample_count (category 'ascent').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'ascent' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -6318,7 +6536,17 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
 
 
 def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the aggregate descent plots for one float; return their figure metadata."""
+    """Write the aggregate descent plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'descent' data as descent, descent_rate_v_pres, descent_rate_v_time, descent_rate_avg
+    and descent_sample_count (category 'descent').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'descent' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -6758,7 +6986,18 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
 
 
 def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the aggregate drift plots for one float; return their figure metadata."""
+    """Write the aggregate drift plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'drift' data as drift_pres, drift_temp, drift_saln, drift_dens and drift_sigma0, their
+    per-dive averages drift_pres_avg ... drift_sigma0_avg, and drift_sample_count (category
+    'drift').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no 'drift'
+    data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -7445,7 +7684,19 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
 
 
 def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the aggregate pump plots for one float; return their figure metadata."""
+    """Write the aggregate pump plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'pump' data as pump_pres, pump_volt, pump_curr, pump_power, pump_energy, pump_vac,
+    pump_power_v_pres, pump_vac_v_pres, pump_vac_v_time, the per-dive pump_vac_avg, pump_volt_avg,
+    pump_curr_avg, pump_power_avg, pump_energy_sum, pump_time_sum and pump_num_ops, and
+    pump_energy_v_max_pres (category 'pump').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no 'pump'
+    data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -8609,7 +8860,17 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
 
 
 def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the aggregate surface plots for one float; return their figure metadata."""
+    """Write the aggregate surface plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'surface' data as surface_pres, surface_temp, surface_pres_avg, surface_temp_avg and
+    surface_sample_count (category 'surface').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'surface' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -9006,7 +9267,19 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
 
 
 def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the Iridium and GPS plots for one float; return their figure metadata."""
+    """Write the Iridium and GPS plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
+
+    Plots the 'sbd', 'gps', 'iridium_position' and 'summary' data as satcom, satcom_gps_ttf,
+    satcom_gps_cno, satcom_gps_nsat, satcom_gps_hdop, satcom_gps_fix_cep, satcom_sbd_count,
+    satcom_sbd_data_size, satcom_sbd_data_size_avg and satcom_iridium_fix_cep_avg (category
+    'satcom').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no 'sbd'
+    and no 'gps' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
     
     figs_meta = []
     
@@ -10306,7 +10579,21 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
 
 
 def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the wave plots for one float; return their figure metadata."""
+    """Write the wave plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses all of them (max_dive for the dive colour scale).
+
+    Plots the 'wave' and 'wave_spectra' data (with 'profile_position') as wave_mwm, wave_swh,
+    wave_period, wave_direction_mean, the acceleration and displacement spectra
+    wave_spectra_{accel,disp}_{Sxx,Syy,Szz} (log and _linear scales) and
+    wave_spectra_{accel,disp}_Cxy_linear, and the waterfalls wave_waterfall_{accel,disp}_Szz (log
+    and _linear) (category 'wave').
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no 'wave'
+    data (logged at debug level only). A failure is logged and swallowed unless --halt-on-error (-H)
+    is given.
+    """
     
     figs_meta = []
     
@@ -12071,6 +12358,16 @@ PLOT_WRITERS = [
 
 
 def WritePlotFiles():
+    """Write the plot files and index.html page of each float in float_aggregate_map.
+
+    For each float with SBD messages, creates <plots>/<id>/ (--plots, -p) if needed and calls each
+    plot-group function in PLOT_WRITERS with the float's id, aggregate data, plot directory, the
+    sorted dive numbers of its SBD messages and the largest of them. The returned figure metadata
+    (paths reduced to file names, titles without their "<id>: " prefix) is stored by id_str in
+    float_aggregate_data['figures'], then WriteHtmlFile writes the index page. A failure for a
+    float, or a missing plot directory, is logged and swallowed unless --halt-on-error (-H) is
+    given.
+    """
     
     global float_aggregate_map
     
@@ -12184,6 +12481,32 @@ def WritePlotImageFiles(
         ts_pos = [1, -.06],
         showlegend = True
         ):
+    """Write one figure as interactive HTML, PNG, small PNG and thumbnail files.
+
+    Writes <dpath_float>/<float_id>_<id_str>.html (Plotly from the CDN, at the html_width and
+    html_height of opts[size]; None lets the plot fill the page), <float_id>_<id_str>_small.png
+    (small_width x small_height, without the legend), <float_id>_<id_str>_thumb.png (the small
+    image reduced to the figThumb width) and <float_id>_<id_str>.png (width x height, without the
+    legend). The figure's layout is changed in place. With --display-figures (-D) the figure is
+    also shown in the browser.
+
+    Args:
+        id_str: Figure id, used in the file names and as the key of the figure metadata.
+        figure: Plotly figure; its title text becomes the metadata title.
+        float_id: WHOI id of the float, used in the file names.
+        dpath_float: Directory to write to; if None or empty, <plots>/<float_id> (created if
+            needed).
+        category: Category shown in the figure table of index.html.
+        size: Key of opts giving the image sizes (e.g. 'fig', 'figWide', 'figWideL').
+        ts_pos: Position for a timestamp annotation; currently unused.
+        showlegend: Whether the HTML plot shows the legend (the PNG images never do).
+
+    Returns:
+        The figure metadata dict (id_str, dt_str, title, category, size, the fpath_* paths with the
+        --strip-path regex removed, and the size_* file sizes in bytes; the fpath_svg* paths are
+        set but no SVG files are written), or None if any file could not be written (logged, or
+        raised with --halt-on-error, -H).
+    """
     try: 
         
         if dpath_float is None or len(dpath_float) < 1:
