@@ -416,9 +416,19 @@ inserts a row or overwrites the row with the same key. Each worker thread uses i
 
 The mail processing thread saves each message before it is decoded. While the SQL server is
 unavailable, messages are held and retried every 10 s and no new mail is fetched (see
-`mail.moveMessages`), so an outage delays processing but does not lose messages. The table
-definitions are in the Doxygen documentation (the "Libraries and Database Schema" page in
-`doc/xmtps.pdf`).
+`mail.moveMessages`), so an outage delays processing but does not lose messages.
+
+[`sql/xmtps-schema.sql`](sql/xmtps-schema.sql) creates the tables (the production schema,
+including its indexes and foreign keys) in an existing database:
+
+```
+mysql -u <user> -p -e "CREATE DATABASE xmtps_alamo DEFAULT CHARACTER SET utf8mb4"
+mysql -u <user> -p xmtps_alamo < sql/xmtps-schema.sql
+```
+
+It only creates tables that do not exist yet. The server's `sql_mode` must allow zero dates
+(production uses `STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION`), because
+XMTPS writes unset date/times as zero dates.
 
 ## Deployment
 
@@ -670,6 +680,8 @@ Documentation:
   and describes the SQL backend in general instead of listing its tables and columns.
 - The README documents the JSON files written by the Python tools: the per-dive jsonpickle
   files, the aggregate tables, the float summary and `.lastprocessed`.
+- `sql/xmtps-schema.sql` creates the database tables (the production schema, with the new
+  `XFloatMail.iridium_position_datetime` index); it is referenced from the SQL backend section.
 
 ### 2026-10-24
 
