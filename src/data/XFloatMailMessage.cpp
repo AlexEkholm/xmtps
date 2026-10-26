@@ -109,11 +109,8 @@ const util::mysql::SqlTableDescription<XFloatMailMessage> XFloatMailMessage::sql
                 &XFloatMailMessage::id_msg_uid,
                 &XFloatMailMessage::set_id_msg_uid),
 
-        sql_cols(
-                XFloatMailMessage,
-                "msg_body_text",
-                &XFloatMailMessage::msg_body_text,
-                &XFloatMailMessage::set_msg_body_text),
+        /* The mail body text and raw header text are not stored: they are only used while the mail
+         * is parsed, and both are part of msg_raw_text. */
 
         sql_colb(
                 XFloatMailMessage,
@@ -138,12 +135,6 @@ const util::mysql::SqlTableDescription<XFloatMailMessage> XFloatMailMessage::sql
                 "msg_header_subject",
                 &XFloatMailMessage::msg_header_subject,
                 &XFloatMailMessage::set_msg_header_subject),
-
-        sql_cols(
-                XFloatMailMessage,
-                "msg_header_raw_text",
-                &XFloatMailMessage::msg_header_raw_text,
-                &XFloatMailMessage::set_msg_header_raw_text),
 
         sql_colb(
                 XFloatMailMessage,

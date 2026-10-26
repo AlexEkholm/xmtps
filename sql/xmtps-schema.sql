@@ -29,7 +29,18 @@
 --
 -- Source: the production schema (mysqldump of xmtps_alamo, MySQL 8.4.11, 2026-09-08), with the
 -- index on XFloatMail.iridium_position_datetime added on 2026-10-25 for the startup query that
--- selects the floats active in the last 90 days.
+-- selects the floats active in the last 90 days, and the XFloatMail changes of 2026-10-26:
+--
+--   - Columns dropped: id_dac and id_wmo (never written), msg_body_text and msg_header_raw_text
+--     (never read after parsing; both are part of msg_raw_text).
+--   - Primary key reordered to start with id_imei, so each float's messages are stored together.
+--     It has the same columns, so the same rows are duplicates.
+--   - Indexes for the daemon's queries: inst_dive_idx (a dive's messages; a float's messages for
+--     reprocessing) and active_idx (the floats active in the last 90 days, read from the index
+--     alone). They replace id_dac_idx, id_wmo_idx, id_dive_idx (the old primary key's first
+--     column), id_instrument and iridium_position_datetime_idx.
+--
+-- bin/migrate-xfloatmail.sh applies these changes to an existing database.
 -- =================================================================================================
 
 CREATE TABLE IF NOT EXISTS `XFloat` (
@@ -152,23 +163,19 @@ CREATE TABLE IF NOT EXISTS `XFloatMail` (
   `id_sbd_momsn` smallint NOT NULL DEFAULT '-1',
   `id_sbd_packet` int NOT NULL DEFAULT '-1',
   `id_msg` varchar(128) NOT NULL,
-  `id_dac` smallint NOT NULL DEFAULT '-1',
   `id_instrument` smallint NOT NULL DEFAULT '-1',
   `id_sbd_mtmsn` int NOT NULL DEFAULT '-1',
   `id_msg_uid` int NOT NULL DEFAULT '-1',
-  `id_wmo` int NOT NULL DEFAULT '-1',
   `iridium_position_cep_radius` int DEFAULT NULL,
   `iridium_position_datetime` datetime DEFAULT NULL,
   `iridium_position_is_valid` bit(1) NOT NULL DEFAULT b'0',
   `iridium_position_latitude` double DEFAULT NULL,
   `iridium_position_longitude` double DEFAULT NULL,
-  `msg_body_text` varchar(512) DEFAULT NULL,
   `msg_body_is_valid` bit(1) NOT NULL DEFAULT b'0',
   `msg_header_datetime` datetime DEFAULT NULL,
   `msg_header_from` varchar(128) DEFAULT NULL,
   `msg_header_subject` varchar(128) DEFAULT NULL,
   `msg_header_is_valid` bit(1) NOT NULL DEFAULT b'0',
-  `msg_header_raw_text` text,
   `msg_raw_text` text,
   `msg_is_valid` bit(1) NOT NULL DEFAULT b'0',
   `sbd_data` blob,
@@ -179,11 +186,8 @@ CREATE TABLE IF NOT EXISTS `XFloatMail` (
   `sbd_file_size_bytes` int DEFAULT NULL,
   `sbd_session_status_code` int DEFAULT NULL,
   `sbd_session_status_string` varchar(64) DEFAULT NULL,
-  PRIMARY KEY (`id_dive`,`id_imei`,`id_sbd_momsn`,`id_sbd_packet`,`id_msg`),
-  KEY `id_dac_idx` (`id_dac`),
-  KEY `id_wmo_idx` (`id_wmo`),
-  KEY `id_dive_idx` (`id_dive`),
+  PRIMARY KEY (`id_imei`,`id_dive`,`id_sbd_momsn`,`id_sbd_packet`,`id_msg`),
   KEY `id_sbd_momsn_idx` (`id_sbd_momsn`),
-  KEY `id_instrument` (`id_instrument`),
-  KEY `iridium_position_datetime_idx` (`iridium_position_datetime`)
+  KEY `inst_dive_idx` (`id_instrument`,`id_dive`),
+  KEY `active_idx` (`iridium_position_datetime`,`msg_is_valid`,`id_instrument`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;

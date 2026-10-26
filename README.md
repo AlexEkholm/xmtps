@@ -534,6 +534,14 @@ It only creates tables that do not exist yet. The server's `sql_mode` must allow
 (production uses `STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION`), because
 XMTPS writes unset date/times as zero dates.
 
+[`bin/migrate-xfloatmail.sh`](bin/migrate-xfloatmail.sh) brings an existing `XFloatMail` table to
+the current layout (dropped columns, primary key starting with `id_imei`, and the indexes for the
+daemon's queries; see the comments in `sql/xmtps-schema.sql`). Run it as root after deploying a
+build that no longer writes the dropped columns; it refuses to run otherwise, and also while the
+MySQL data directory is on the root filesystem, since the rebuild needs room for a second copy of
+the table. [`bin/move-mysql-datadir.sh`](bin/move-mysql-datadir.sh) moves the data directory from
+`/var/lib/mysql` to `/data1/mysql`.
+
 ## Deployment
 
 The `bin/*.service` files are systemd units:
@@ -729,6 +737,20 @@ when none of its dive files is newer, unless `-f` is given.
 ## Changelog
 
 ### 2026-10-26
+
+`XFloatMail` table (needs `bin/migrate-xfloatmail.sh` once the build is deployed):
+
+- The mail body text and raw header text are no longer stored (`msg_body_text`,
+  `msg_header_raw_text`): they are only used while a mail is parsed, and both are part of
+  `msg_raw_text`. The unused `id_dac` and `id_wmo` columns are dropped.
+- The primary key starts with `id_imei` instead of `id_dive`, so each float's messages are stored
+  together instead of spread over the 19 GB table. New indexes match the daemon's queries:
+  `inst_dive_idx` (`id_instrument`, `id_dive`) for loading a dive and reprocessing a float, and
+  `active_idx` (`iridium_position_datetime`, `msg_is_valid`, `id_instrument`) for the startup
+  query of the floats active in the last 90 days, which it answers from the index alone.
+  The indexes they replace are dropped.
+- `bin/move-mysql-datadir.sh` moves the MySQL data directory to `/data1`: the database
+  (23 GB, almost all `XFloatMail`) had filled the 49 GB root filesystem to 94%.
 
 Wave spectra bin frequencies (decoder and `FloatClasses.py`):
 
