@@ -2021,13 +2021,12 @@ void XFloatDiveData::DecodeXMsgData(
 
     linf() << "Decoding message data...";
 
-    // Check data length.
+    /* Check data length. Log and discard a short packet rather than throw: this function must not
+     * throw, and the message is already saved, so it would fail again whenever it is decoded. */
     if(data.size() < 8) {
-      ostringstream os;
-      os << ": Invalid X-Message size! Expected at least 8 bytes, but received only "
-         << data.size()
-         << " bytes!";
-      EXC_THROW(os.str());
+      lerr() << "Invalid X-Message size! Expected at least 8 bytes, but received only "
+             << data.size() << " bytes! Packet discarded.";
+      return;
     }
 
     /* Verify the checksum: the packet ends in '$', two checksum characters and '>'. The checksum
@@ -2041,11 +2040,13 @@ void XFloatDiveData::DecodeXMsgData(
       if(data[n - 4] != '$' || data[n - 1] != '>') {
         lwrn() << "X-Message packet has no '$cc>' trailer; checksum not verified.";
       } else if(data[n - 3] != 0x30 + (sum >> 4) || data[n - 2] != 0x30 + (sum & 0x0F)) {
-        ostringstream os;
-        os << "X-Message checksum mismatch: received '" << (char) data[n - 3] << (char) data[n - 2]
-           << "', computed '" << (char) (0x30 + (sum >> 4)) << (char) (0x30 + (sum & 0x0F))
-           << "'! Packet discarded.";
-        EXC_THROW(os.str());
+
+        /* Log and discard the packet rather than throw: this function must not throw, and the
+         * message is already saved, so it would fail again whenever it is decoded. */
+        lerr() << "X-Message checksum mismatch: received '" << (char) data[n - 3]
+               << (char) data[n - 2] << "', computed '" << (char) (0x30 + (sum >> 4))
+               << (char) (0x30 + (sum & 0x0F)) << "'! Packet discarded.";
+        return;
       }
     }
 
@@ -3564,7 +3565,8 @@ void XFloatDiveData::GetGainsAndOffsets(
  *                              the offset is not computed).
  *  @param[in]  min_num_samples The minimum number of surface pressure samples a dive needs to be
  *                              included; a dive with fewer gives too few samples for a reliable
- *                              minimum.
+ *                              minimum. With fewer than 5 samples, the outlier rejection cannot
+ *                              reliably discard a bad sample.
  *
  *  @throw      util::log::MessageException if an error occurs.
  *

@@ -625,7 +625,7 @@ class XFloatDiveData:
         uint16_t& so) const;
 
     float ComputePressureOffsetFromSurfaceTimeSeries(unsigned int max_num_dives,
-            int min_num_samples = 10);
+            int min_num_samples = 5);
 
     string GenerateListingString() const;
 

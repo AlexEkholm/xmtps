@@ -300,7 +300,7 @@ the dive's pressures. SBE CTDs correct pressure onboard and are not corrected ag
   (samples farther from the median than 3 × 1.4826 × the median absolute deviation, or than
   0.1 dBar if that is larger). The offset is the mean of these minima over the dive and up to
   three preceding dives whose surface data is valid (a complete surface series, a GPS fix, and a
-  mean surface pressure within ±5 dBar) and that have at least 10 surface pressure samples, so
+  mean surface pressure within ±5 dBar) and that have at least 5 surface pressure samples, so
   that the minimum is not taken from too few samples.
 - **Applied to**: the fall, drift, profile, valve, pump and rise pressures in the listing. The
   surface time series (`SFC`, `sfc`, `SFD`) is listed uncorrected, since it is what
@@ -739,6 +739,13 @@ Decoder daemon (version 1.0):
   stay in the database). With 1,461 messages being reprocessed, shutdown took 8.5 s instead of
   29.9 s.
 - `xmtps-alamo.service`: `TimeoutStopSec=300` (systemd's default was 90 s).
+- The surface pressure offset now counts dives with at least 5 surface pressure samples (it was
+  10). On 3,812 production dives, offsets from the first 5 samples were within 0.085 dBar of
+  those from all samples for 95% of the 4-dive offsets; below 5, outliers are no longer
+  rejected reliably. The limit of 10 had left the offset uncorrected for 27 RBR floats that send
+  8 or 9 samples per dive.
+- A packet with a bad checksum or fewer than 8 bytes is logged and discarded; before, it
+  terminated the daemon.
 
 ### 2026-10-25
 
