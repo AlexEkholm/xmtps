@@ -71,6 +71,7 @@ bin/
   xmtps-alamo.service         systemd unit for the decoder daemon
   xmtps-alamo-plot.service    systemd unit for the plot-generation loop
 build/                        build-number script and counter
+example/                      real example files from one dive (see example/README.md)
 ```
 
 ## Building
@@ -334,6 +335,12 @@ Logs are written to `<dir.log>/YYYY-MM-DD.log`, with warnings and errors also in
 | Listings | `<dir.lis>/<serial>/lis<serial>-<dive>.txt` |
 | PHY, KML, status, SBD | under `dir.phy`, `dir.kml`, `dir.stat`, `dir.sbd` |
 
+The [`example/`](example/) folder has a real example of each file, all from float 9303's dive
+440: the Iridium [email](example/mail/), the [SBD](example/sbd/) attachments, the
+[RAW](example/raw/) files, the [listing](example/listing/lis9303-0440.txt), and the
+[JSON](example/json/) and [plot](example/plots/) files the Python tools make from it (see
+[example/README.md](example/README.md)).
+
 Decoded data, messages, floats and dives are also stored in the MySQL database (see
 [SQL backend](#sql-backend)).
 
@@ -400,6 +407,7 @@ so far. The Python tools (`xmtps-list2json.py`) parse these files.
 
 ### Examples
 
+A complete listing file is in [example/listing/lis9303-0440.txt](example/listing/lis9303-0440.txt).
 The excerpts below are from `lis9287-0325.txt` and `lis11186-0107.txt` (some lines and repeated
 rows left out, marked `...`).
 
@@ -627,7 +635,8 @@ xmtps-generate-summary-page.py -i "/data1/alamo/data/json/[0-9]+/[0-9]+_summary.
 ### JSON files
 
 The Python tools write three kinds of JSON file under the output directory (production:
-`/data1/alamo/data/json/<serial>/`). Times are given twice throughout: `dt_epoch` (Unix seconds,
+`/data1/alamo/data/json/<serial>/`); [example/json/](example/json/) has one of each, and
+[example/plots/](example/plots/) some of the plots made from them. Times are given twice throughout: `dt_epoch` (Unix seconds,
 UTC) and `dt_str` (ISO 8601, e.g. `2026-10-25T11:05:32Z`). Pressure is in dBar, temperature in
 °C, salinity in PSU; `dens` and `sigma0` are in-situ density and potential density referenced to
 the surface, minus 1000 kg/m³, from `RhoLUT.py`.

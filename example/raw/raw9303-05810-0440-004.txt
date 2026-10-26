@@ -1,0 +1,77 @@
+#===================================================================================================
+#        _       ____  ______  ____   ________            __     ______
+#       | |     / / / / / __ \/  _/  / ____/ /___  ____ _/ /_   / ____/________  __  ______
+#       | | /| / / /_/ / / / // /   / /_  / / __ \/ __ `/ __/  / / __/ ___/ __ \/ / / / __ \
+#       | |/ |/ / __  / /_/ // /   / __/ / / /_/ / /_/ / /_   / /_/ / /  / /_/ / /_/ / /_/ /
+#       |__/|__/_/ /_/\____/___/  /_/   /_/\____/\__,_/\__/   \____/_/   \____/\__,_/ .___/
+#                                                                                  /_/
+#===================================================================================================
+#
+# This data was produced and distributed as part of projects that were planned and executed by or
+# in collaboration with the WHOI Float Group.
+#
+# This file was created by:
+#
+#   The X-Message Telemetry Processing Service (XMTPS)
+#   version 0.6.3276b (built 2026-08-12T14:12+00:00)
+#
+# XMTPS was created and is maintained by:
+#
+#   Alexander K. Ekholm <aekholm@whoi.edu>
+#   Research Engineer, Float Group
+#   Department of Physical Oceanography
+#   Woods Hole Oceanographic Institution
+#   Woods Hole, MA, USA
+#
+#===================================================================================================
+# Processing Details
+#===================================================================================================
+
+WHOI:            9303
+IMEI:            XXXXXXXX2418110
+Dive:            440
+Message UID:     1211366
+Message ID:      39e31b$csup3r@UFOR19PA23.eemsg.mail.mil
+Processed:       2026-08-27T16:32:14Z
+Valid:           yes
+
+#===================================================================================================
+# Message Header
+#===================================================================================================
+
+From:            service@sbd.pac.disa.mil
+Subject:         SBD Msg From Unit: XXXXXXXX2418110
+Date:            2026-08-27T16:31:49Z
+
+#===================================================================================================
+# Iridium Session Details
+#===================================================================================================
+
+MOMSN:           5810
+MTMSN:           0
+Time of Session: 2026-08-27T16:31:45Z
+Session Status:  0 - Transfer OK
+Message Size:    321
+Unit Location:   +29.54123-68.74308
+CEPradius:       4
+Position Valid:  yes
+
+#===================================================================================================
+# Iridium Short-Burst Data (SBD) Message
+#===================================================================================================
+
+Filename:        XXXXXXXX2418110_005810.sbd
+Local Path:      ""
+Hex:             
+
+(000) 0x 58013A24 5701B804 2030CC00 0108005D FA000000 24924944 A4922000 00000000
+(032) 0x 1E201F2F 2F11F0D4 E03FE21E 002E0001 1D24B200 2B7A4F02 1E002F1E F22C31D1
+(064) 0x 110F0101 2F1200F3 D111E0C0 05B3FF3F 12F12D2F 1E312014 F1F3FF2D FF4FC013
+(096) 0x FF0200FC 04FF00FF 06FDFF03 08F90106 13FADBFF F0D2EDE2 04106111 F306FFF3
+(128) 0x 01FFFF01 05040B05 0603F8FE 0201F9FF 02FAFE05 01F9FD00 FFFA0103 010E0714
+(160) 0x 0DFE0214 06F50812 0B300AE9 F11B0DF3 F7F5F7F7 F7F5F8F8 FFFBFAFA FFF801FA
+(192) 0x F2F4F6FC FDFBFFFF 06FD0605 FDFFFF00 EE034D3B 020018FE 119C6D5C D70448D3
+(224) 0x 09810410 13070600 00000A3B 60205120 07E6005F 04BA00C3 023B701A D4002A04
+(256) 0x CA012802 65D012BD 001504CA 01160267 D00A3900 1504CB00 E7025FD0 056F0015
+(288) 0x 04CB00D4 024DD003 47001504 CA00D302 44E000FA 003C04C4 00E1030B 3B243A30
+(320) 0x 3E

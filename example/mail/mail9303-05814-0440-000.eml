@@ -1,0 +1,40 @@
+Message-Id: <39e31b$csupha@UFOR19PA23.eemsg.mail.mil>
+Date: 27 Aug 2026 16:32:39 +0000
+Reply-To: <service@sbd.pac.disa.mil>
+From: service@sbd.pac.disa.mil
+To: alamo@whoi.edu
+Subject: SBD Msg From Unit: XXXXXXXX2418110
+MIME-Version: 1.0
+Content-Type: multipart/mixed;boundary="SBD.Boundary.605592468"
+
+SBM Message
+--SBD.Boundary.605592468
+Content-Type: text/plain;charset=US-ASCII
+Content-Disposition: inline
+Content-Transfer-Encoding: 7bit
+
+MOMSN: 5814
+MTMSN: 0
+Time of Session (UTC): Thu Aug 27 16:32:35 2026
+Session Status: 00 - Transfer OK
+
+
+Message Size (bytes): 291
+
+Unit Location: Lat = 29.54123 Long = -68.74308
+CEPradius = 3
+
+
+
+--SBD.Boundary.605592468
+Content-Type: application/x-zip-compressed; name="SBMmessage.sbd"
+Content-Disposition: attachment; filename="XXXXXXXX2418110_005814.sbd"
+Content-Transfer-Encoding: base64
+
+WAEcJFcBuAABABj+EZWFI9bxegsJgQMKIAAEAAAAKztAEF0yIX1CAAAQAPoA0qAD7AFYoAbc
+AY4gB+YCIqAJxQPCoAyzBbWgD6EIdKASjwwuoBV8EligGGsZYKAZ7yBooBnLJ3CgGfYsHjAZ
+3i54oBnpNYCgGlc6T6AaQTvnABYRMiF9QQPWAloGygLCAoQB//876AAWEjIht5ECWwJeGp5e
+A5MjAAAAO5gQHwAACAAaQQAANUAAAAAAAAAAAAAAABO510XbHDuoEB8AAAgAXhD//+hAAAAA
+AAAAAAAAAAAnAOjwGAs7uBAcAAAIAJMn///8IAAAAAAAAAAAAAAAX+PfO3gQHAAACAAAAQAq
+MCAAAAAAAAAAAAAAAAAAADskNjM+
+--SBD.Boundary.605592468--
