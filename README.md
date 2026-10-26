@@ -627,8 +627,10 @@ or `FloatClasses.py`.
 
 `xmtps-generate-summary-page.py [options] PATH ...` — reads the per-float `<serial>_summary.json`
 files (searching input directories recursively) and writes the fleet summary page to
-`<output>/index.html`. `DIR` for `-o` must exist. It takes only the common options above, and
-always rebuilds the page from all matching summary files.
+`<output>/index.html`. `DIR` for `-o` must exist. Besides the common options above, it takes
+`--runtime SECONDS`, the duration of the JSON and plot updates, which is shown in the page footer
+with the decoder's status, uptime and version. It always rebuilds the page from all matching
+summary files.
 
 Example (as run by `update-plots-service.sh` for one float):
 
@@ -638,7 +640,7 @@ xmtps-list2json.py -i "/data1/alamo/data/list/[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" \
 xmtps-aggregate-json.py -i "/data1/alamo/data/json/[0-9]+/dives/[0-9]+_-?[0-9]+.json" \
     -o /data1/alamo/data/json -p /data1/alamo/data/plots2 /data1/alamo/data/json/9308/dives
 xmtps-generate-summary-page.py -i "/data1/alamo/data/json/[0-9]+/[0-9]+_summary.json" \
-    -o /data1/alamo/data/plots2 /data1/alamo/data/json
+    -o /data1/alamo/data/plots2 --runtime 185 /data1/alamo/data/json
 ```
 
 ### JSON files
@@ -737,6 +739,21 @@ when none of its dive files is newer, unless `-f` is given.
 ## Changelog
 
 ### 2026-10-26
+
+Float summary page footer:
+
+- The footer now reads, for example, "Page last updated 2026-10-26T17:40Z (105 minutes ago,
+  runtime: 3 minutes) - python version 0.11 - decoder status: active (uptime: 3 hours,
+  4 minutes) - xmtps version 1.0.3318b (built 2026-10-26)". The runtime is that of the JSON and
+  plot updates before the page is generated: `update-plots-service.sh` passes it with the new
+  `--runtime` option. The decoder's status and uptime come from `systemctl show xmtps-alamo` and
+  its version from `xmtps --version`; the time since the update is filled in by the browser
+  (`bin/py/PageStatus.py`). The individual float pages are unchanged.
+- `bin/py/update-plots-service.sh` is updated to the version running on argus (run-time limit,
+  run time logged), plus the `--runtime` option.
+- `makefile.targets` makes the objects that print the build number and build date depend on
+  `build/buildNo.txt`. They were only rebuilt when their sources changed, so `xmtps --version`
+  and the file headers could show an older build (build 3318 reported 3312).
 
 Shutdown:
 

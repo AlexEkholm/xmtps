@@ -26,7 +26,9 @@ import os
 import plotly.graph_objects as go
 import plotly.io as pio
 import re
-from yattag import Doc 
+from yattag import Doc
+
+from PageStatus import WriteStatusFooter
 
 # local
 # from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
@@ -273,11 +275,6 @@ function updateElapsedTimes() {
         elem.append(document.createElement('br'));
         elem.append(elapsed_elem);
     });
-    elem = document.getElementById("pue");
-    dt = epoch_now - elem.getAttribute('epoch');
-    if (dt < 0 || dt > 946080000) 
-        return;
-    elem.textContent = '(' +  elapsedTimeString(dt) + ')';
 }
 var reloading;
 function checkAutoRefresh() {
@@ -605,12 +602,9 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                         # Create footer
                         
                         with tag('div', id='foot'):
-                            with tag('div', id='lfoot'): 
-                                dt_now = datetime.datetime.now(datetime.UTC)
-                                line('i', 'Page last updated ' + dt_now.isoformat()[:16] + 'Z ' )
-                                line('i', '', id='pue', epoch='{}'.format(round(dt_now.timestamp())))
-                                # doc.stag('br')
-                                line('i', ' - version ' + JSON_VERSION)
+                            with tag('div', id='lfoot'):
+                                with tag('i'):
+                                    WriteStatusFooter(doc, tag, text, JSON_VERSION, args.runtime)
                                 # text('Page last updated ' + datetime.datetime.now(datetime.UTC).isoformat()[:16] + 'Z' + ' - v' + JSON_VERSION + ' - Float Group, Department of Physical Oceanography, Woods Hole Oceanographic Institution, Woods Hole, MA, USA')
                             with tag('div', id='rfoot'): 
                                 with tag('label', ( 'for', 'autorefresh')):
@@ -933,6 +927,15 @@ parser.add_argument(
     dest='output',
     help='write summary page to specified directory (default=\'.\')',
     metavar='PATH')
+
+parser.add_argument(
+    '--runtime',
+    type=float,
+    dest='runtime',
+    help='show SECONDS as the runtime in the page footer: the duration of the JSON and plot '
+         'updates before this page is generated (update-plots-service.sh passes it); without '
+         'it, no runtime is shown',
+    metavar='SECONDS')
 
 
 parser.add_argument(
