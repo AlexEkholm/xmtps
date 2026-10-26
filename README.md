@@ -738,6 +738,16 @@ when none of its dive files is newer, unless `-f` is given.
 
 ### 2026-10-26
 
+Shutdown:
+
+- The daemon no longer shuts down from inside the signal handler. The handler ran the whole
+  shutdown (logging, stopping the threads, saving to MySQL) in whichever thread the signal
+  interrupted; if that thread held a lock, such as the logger's, the handler deadlocked on it.
+  On 2026-10-26 a `systemctl restart` during reprocessing hung that way: no "Caught SIGTERM" was
+  logged, and systemd killed the daemon after `TimeoutStopSec` (300 s) without restarting it. The
+  handler now only records the signal; the daemon thread sees it within 100 ms and shuts down
+  from its main loop. A SIGABRT now ends the process at once instead of attempting a shutdown.
+
 `XFloatMail` table (needs `bin/migrate-xfloatmail.sh` once the build is deployed):
 
 - The mail body text and raw header text are no longer stored (`msg_body_text`,

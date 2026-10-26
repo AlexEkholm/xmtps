@@ -44,11 +44,11 @@
  *  terminate the worker threads, save the locally cached data to the database, release the
  *  run-time lock, and flush the global logger.
  *
- *  @note       If, at any time during execution after initialization, a catchable signal is
- *              received, the execution of the daemon thread will be interrupted and the exit
- *              handler function @ref util::sig::SignalHandler::ExitHandler() will be invoked. The
- *              exit handler terminates the worker threads, saves the locally cached data to the
- *              database, releases the run-time lock, and flushes the global logger.
+ *  @note       A catchable signal (SIGTERM, SIGINT, ...) is only recorded by the signal handler.
+ *              The daemon thread sees it within @ref XFLT_THREAD_SLEEP_MS milliseconds, leaves
+ *              its loop and calls the exit handler @ref util::sig::SignalHandler::ExitHandler()
+ *              itself, outside the signal handler, where logging, locking and database access are
+ *              safe.
  *
  *  @param[in]  argc    The number of command-line arguments.
  *  @param[in]  argv    The command-line argument list.
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     LocalConfiguration cfg(Initialize(argc, argv));   // Initialize application.
     StartWorkerThreads();                             // Start worker threads.
     for(int delay_msec = XFLT_DAEMON_THREAD_SPINUP_DELAY_SEC * 1000;
-        delay_msec >= 0;
+        delay_msec >= 0 && !SignalHandler::caught_signal();
         delay_msec -= XFLT_THREAD_SLEEP_MS) {
 
       cfg.CheckRuntimeLock();                         // Check runtime lock.
@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
      *  - If daemon, loops until termination signal is encountered.
      */
 
-    do {
+    while(!SignalHandler::caught_signal()) {
 
       cfg.CheckRuntimeLock();                         // Check runtime lock.
 
@@ -108,11 +108,14 @@ int main(int argc, char** argv) {
         ms_since_log_last_flushed = 0;
       }
 
-    } while(cfg.is_daemon());                         // If daemon, loop until termination.
+      if(!cfg.is_daemon())                            // If daemon, loop until termination.
+        break;
+    }
 
   }CATCH_NOTHROW("Daemon thread encountered fatal exception!")
 
-  SignalHandler::ExitHandler(SIGTERM);                // Call the exit handler.
+  // Call the exit handler, for the signal caught (if any).
+  SignalHandler::ExitHandler(SignalHandler::caught_signal() ? SignalHandler::caught_signal() : SIGTERM);
 
   /* Dead Code: */
 
@@ -714,12 +717,14 @@ options_description LocalConfiguration::GenerateConfigurationFileOptionsDescript
 
 namespace sig {
 
+volatile std::sig_atomic_t SignalHandler::caught_signal_(0);
+
 /** The exit handler.
  *
- *  This function is responsible for handling signals received from the local system. It is
- *  invoked when a signal is caught, but may also be invoked "manually" anywhere in the execution
- *  of the primary daemon thread to terminate the application, for example, at the bequest of a
- *  user.
+ *  This function shuts the application down after a signal received from the local system. It is
+ *  called by the daemon thread, never from the signal handler itself (see
+ *  @ref SignalHandler), once the thread sees the signal, or when the daemon thread
+ *  ends for another reason.
  *
  *  This function attempts an orderly shutdown of the application. First, the worker threads are
  *  terminated. Then, locally cached data is saved to the database. Next, run-time lock is

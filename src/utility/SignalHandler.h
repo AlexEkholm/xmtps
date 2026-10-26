@@ -25,6 +25,10 @@
 
 /* Includes */
 
+// std
+#include <csignal>
+
+// local
 #include "Log.h"
 
 /* Definitions */
@@ -38,8 +42,25 @@ namespace sig {
  *
  *  This class provides functions for graceful shutdown, triggered by catchable system signals.
  *
+ *  The signal handler, @c CatchSignal(), only records the signal: a signal interrupts whichever
+ *  thread happens to be running, and if that thread holds a lock (the logger's, the memory
+ *  allocator's, ...) any logging, locking or memory allocation in the handler deadlocks. The daemon
+ *  thread checks @ref caught_signal() in its main loop and calls @ref ExitHandler() from there.
  */
 class SignalHandler {
+
+    /* Static Data Members */
+
+    /** The last signal caught, or 0 if none. Set only by @c CatchSignal(). */
+    static volatile std::sig_atomic_t caught_signal_;
+
+    /** The signal handler: record the signal for the daemon thread.
+     *
+     *  @param[in]  signo   The signal number.
+     */
+    static void CatchSignal(int signo) {
+        caught_signal_ = signo;
+    }
 
 public:
 
@@ -56,27 +77,35 @@ public:
             lout() << "Registering system signal handlers...";
 
             ldbg() << "Registering SIGABRT handler...";
-            if(signal(SIGABRT, SignalHandler::ExitHandler) == SIG_ERR)
+            if(signal(SIGABRT, SignalHandler::CatchSignal) == SIG_ERR)
                 EXC_THROW("Failed to register signal handler for SIGABRT!");
 
             ldbg() << "Registering SIGINT handler...";
-            if(signal(SIGINT, SignalHandler::ExitHandler) == SIG_ERR)
+            if(signal(SIGINT, SignalHandler::CatchSignal) == SIG_ERR)
                 EXC_THROW("Failed to register signal handler for SIGINT!");
 
             ldbg() << "Registering SIGQUIT handler...";
-            if(signal(SIGQUIT, SignalHandler::ExitHandler) == SIG_ERR)
+            if(signal(SIGQUIT, SignalHandler::CatchSignal) == SIG_ERR)
                 EXC_THROW("Failed to register signal handler for SIGQUIT!");
 
             ldbg() << "Registering SIGTERM handler...";
-            if(signal(SIGTERM, SignalHandler::ExitHandler) == SIG_ERR)
+            if(signal(SIGTERM, SignalHandler::CatchSignal) == SIG_ERR)
                 EXC_THROW("Failed to register signal handler for SIGTERM!");
 
             ldbg() << "Registering SIGTSTP handler...";
-            if(signal(SIGTSTP, SignalHandler::ExitHandler) == SIG_ERR)
+            if(signal(SIGTSTP, SignalHandler::CatchSignal) == SIG_ERR)
                 EXC_THROW("Failed to register signal handler for SIGTSTP!");
 
             linf() << "Done. Successfully registered system signal handlers.";
         }CATCH_BLOCK("Failed to register signal handlers!")
+    }
+
+    /** Get the last signal caught.
+     *
+     *  @return     The signal number, or 0 if no signal has been caught.
+     */
+    static int caught_signal() {
+        return caught_signal_;
     }
 
     static void ExitHandler(int signo);
