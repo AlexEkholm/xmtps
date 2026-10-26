@@ -264,14 +264,10 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
         if(wave_data_spectral_.size() < (unsigned int)(segment_len() >> 1))
           wave_data_spectral_.resize(segment_len() >> 1);
 
-        /* Iterate over spectral samples: */
+        /* Iterate over the spectral samples in this message. Newer sensor firmware truncates the
+         * spectrum to a range of frequencies, so a message may hold fewer than N/2 bins. */
 
-        for(unsigned int i = 0; i < (unsigned int)(segment_len() >> 1); ++i) {
-
-          if((unsigned int)(i*2+17) >= (unsigned int)xmsg_size_bytes()) {
-            lerr() << "wave sample index exceeds message size";
-            break;
-          }
+        for(unsigned int i = 0, n = NumSpectralBins(16, first_sample_idx); i < n; ++i) {
 
           wave_data_spectral_.at(i+first_sample_idx).freq_
               = sample_rate_effective_*(i+first_sample_idx+1)/segment_len();
@@ -462,14 +458,11 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
              if(wave_data_spectral_.size() < (unsigned int)(segment_len() >> 1))
                wave_data_spectral_.resize(segment_len() >> 1);
 
-             /* Iterate over spectral samples: */
+             /* Iterate over the spectral samples in this message. Newer sensor firmware truncates
+              * the spectrum to a range of frequencies, so a message may hold fewer than N/2
+              * bins. */
 
-             for(unsigned int i = 0; i < (unsigned int)(segment_len() >> 1); ++i) {
-
-               if((unsigned int)(i*2+20) >= (unsigned int)xmsg_size_bytes()) {
-                 lerr() << "wave sample index exceeds message size";
-                 break;
-               }
+             for(unsigned int i = 0, n = NumSpectralBins(18, first_sample_idx); i < n; ++i) {
 
                wave_data_spectral_.at(i+first_sample_idx).freq_
                    = sample_rate_effective_*(i+first_sample_idx+1)/segment_len();

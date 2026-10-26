@@ -250,6 +250,38 @@ public:
       }
     }
 
+private:
+
+    /** Get the number of spectral bins to decode from this spectral message.
+     *
+     *  The message holds two-byte bins between its header and its ';' terminator. Newer sensor
+     *  firmware truncates the spectrum to a range of frequencies, so this may be fewer than the
+     *  N/2 bins of the spectrum. Bins that would lie beyond the spectrum's N/2 bins, counting from
+     *  the first bin index, are not decoded, and a warning is logged.
+     *
+     *  @param[in]  header_len  The length of the message header, in bytes (16 for spectral
+     *                          versions 0 and 1, 18 for version 2).
+     *  @param[in]  first_bin   The index of the first bin in this message.
+     *
+     *  @return     The number of bins to decode.
+     */
+    unsigned int NumSpectralBins(unsigned int header_len, unsigned int first_bin) const {
+
+      const unsigned int size = xmsg_size_bytes();
+      const unsigned int num_bins = size > header_len + 1 ? (size - header_len - 1) / 2 : 0;
+      const unsigned int spectrum_bins = segment_len() >> 1;
+      const unsigned int max_bins = first_bin < spectrum_bins ? spectrum_bins - first_bin : 0;
+
+      if(num_bins > max_bins) {
+        lwrn() << "Wave message has " << num_bins << " bins from bin " << first_bin
+               << ", but the spectrum has only " << spectrum_bins
+               << " bins; the bins beyond it are not decoded.";
+        return max_bins;
+      }
+
+      return num_bins;
+    }
+
 public:
 
     /* Accessor Methods: */

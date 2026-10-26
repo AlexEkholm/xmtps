@@ -746,6 +746,11 @@ Decoder daemon (version 1.0):
   8 or 9 samples per dive.
 - A packet with a bad checksum or fewer than 8 bytes is logged and discarded; before, it
   terminated the daemon.
+- Wave spectra truncated to a range of frequencies (newer sensor firmware) are decoded without
+  error: only the bins in each message are read. Before, each truncated message logged "wave
+  sample index exceeds message size" (about 3,700 per 10 minutes while reprocessing); the bins
+  were decoded correctly. Bins past N/2 are skipped with a warning instead of discarding the
+  message.
 
 ### 2026-10-25
 

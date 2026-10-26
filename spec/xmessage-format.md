@@ -3136,7 +3136,12 @@ For bin k (0 … N/2 - 1), f_k = f_s · (k + 1) / N, with f_s = f_base / (d + 1)
 - Build 3238 (2025-10) went back to `fs·(i+1)/seglen`.
 - The 2026-10-24 fix added k0 to k, so bins in a blob with k0 > 0 get the right frequency. Before that, the frequency ignored k0.
 - [decoder] The spectral array holds N/2 bins per dive. A bin that no blob filled keeps frequency -99 and fill values. For example 9287 and 9291 send only bins 0-50 of N/2 = 256.
-- [decoder] A blob whose k0 + i reaches N/2 makes `vector::at` throw, and the blob is discarded.
+- Newer sensor firmware truncates the spectrum to a range of frequencies, so a blob may carry fewer
+  than N/2 bins (n from `jj`, as in C.3.3 and C.3.4). [decoder] Only the n bins in the blob are
+  decoded; before build 3315 the decoder tried all N/2 and logged "wave sample index exceeds
+  message size" for every truncated blob.
+- [decoder] Bins that would reach past N/2 (k0 + i ≥ N/2) are not decoded, and a warning is
+  logged; before build 3315 `vector::at` threw and the whole blob was discarded.
 
 #### C.3.8 Every-other-value correction (WIMS firmware)
 
