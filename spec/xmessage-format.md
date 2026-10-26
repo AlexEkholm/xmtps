@@ -3059,7 +3059,7 @@ Used by the 8.x firmware (for example float 9270, 8.0.1.1, 273-byte blobs).
 | 5 | 1 | U1 | Mode | enum | 1 = spectral (0 = raw). [decoder] Not read for v0/v1: the mode is taken to be spectral. |
 | 6 | 1 | U1 | Spectral axis | enum, C.3.5 | |
 | 7 | 1 | U1 | Spectral type | enum, C.3.5 | |
-| 8 | 1 | U1 | Segment length power p | | Segment (FFT) length N = 2^p. The blob carries one-sided bins 1 to N/2 (no DC bin). Production: 8 (N = 256) or 9 (N = 512 |
+| 8 | 1 | U1 | Segment length power p | | Segment (FFT) length N = 2^p. The blob carries one-sided FFT bins 0 to N/2 - 1: bin 0 is the DC bin, and there is no Nyquist bin (WIMS firmware v1.x and v2.x). Production: 8 (N = 256) or 9 (N = 512 |
 | 9 | 2 | U2 | Base sample rate f_base | Hz | 40 (v1 floats) or 45 (v2 floats |
 | 11 | 2 | U2 | Sample rate divider d | | Effective sample rate f_s = f_base / (d + 1). For example 40/(9+1) = 4 Hz, 45/(17+1) = 2.5 Hz, 45/(8+1) = 5 Hz. |
 | 13 | 1 | U1 | Accelerometer full-scale range | g | 2, 4, 8 or 16. Selects ASSF (C.3.6 |
@@ -3131,9 +3131,10 @@ Mode (v2 byte 5): 0 = raw, 1 = spectral.
 
 #### C.3.7 Frequency bins
 
-For bin k (0 … N/2 - 1), f_k = f_s · (k + 1) / N, with f_s = f_base / (d + 1). Bin 0 is the first non-DC bin, f_s/N; the last bin is the Nyquist frequency, f_s/2.
+For bin k (0 … N/2 - 1), f_k = f_s · k / N, with f_s = f_base / (d + 1). Bin 0 is the DC bin; the last bin is f_s/2 - f_s/N. WIMS firmware up to 2.01.00614b labels its own output one bin high, (k + 1) · f_s / N, and the decoder did the same until 2026-10-26 (see below).
 
 - Build 3238 (2025-10) went back to `fs·(i+1)/seglen`.
+- 2026-10-26: `fs·(k0+i)/seglen`, with bin 0 the DC bin. The WIMS firmware copies FFT bins 0 to N/2 - 1, so `fs·(i+1)/seglen` was one bin too high; an intercomparison with NDBC buoy 41047 confirmed the offset.
 - The 2026-10-24 fix added k0 to k, so bins in a blob with k0 > 0 get the right frequency. Before that, the frequency ignored k0.
 - [decoder] The spectral array holds N/2 bins per dive. A bin that no blob filled keeps frequency -99 and fill values. For example 9287 and 9291 send only bins 0-50 of N/2 = 256.
 - Newer sensor firmware truncates the spectrum to a range of frequencies, so a blob may carry fewer
@@ -3148,7 +3149,7 @@ For bin k (0 … N/2 - 1), f_k = f_s · (k + 1) / N, with f_s = f_base / (d + 1)
 [inferred from production; README 0.6.3235] Firmware 0x0A060231, 0x0A080031, 0x0A090131 and 0x0A0A0031 send only every other spectral value: the first half of the N/2 bins holds the spectrum at twice the bin spacing, and the second half is zeros. After each 0xC1/0xC3 blob from a float whose stored firmware word (from the latest D0) is one of these, `XWave::FixFuckup9000()` runs. It:
 
 - sets f_s' = 2 · f_base / (d + 1), which also becomes the `WVS` `fsam`;
-- sets every bin's frequency, i = 0 … N/2 - 1, to f_i = f_s' · (i + 1) / N.
+- sets every bin's frequency, i = 0 … N/2 - 1, to f_i = f_s' · i / N (f_s' · (i + 1) / N before 2026-10-26). [inferred from the NDBC 41047 intercomparison, whose offset matches one decoded bin] The floats send the even WIMS bins (0, 2, 4, …), so bin i holds WIMS FFT bin 2i.
 
 The spectral values are left as they are, so the zero second half is still listed, at frequencies above f_s/2. The correction is keyed on the float's latest known firmware word, so wave blobs decoded before the dive's first D0 has ever been received are not corrected [inferred from the code path]. 10.12.1.31 (0x0A0C0131) and 10.7.1.31 (0x0A070131) are WIMS firmware too, but they are not in the correction list (C.5).
 

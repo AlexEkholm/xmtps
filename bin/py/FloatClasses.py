@@ -26,9 +26,30 @@ import pytz
 import re
 from scipy.interpolate import interp1d
 
+try:
+    import ppigrf     # IGRF geomagnetic field model, for the magnetic declination
+except ImportError:
+    ppigrf = None
+
 """
 Helper functions
 """
+
+def MagneticDeclination(lat: float, lon: float, dt_epoch: float) -> float:
+    """Return the magnetic declination (degrees, east of true north positive) from the IGRF.
+
+    Args:
+        lat, lon: position, in decimal degrees.
+        dt_epoch: time, in seconds since 1970-01-01T00:00:00Z.
+
+    Returns:
+        The declination, or NaN if ppigrf is not installed or the inputs are invalid.
+    """
+    if ppigrf is None or dt_epoch is None or not (dt_epoch > 0) or np.isnan(lat) or np.isnan(lon):
+        return np.nan
+    date = datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=float(dt_epoch))
+    b_e, b_n, _ = ppigrf.igrf(lon, lat, 0, date)
+    return float(np.degrees(np.arctan2(np.ravel(b_e)[0], np.ravel(b_n)[0])))
 
 def RollingAverage(array, N: int ):
     """Return the centred N-point moving average of a 1-D array, rounded to 5 decimals.
@@ -539,6 +560,18 @@ class Dive:
         self.surface     = Surface()
         self.wave        = None
    
+    def SurfaceFix(self):
+        """Return the GPS fix of the surfacing that ends the dive, for the wave measurement.
+
+        This is the first valid fix with idx 0 or 2 (as for the profile position), else the first
+        valid fix of the dive, else None.
+        """
+        fixes = [g for g in self.gps if g.is_valid()]
+        for g in fixes:
+            if g.idx in (0, 2):
+                return g
+        return fixes[0] if fixes else None
+
     def PostProcess(self):
         """Post-process every part of the dive and set the drift sample times, before pickling.
 
@@ -554,7 +587,11 @@ class Dive:
         self.pump.PostProcess()
         self.surface.PostProcess()
         if self.wave is not None:
-            self.wave.PostProcess()
+            fix = self.SurfaceFix()
+            if fix is None:
+                self.wave.PostProcess()
+            else:
+                self.wave.PostProcess(lat=fix.lat, lon=fix.lon, dt_epoch=fix.dt_epoch)
         else:
             del self.wave
         
@@ -1151,18 +1188,27 @@ class Wave:
             slen: FFT length (samples per spectral segment).
 
         Attributes:
-            raw_freq, freq: bin frequencies k * fsam / slen for k = 1 .. slen//2, in Hz.
+            raw_freq, freq: bin frequencies k * fsam / slen for k = 0 .. slen//2 - 1, in Hz. Bin 0 is the
+                DC bin of the sensor FFT.
             raw_Szz_g .. raw_Qzy_g: the spectra as received (set by PostProcess()).
             Szz_g .. Qzy_g: acceleration spectra, filled from the wvs lines.
             Szz .. Qzy: displacement spectra in m^2/Hz (computed by PostProcess()).
             a0, a1, a2, b1, b2: Longuet-Higgins directional Fourier coefficients.
             r1, r2: directional spreading parameters, in [0, 1].
-            theta1: mean wave direction per frequency, in degrees.
-            theta2: principal wave direction per frequency, in degrees.
+            theta1: mean wave direction per frequency, in degrees clockwise from north (see
+                direction_ref), toward which the waves propagate, [0, 360).
+            theta2: principal wave direction per frequency, in degrees clockwise from north (see
+                direction_ref), toward which the waves propagate, [0, 360); the end of the
+                principal axis nearest theta1.
             wavenumber: deep-water wavenumber per frequency, in rad/m.
             moment: spectral moments m0, m1, m2 of Szz.
             swh: significant wave height, in m.
-            mwd: mean wave direction, in degrees.
+            mwd: mean wave direction, in degrees clockwise from north, toward which the waves
+                propagate, [0, 360).
+            declination: magnetic declination applied to the directions, in degrees (east
+                positive), or NaN if none was applied.
+            direction_ref: 'true' if the directions are referenced to true north (the declination
+                was applied), else 'magnetic'.
             period_peak, period_avg, period_zero: peak, mean and zero-crossing periods, in s.
         """
         self.slen = slen
@@ -1178,7 +1224,7 @@ class Wave:
         
         # raw spectra
         
-        self.raw_freq           = np.array([ x*self.fsam/self.slen for x in range(1, flen + 1) ])
+        self.raw_freq           = np.array([ x*self.fsam/self.slen for x in range(0, flen) ])
         
         self.raw_Szz_g          = np.empty(flen, dtype=np.double)
         self.raw_Szz_g[:]       = np.nan
@@ -1195,7 +1241,7 @@ class Wave:
         
         # processes spectra
         
-        self.freq           = np.array([ x*self.fsam/self.slen for x in range(1, flen + 1) ])
+        self.freq           = np.array([ x*self.fsam/self.slen for x in range(0, flen) ])
         
         self.Szz_g          = np.empty(flen, dtype=np.double)
         self.Szz_g[:]       = np.nan
@@ -1259,12 +1305,15 @@ class Wave:
         
         self.swh            = np.nan            # Significant wave height
         self.mwd            = np.nan            # Mean wave direction
+        self.declination    = np.nan            # Magnetic declination applied to directions
+        self.direction_ref  = 'magnetic'        # Reference of the directions
         
         self.period_peak    = np.nan            # Dominant period         
         self.period_avg     = np.nan            # Average period
         self.period_zero    = np.nan            # Zero-crossing
         
-    def PostProcess(self, freq_min: float = 0.0625, interpolate = True, rolling_average: int = 3):
+    def PostProcess(self, freq_min: float = 0.0625, interpolate = True, rolling_average: int = 3,
+                    lat: float = np.nan, lon: float = np.nan, dt_epoch: float = None):
         """Compute displacement spectra, directional coefficients and wave statistics.
 
         Does nothing if slen < 1. Otherwise:
@@ -1286,11 +1335,15 @@ class Wave:
            bin, and the directional coefficients: a0 = Szz / pi,
            a1, b1 = Qzx, Qzy / sqrt(Szz (Sxx + Syy)), a2 = (Sxx - Syy) / (Sxx + Syy),
            b2 = 2 Cxy / (Sxx + Syy), r1, r2 their magnitudes, theta1 = atan2(a1, b1) and
-           theta2 = atan2(a2, b2) (NaN angles become 0).
+           theta2 = atan2(b2, -a2) / 2, taken at the end of that axis (theta2 or theta2 + 180)
+           nearest theta1 (NaN angles become 0). Directions are clockwise from magnetic north and
+           give the direction the waves propagate toward (not from).
         8. If m0 > 0: swh = 4 sqrt(m0) (m), period_peak = 1 / f_peak, period_avg = m0 / m1 and
            period_zero = sqrt(m0 / m2) (s), and mwd is the mean of the theta1 directions
-           weighted by sqrt(Szz) over freq_min to 0.6 Hz. Angles are converted to whole
-           degrees in [0, 360). If m0 is not positive, the spectra, coefficients, moments and
+           weighted by sqrt(Szz) over freq_min to 0.6 Hz. If the magnetic declination at
+           lat, lon and dt_epoch is available (IGRF, ppigrf), it is added to the directions,
+           which are then referenced to true north (direction_ref 'true'); otherwise they stay
+           referenced to magnetic north. Angles are converted to whole degrees in [0, 360). If m0 is not positive, the spectra, coefficients, moments and
            statistics are set to NaN and the angles to 0.
         9. Round everything and convert the arrays to lists for pickling.
 
@@ -1298,6 +1351,8 @@ class Wave:
             freq_min: lowest frequency, in Hz, used for the 300 m^2/Hz check and for mwd.
             interpolate: if True, interpolate the spectra onto the fixed frequency grid.
             rolling_average: rolling average window, in bins; 1 or less for none.
+            lat, lon, dt_epoch: position (decimal degrees) and time (seconds since epoch) of the
+                measurement, for the magnetic declination.
 
         Raises:
             Exception: 'Failed to post-process wave data.' if any step fails.
@@ -1318,22 +1373,11 @@ class Wave:
         F_INTER_STEP = 0.005 # Hz
         F_INTER_MAX  = 1.250 # Hz
         
-        # linear correction
-        # ccoef = [0, 0]
-        
-        # based on adwsd data
-        # ccoef = [2.10504466, -0.10535845] # 2.10504466 * (f - 0.10535845) 
-    
-        # based on ndbc data
-        # ccoef = [2.0866, -0.0898]
-        # ccoef = [1.7331, -0.0934]
-        
-        # nonlinear correction
-        # ccoef = [0,0,0]
-        # ccoef = [2.40313, 0.05753, 0.03259]
-        # ccoef = [2.69515, 0.04346, 0.04976]
-        # ccoef = [2.64497, 0.05012, 0.01105, 0.04055]
-        ccoef = [2.41526, 0.05278, 0.00797, 0.04280]
+        # low-frequency response correction coefficients
+
+        # Fit against NDBC 41047 (Hurricane Erin, WIMS floats 9302, 9303, 9308 and 9309) with
+        # bin 0 as the DC bin; see the WIMS user manual.
+        ccoef = [0.09681, 0.05256, 0.01988, 0.03908]
     
         # spectra peak
         peak_zz  = 0
@@ -1572,10 +1616,15 @@ class Wave:
             self.r1 = np.sqrt((self.a1 ** 2) + (self.b1 ** 2))
             self.r2 = np.sqrt((self.a2 ** 2) + (self.b2 ** 2))
             
+            # Directions are clockwise from magnetic north (x = east, y = north) and give the
+            # direction the waves propagate toward. a2 and b2 only give the principal axis, unique
+            # modulo 180, so theta2 is taken at the end of the axis nearest theta1.
+
             self.theta1 = np.arctan2(self.a1, self.b1)
             self.theta1 = np.where(np.isnan(self.theta1), 0, self.theta1)
-            self.theta2 = np.arctan2(self.a2, self.b2)
+            self.theta2 = 0.5 * np.arctan2(self.b2, -self.a2)
             self.theta2 = np.where(np.isnan(self.theta2), 0, self.theta2)
+            self.theta2 = np.where(np.cos(self.theta2 - self.theta1) < 0, self.theta2 + math.pi, self.theta2)
             
             # Check that we have good spectra
             
@@ -1613,6 +1662,15 @@ class Wave:
                 self.mwd            = self.mwd * 180 / math.pi
                 self.theta1         = self.theta1 * 180 / math.pi
                 self.theta2         = self.theta2 * 180 / math.pi
+
+                # Rotate from magnetic to true north (bins without a direction stay 0)
+
+                self.declination = MagneticDeclination(lat, lon, dt_epoch)
+                if not np.isnan(self.declination):
+                    self.mwd            = self.mwd + self.declination
+                    self.theta1         = np.where(np.isnan(self.r1), self.theta1, self.theta1 + self.declination)
+                    self.theta2         = np.where(np.isnan(self.r2), self.theta2, self.theta2 + self.declination)
+                    self.direction_ref  = 'true'
                 
                 # self.theta1         = np.round(self.theta1/15, 0)
                 # self.theta1         = self.theta1 * 15
@@ -1621,9 +1679,9 @@ class Wave:
                 self.theta1         = np.round(self.theta1, 0)
                 self.theta2         = np.round(self.theta2, 0)
                 
-                self.mwd            = self.mwd if self.mwd >=0 else self.mwd + 360
-                self.theta1         = np.where(self.theta1 >= 0, self.theta1, self.theta1 + 360)
-                self.theta2         = np.where(self.theta2 >= 0, self.theta2, self.theta2 + 360)
+                self.mwd            = self.mwd % 360
+                self.theta1         = np.mod(self.theta1, 360)
+                self.theta2         = np.mod(self.theta2, 360)
                   
             else:
             

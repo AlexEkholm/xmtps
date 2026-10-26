@@ -127,7 +127,7 @@ class XWaveSpectralSample {
 
       if(c_xx_ == INT32_MIN) return SPECTRA_FILL_VALUE;
 //      if(scale == 0)         return SPECTRA_FILL_VALUE;
-//      if(!freq)              return XWaveSpectralSample::SPECTRA_FILL_VALUE;
+      if(freq <= 0)          return XWaveSpectralSample::SPECTRA_FILL_VALUE;    // DC bin
 
       two_pi_f = (T) 2 * 3.14159265359 * freq;
       tmp = g_squared * c_xx_g2hz(scale) / two_pi_f / two_pi_f / two_pi_f / two_pi_f;
@@ -145,7 +145,7 @@ class XWaveSpectralSample {
 
       if(c_xy_ == INT32_MIN) return XWaveSpectralSample::SPECTRA_FILL_VALUE;
 //      if(!scale)             return XWaveSpectralSample::SPECTRA_FILL_VALUE;
-//      if(!freq)              return XWaveSpectralSample::SPECTRA_FILL_VALUE;
+      if(freq <= 0)          return XWaveSpectralSample::SPECTRA_FILL_VALUE;    // DC bin
 
       two_pi_f = (T) 2 * 3.14159265359 * freq;
       tmp = g_squared * c_xy_g2hz(scale) / two_pi_f / two_pi_f / two_pi_f / two_pi_f;
@@ -164,7 +164,7 @@ class XWaveSpectralSample {
 
       if(c_yy_ == INT32_MIN) return XWaveSpectralSample::SPECTRA_FILL_VALUE;
 //      if(!scale)             return XWaveSpectralSample::SPECTRA_FILL_VALUE;
-//      if(!freq)              return XWaveSpectralSample::SPECTRA_FILL_VALUE;
+      if(freq <= 0)          return XWaveSpectralSample::SPECTRA_FILL_VALUE;    // DC bin
 
       two_pi_f = (T) 2 * 3.14159265359 * freq;
       tmp = g_squared * c_yy_g2hz(scale) / two_pi_f / two_pi_f / two_pi_f / two_pi_f;
@@ -182,7 +182,7 @@ class XWaveSpectralSample {
 
       if(c_zz_ == INT32_MIN) return XWaveSpectralSample::SPECTRA_FILL_VALUE;
 //      if(!scale)             return XWaveSpectralSample::SPECTRA_FILL_VALUE;
-//      if(!freq)              return XWaveSpectralSample::SPECTRA_FILL_VALUE;
+      if(freq <= 0)          return XWaveSpectralSample::SPECTRA_FILL_VALUE;    // DC bin
 
       two_pi_f = (T) 2 * 3.14159265359 * freq;
       tmp = g_squared * c_zz_g2hz(scale) / two_pi_f / two_pi_f / two_pi_f / two_pi_f;
@@ -200,7 +200,7 @@ class XWaveSpectralSample {
 
       if(q_zx_ == INT32_MIN) return XWaveSpectralSample::SPECTRA_FILL_VALUE;
 //      if(!scale)             return XWaveSpectralSample::SPECTRA_FILL_VALUE;
-//      if(!freq)              return XWaveSpectralSample::SPECTRA_FILL_VALUE;
+      if(freq <= 0)          return XWaveSpectralSample::SPECTRA_FILL_VALUE;    // DC bin
 
       two_pi_f = (T) 2 * 3.14159265359 * freq;
       tmp = g_squared * q_zx_g2hz(scale) / two_pi_f / two_pi_f / two_pi_f / two_pi_f;
@@ -219,7 +219,7 @@ class XWaveSpectralSample {
 
       if(q_zy_ == INT32_MIN) return XWaveSpectralSample::SPECTRA_FILL_VALUE;
 //      if(!scale)             return XWaveSpectralSample::SPECTRA_FILL_VALUE;
-//      if(!freq)              return XWaveSpectralSample::SPECTRA_FILL_VALUE;
+      if(freq <= 0)          return XWaveSpectralSample::SPECTRA_FILL_VALUE;    // DC bin
 
       two_pi_f = (T) 2 * 3.14159265359 * freq;
       tmp = g_squared * q_zy_g2hz(scale) / two_pi_f / two_pi_f / two_pi_f / two_pi_f;

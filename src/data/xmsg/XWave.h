@@ -246,7 +246,7 @@ public:
       for(unsigned int i = 0; i < (unsigned int)(segment_len() >> 1); ++i) {
 
         wave_data_spectral_.at(i).freq_
-            = sample_rate_effective_*(i+1)/segment_len();
+            = sample_rate_effective_*i/segment_len();     // bin 0 is the DC bin
       }
     }
 

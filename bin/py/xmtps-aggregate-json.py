@@ -377,6 +377,8 @@ def AggregateDiveData():
                     'wave':      
                         pd.DataFrame(columns = [ 'dive', 
                                                  'mwd',
+                                                 'declination',
+                                                 'direction_ref',
                                                  'period_peak', 
                                                  'period_avg',
                                                  'period_zero',
@@ -1095,6 +1097,8 @@ def AggregateDiveData():
                             {
                                 'dive':         np.array([dive_num], dtype='int'),
                                 'mwd':          np.array([wave_data.mwd], dtype='int'),
+                                'declination':  np.array([getattr(wave_data, 'declination', np.nan)], dtype='float'),
+                                'direction_ref': np.array([getattr(wave_data, 'direction_ref', 'magnetic')], dtype='str'),
                                 'period_peak':  np.array([wave_data.period_peak], dtype='float'),
                                 'period_avg':   np.array([wave_data.period_avg], dtype='float'),
                                 'period_zero':  np.array([wave_data.period_zero], dtype='float'),
@@ -10773,7 +10777,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         ),
                     layout=dict(
                         showlegend = True,
-                        title = dict(text='{}: Wave Mean Direction Spectra'.format(float_id)),
+                        title = dict(text='{}: Wave Mean Direction Spectra (Toward)'.format(float_id)),
                         xaxis=dict(
                             title='',
                             autorange=False,
@@ -10800,7 +10804,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 wave_mwm = go.Figure(
                     layout=dict(
                         showlegend = False,
-                        title=dict(text='{}: Significant Wave Height, Average Period, and Average Direction'.format(float_id)),
+                        title=dict(text='{}: Significant Wave Height, Average Period, and Average Direction (Toward)'.format(float_id)),
                         polar=dict(
                             angularaxis = dict(
                                 direction='clockwise',

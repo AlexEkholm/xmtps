@@ -270,7 +270,7 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
         for(unsigned int i = 0, n = NumSpectralBins(16, first_sample_idx); i < n; ++i) {
 
           wave_data_spectral_.at(i+first_sample_idx).freq_
-              = sample_rate_effective_*(i+first_sample_idx+1)/segment_len();
+              = sample_rate_effective_*(i+first_sample_idx)/segment_len();   // bin 0 is the DC bin
 
           switch(type) {
             case XWAVE_SPECTRAL_TYPE_UNDEFINED:
@@ -465,7 +465,7 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
              for(unsigned int i = 0, n = NumSpectralBins(18, first_sample_idx); i < n; ++i) {
 
                wave_data_spectral_.at(i+first_sample_idx).freq_
-                   = sample_rate_effective_*(i+first_sample_idx+1)/segment_len();
+                   = sample_rate_effective_*(i+first_sample_idx)/segment_len();   // bin 0 is the DC bin
 
                switch(type) {
                  case XWAVE_SPECTRAL_TYPE_UNDEFINED:

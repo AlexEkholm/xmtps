@@ -109,6 +109,7 @@ libraries are the Ubuntu packages; other versions may work but are not tested.
 | MySQL server | 8.4.11 | `sql_mode` must allow zero dates (see [SQL backend](#sql-backend)) |
 | Python | 3.12.13, in the venv `/data1/alamo/bin/py/.venv` | |
 | numpy | 2.5.0 | |
+| ppigrf | not yet installed | IGRF geomagnetic model for the wave direction declination correction; without it, wave directions stay referenced to magnetic north |
 | scipy | 1.18.0 | `scipy.interpolate` (`RhoLUT.py`), `scipy.io.netcdf_file` (ETOPO2) |
 | pandas | 3.0.3 | |
 | plotly | 6.8.0 | |
@@ -672,7 +673,7 @@ part of the format (`json_vers`, currently `0.11`, identifies it). Missing value
 | `surface` | `Surface` | Surface time series: `pres`, `temp`, `saln` and times; and the surface pressure offset correction from the `PRC` line: `pres_correction` (dBar, NaN without a `PRC` line), `pres_correction_valid`, `pres_correction_num_samples`, `pres_correction_num_dives`. |
 | `pump` | `Pump` | Pump actions: `pres`, `time` (s), `volt`, `curr`, `curr_adj`, `vac`, `power`, `energy`. |
 | `gps`, `sbd` | lists of `Gps`, `Sbd` | GPS fixes and the dive's SBD messages (position, CEP, MOMSN, packet ID, size). |
-| `wave` | `Wave` | Wave spectra (`Szz_g` … in g²/Hz, `Szz` … in m²/Hz), directional moments and derived values: significant wave height `swh` (m), periods (s), mean direction `mwd` (°). |
+| `wave` | `Wave` | Wave spectra (`Szz_g` … in g²/Hz, `Szz` … in m²/Hz), directional moments and derived values: significant wave height `swh` (m), periods (s), mean direction `mwd` (°). Directions are clockwise from magnetic north and give the direction the waves propagate toward, not from. |
 | `mission` | `MissionParameters` | Firmware and configuration versions, CTD type, `parameters` (`{name: value}`) and `entries` (section, index, name, value, units of every `m` line). |
 | `engineering` | `Engineering` | One object per engineering section (`descent`, `drift`, `ascent`, `surface`, `ice`, `bit`) with an attribute per parameter, `errors` (error codes) and `extra` (columns not mapped to an attribute). |
 
@@ -702,8 +703,8 @@ Read one with `pandas.read_json(path, orient="split")`.
 | `_profile_position` | dive | Position assigned to the profile: time, `lat`, `lon`, `cep_km`, `src` (`gps` or `iridium`) |
 | `_displacement_surface`, `_displacement_submerged` | dive | Displacement between two positions: `azi` (°), `dist_m`, `duration_s`, `speed_mps`, and `pos1_*`/`pos2_*` |
 | `_cycle_timing` | dive | Start time and duration of descent, drift, ascent and surface, and `total_duration_s` |
-| `_wave` | dive | `swh`, `mwd`, `period_peak`, `period_avg`, `period_zero` |
-| `_wave_spectra` | spectral bin | `freq`, acceleration (`*_g`, g²/Hz) and displacement spectra (m²/Hz), `a0`–`b2`, `r1`, `r2`, `theta1`, `theta2` |
+| `_wave` | dive | `swh`, `mwd`, `declination` (°, east positive; NaN if not applied), `direction_ref` (`true` or `magnetic`), `period_peak`, `period_avg`, `period_zero` |
+| `_wave_spectra` | spectral bin | `freq`, acceleration (`*_g`, g²/Hz) and displacement spectra (m²/Hz), `a0`–`b2`, `r1`, `r2`, `theta1` (mean direction toward, [0, 360)), `theta2` (principal direction toward, [0, 360), the end of the principal axis nearest `theta1`) |
 | `_engineering` | dive | Start time and case vacuum of each engineering section (`descent_*`, `drift_*`, `ascent_*`, `surface_*`) |
 | `_engineering_data` | dive | Every engineering parameter, as `section.attribute` columns (e.g. `drift.mean_pres_dbar`); columns no dive reports are left out |
 | `_engineering_errors` | error | `section`, `idx`, `dt_str`, `code` |
@@ -728,6 +729,41 @@ when none of its dive files is newer, unless `-f` is given.
 ## Changelog
 
 ### 2026-10-26
+
+Wave spectra bin frequencies (decoder and `FloatClasses.py`):
+
+- Bin k of a wave spectrum now has frequency k·fs/N, where bin 0 is the DC bin of the WIMS FFT; it was
+  (k+1)·fs/N. WIMS firmware (v1.x and v2.x up to 2.01.00614b) copies FFT bins 0 to N/2-1 and labels them one
+  bin high, and the decoder (`XWave.cpp`, `XWave.h` `FixFuckup9000()`) and `Wave` inherited that label. For
+  the Hurricane Erin floats (9302, 9303, 9308 and 9309, which send every other bin) the error was 0.0195 Hz;
+  shifting the spectra against NDBC buoy 41047 gives a best-match offset of +0.0225 Hz (per-pair median
+  +0.0155 Hz). Wave data processed before this change must be reprocessed.
+- The displacement listing values (`wvm`) of the DC bin are the fill value, instead of a division by zero.
+- New low-frequency response correction coefficients, [0.09681, 0.05256, 0.01988, 0.03908], fitted against
+  NDBC 41047 with the corrected frequencies; see the WIMS user manual. With the corrected frequencies and new
+  coefficients, `swh` is within 1% of the buoy on average (908 colocated pairs).
+  The decoder changes are not yet built or tested.
+
+Wave post-processing (`FloatClasses.py`):
+
+- Wave directions (`theta1`, `theta2`, `mwd`) are corrected for the magnetic declination and referenced
+  to true north. The declination is computed with the IGRF (package `ppigrf`) at the dive's surface GPS
+  fix (idx 0 or 2, else the first valid fix) and stored as `declination`; `direction_ref` is `true`. Without
+  `ppigrf` or a valid fix, the directions stay magnetic (`direction_ref` `magnetic`). The WIMS firmware
+  is unchanged. `ppigrf` must be installed in the argus venv (`pip install ppigrf`). Validated against NDBC
+  41047 and the A-DWSD drifters: the correction reduced the mean direction bias from +25° to +13° (NDBC)
+  and from +9° to -3° (A-DWSD); see the WIMS user manual.
+
+- The principal wave direction `theta2` was computed as atan2(a2, b2), which is not a direction:
+  waves along north-south gave 270°. It is now the principal axis atan2(b2, -a2)/2, taken at the
+  end of the axis (that angle or that angle + 180°) nearest `theta1`, in [0, 360). a2 and b2
+  alone cannot tell a direction from its opposite. Checked by running synthetic spectra for waves
+  toward 0° to 345°, in 15° steps and with the WIMS firmware's cross-spectra sign conventions,
+  through `Wave.PostProcess()`; `theta1` and `mwd` were already correct. With two opposing wave
+  systems, or when `theta1` is poorly defined, the end of the axis chosen can be wrong.
+- Directions (`theta1`, `theta2`, `mwd`) are documented as clockwise from magnetic north and
+  toward which the waves propagate (not from). The wave plot titles say "(Toward)".
+- Directions that round to 360° are now 0°.
 
 Decoder daemon (version 1.0):
 
