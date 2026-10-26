@@ -430,6 +430,8 @@ class XFloatMailRetrievalService:
 
     static vector<path> ListRawMailFiles();
 
+    static bool PushForProcessing(const shared_ptr<XFloatMailMessage>& xmsg);
+
     static void MoveProcessedMessages(const vmime::shared_ptr<vmime::net::folder>& folder_inbox);
 
     static void set_termination_signaled(bool termination_signaled = true);

@@ -95,15 +95,16 @@
 /** Default/fill value for invalid position longitude. */
 #define XFLT_POS_INVALID_LON                    IRI_POS_INVALID_LAT
 
-/** Default mail message processing queue capacity. */
-#define XFLT_QUEUE_SIZE_MAIL_PROCESSING         (1024*8)
+/** Default mail message processing queue capacity. The queues are kept short because each stage
+ *  processes the messages still queued before it shuts down. */
+#define XFLT_QUEUE_SIZE_MAIL_PROCESSING         (128)
 
 /** Default telemetry decode queue capacity. */
-#define XFLT_QUEUE_SIZE_TELEMETRY               (1024*8)
+#define XFLT_QUEUE_SIZE_TELEMETRY               (128)
 
-#define XFLT_QUEUE_SIZE_PPROCESSING             (1024*64)
+#define XFLT_QUEUE_SIZE_PPROCESSING             (128)
 
-#define XFLT_QUEUE_SIZE_NC_FILE_WRITER          (1024*64)
+#define XFLT_QUEUE_SIZE_NC_FILE_WRITER          (128)
 
 /** XFloat service threads' idle sleep time, in milliseconds. */
 #define XFLT_THREAD_SLEEP_MS                    (100)

@@ -267,6 +267,28 @@ void XFloatMailRetrievalService::DisconnectFromMailServer() ATTR_NO_EXCEPTIONS {
 }
 
 
+/** Push a mail message into the mail processing queue, waiting while the queue is full.
+ *
+ *  The wait ends when termination is signaled, so a full queue does not hold up shutdown; the
+ *  message is then not queued.
+ *
+ *  @param[in]      xmsg            The mail message to push.
+ *
+ *  @return         TRUE if the message was queued, or FALSE if termination was signaled first.
+ */
+bool XFloatMailRetrievalService::PushForProcessing(const shared_ptr<XFloatMailMessage>& xmsg) {
+
+    while(!XFloatMailProcessingService::MsgProcessingQueuePush(xmsg, false)) {
+
+        if(termination_signaled_)
+            return false;
+
+        sleep(millisec(XFLT_THREAD_SLEEP_MS));
+    }
+
+    return true;
+}
+
 /** Fetch a batch of messages from the file system.
  *
  *  @return         The number of messages fetched.
@@ -345,11 +367,15 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromFileSystem() {
               }
 
 
+              // Push message to the processing queue. On termination, leave the file for the
+              // next run.
+              if(!PushForProcessing(xmsg)) {
+                  remove(lock_file_path);
+                  break;
+              }
+
               // Remove mail files
               remove(mail_file_path);
-
-              // Push message to the processing queue.
-              XFloatMailProcessingService::MsgProcessingQueuePush(xmsg, true);
               is_processed = true;
               ++num_processed;
 
@@ -499,8 +525,12 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
                                     xmsg->msg_header_datetime(),
                                     false).substr(0, 6));
 
-                // Push message to the processing queue.
-                XFloatMailProcessingService::MsgProcessingQueuePush(xmsg, true);
+                // Push message to the processing queue. On termination, the message and the
+                // rest of the batch stay in the inbox for the next run.
+                if(!PushForProcessing(xmsg)) {
+                    pending_moves_.erase(xmsg->id_msg_uid());
+                    break;
+                }
 
             }CATCH_NOTHROW("Failed to process fetched message!")
 
@@ -867,7 +897,8 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
     if(reprocess_by_inst_ids_.size() > 0) {
 
         // Reprocess messages for selected instruments.
-        for(auto it = reprocess_by_inst_ids_.begin(); it != reprocess_by_inst_ids_.end(); ++it)
+        for(auto it = reprocess_by_inst_ids_.begin();
+                it != reprocess_by_inst_ids_.end() && !termination_signaled_; ++it)
 
             try {
 
@@ -903,8 +934,11 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
                         "to reprocess.");
                 linf() << format(fmt2) % xmsgs.size() % *it;
 
-                // Push messages to processing queue.
-                XFloatMailProcessingService::MsgProcessingQueuePushAll(xmsgs.begin(), xmsgs.end());
+                // Push messages to processing queue. On termination, stop; the messages stay in
+                // the database and are reprocessed when the float is next reprocessed.
+                for(auto msg_it = xmsgs.begin(); msg_it != xmsgs.end(); ++msg_it)
+                    if(!PushForProcessing(*msg_it))
+                        break;
 
                 // Reset instrument pointer.
                 xfloat.reset();
@@ -914,7 +948,8 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
         /*  Sleep for a short duration to allow time for the daemon thread to signal
          *  termination if the application is not configured to run as a daemon/service.
          */
-        sleep(millisec(30000));
+        for(unsigned int n = 30000 / XFLT_THREAD_SLEEP_MS; n-- && !termination_signaled_; )
+            sleep(millisec(XFLT_THREAD_SLEEP_MS));
     }
 
     // Enter the primary thread loop.

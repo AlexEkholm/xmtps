@@ -531,7 +531,8 @@ The `bin/*.service` files are systemd units:
 
 - `xmtps-alamo.service` runs the decoder daemon with `Restart=always` and `RestartSec=30`, so a
   startup failure (for example MySQL being unavailable) keeps retrying without hitting systemd's
-  start limit.
+  start limit. `TimeoutStopSec=300` gives the daemon 5 minutes to finish the messages still
+  queued before systemd kills it.
 - `xmtps-alamo-plot.service` runs `bin/py/update-plots-service.sh`, also with `Restart=always` and
   `RestartSec=30`.
 
@@ -716,6 +717,19 @@ run; it is written once the run has written its output. `xmtps-aggregate-json.py
 when none of its dive files is newer, unless `-f` is given.
 
 ## Changelog
+
+### 2026-10-26
+
+Decoder daemon (version 1.0):
+
+- The program version is 1.0 (from 0.6); builds are numbered `1.0.<build>`.
+- Faster shutdown: the mail processing, decoding and post-processing queues hold at most 128
+  messages (they held 8,192 to 65,536), so fewer queued messages are processed before the daemon
+  exits. The mail retrieval thread stops queueing messages once shutdown starts; mail files and
+  inbox messages not yet queued are left for the next run, and reprocessing stops (the messages
+  stay in the database). With 1,461 messages being reprocessed, shutdown took 8.5 s instead of
+  29.9 s.
+- `xmtps-alamo.service`: `TimeoutStopSec=300` (systemd's default was 90 s).
 
 ### 2026-10-25
 

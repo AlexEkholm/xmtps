@@ -58,10 +58,10 @@ namespace po = boost::program_options;
 #define PROG_XVERS                      2.2
 
 /** Program major version. */
-#define PROG_MAJOR_VERS                 0
+#define PROG_MAJOR_VERS                 1
 
 /** Program version. */
-#define PROG_MINOR_VERS                 6
+#define PROG_MINOR_VERS                 0
 
 #if defined(BUILD_DEBUG) && BUILD_DEBUG
 
