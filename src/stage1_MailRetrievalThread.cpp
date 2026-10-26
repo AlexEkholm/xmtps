@@ -71,6 +71,8 @@ unsigned int XFloatMailRetrievalService::message_start_index_(1);
 
 bool XFloatMailRetrievalService::move_mail_messages_;
 
+unsigned int XFloatMailRetrievalService::mail_server_timeout_s_;
+
 map<int, pair<vmime::net::message::uid, string> > XFloatMailRetrievalService::pending_moves_;
 
 bool XFloatMailRetrievalService::sql_server_unavailable_(false);
@@ -171,6 +173,10 @@ vmime::shared_ptr<vmime::net::store> XFloatMailRetrievalService::ConnectToMailSe
                 ldbg() << "Connecting IMAP mail server: " << mail_server_host_ << "...";
                 mail_store_ = mail_session()->getStore(
                         vmime::utility::url(GenerateMailServerUrlString()));
+
+                // Cancel operations that receive nothing from the server for too long.
+                mail_store_->setTimeoutHandlerFactory(
+                        vmime::make_shared<MailTimeoutHandlerFactory>());
 
 #                   if defined(XMTPS_DEBUG_FETCH_MAIL) && XMTPS_DEBUG_FETCH_MAIL
 
@@ -526,7 +532,9 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromServer() {
  *  it to the SQL database or rejected it (see XFloatMailProcessingService::TakeProcessedMsgUids()),
  *  so a message whose processing is interrupted, e.g. by an SQL server outage or a restart, stays
  *  in the inbox and is fetched again. Each message is copied to the folder named after the year
- *  and month of its header date, then deleted from the inbox, and the inbox is expunged.
+ *  and month of its header date, then deleted from the inbox, and the inbox is expunged. If a
+ *  move fails, its messages stay pending and are moved after the next fetch; if it times out
+ *  (see @ref MailTimeoutHandler), the exception is rethrown so the fetch reconnects.
  *
  *  The moved messages were fetched earlier, so they are all below @ref message_start_index_,
  *  which is lowered by the number of messages removed from the inbox.
@@ -541,15 +549,15 @@ void XFloatMailRetrievalService::MoveProcessedMessages(
     using vmime::net::message;
     using vmime::net::messageSet;
 
-    // Collect the processed messages by destination folder.
-    map<string, vector<message::uid> > folder2uid_map;
+    // Collect the processed messages by destination folder: message UID and IMAP UID.
+    map<string, vector<pair<int, message::uid> > > folder2uid_map;
     for(int uid : XFloatMailProcessingService::TakeProcessedMsgUids()) {
 
         auto it = pending_moves_.find(uid);
         if(it == pending_moves_.end())
             continue;
 
-        folder2uid_map[it->second.second].push_back(it->second.first);
+        folder2uid_map[it->second.second].push_back(make_pair(uid, it->second.first));
         pending_moves_.erase(it);
     }
 
@@ -557,6 +565,12 @@ void XFloatMailRetrievalService::MoveProcessedMessages(
     for(auto it = folder2uid_map.begin(); it != folder2uid_map.end(); ++it)
 
         try {
+
+          vector<message::uid> imap_uids;
+          for(const auto& u : it->second)
+              imap_uids.push_back(u.second);
+
+          try {
 
             // Get the destination folder.
             vmime::shared_ptr<folder> folder_dest(
@@ -573,17 +587,31 @@ void XFloatMailRetrievalService::MoveProcessedMessages(
 
             // Copy the message(s) to the destination folder.
             ldbg() << "Copying " << it->second.size() << " message(s) to folder: " << it->first;
-            folder_inbox->copyMessages(folder_dest->getFullPath(), messageSet::byUID(it->second));
+            folder_inbox->copyMessages(folder_dest->getFullPath(), messageSet::byUID(imap_uids));
 
             // Delete the message(s) from the inbox.
             ldbg() << "Deleting " << it->second.size() << " message(s) from inbox";
-            folder_inbox->deleteMessages(messageSet::byUID(it->second));
+            folder_inbox->deleteMessages(messageSet::byUID(imap_uids));
             folder_inbox->expunge();
 
             // The removed messages were below the fetch index.
             message_start_index_ = (message_start_index_ > it->second.size())
                     ? message_start_index_ - it->second.size()
                     : 1;
+
+          } catch(...) {
+
+            /* Keep the messages pending, so that the move is retried after the next fetch (if
+             * the copy succeeded but the delete did not, they are copied again). */
+            for(const auto& u : it->second)
+                pending_moves_[u.first] = make_pair(u.second, it->first);
+            throw;
+          }
+
+        } catch(const vmime::exceptions::operation_timed_out&) {
+
+            // The connection is unusable: abort the fetch, which closes and reopens it.
+            throw;
 
         }CATCH_NOTHROW("Failed to move mail message(s) to folder: " + it->first)
 }

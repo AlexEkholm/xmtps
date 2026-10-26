@@ -1009,7 +1009,7 @@ def ProcessListingFile(fpath_list):
                 if re.match('^PRC ', line):
                     x = line.split()
 
-                    # SN dive midx nSam nDive valid presOffset
+                    # SN dive midx nSam nDive valid presOffset [sfcPmin sfcPmean sfcPmax sfcPstd]
                     dive_data.surface.pres_correction_num_samples = int(x[4])
                     dive_data.surface.pres_correction_num_dives   = int(x[5])
                     dive_data.surface.pres_correction_valid       = int(x[6]) == 1

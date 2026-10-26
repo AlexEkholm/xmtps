@@ -273,11 +273,13 @@ string XFloatDiveData::GeneratePressureCorrectionListingString() const {
        const format fmt("#   %5s %4s %4s "
            "%4s %5s "
            "%5s "
-           "%15s");
+           "%15s "
+           "%8s %8s %8s %8s");
        os << format(fmt) % "SN" % "dive" % "midx" //
               % "nSam" % "nDive" //
               % "valid" //
-              % "presOffset"
+              % "presOffset" //
+              % "sfcPmin" % "sfcPmean" % "sfcPmax" % "sfcPstd"
           << endl;
      }
 
@@ -285,11 +287,13 @@ string XFloatDiveData::GeneratePressureCorrectionListingString() const {
        const format fmt("#   %5s %4s %4s "
            "%4s %5s "
            "%5s "
-           "%15s");
+           "%15s "
+           "%8s %8s %8s %8s");
        os << format(fmt) % "" % "" % "" //
               % "" % "" //
               % "" //
-              % "(dBar)"
+              % "(dBar)" //
+              % "(dBar)" % "(dBar)" % "(dBar)" % "(dBar)"
           << endl;
      }
 
@@ -297,11 +301,17 @@ string XFloatDiveData::GeneratePressureCorrectionListingString() const {
        const format fmt("PRC %5d %4d %4s "
            "%4d %5d "
            "%5d "
-           "%15s");
+           "%15s "
+           "%8s %8s %8s %8s");
+       // This dive's uncorrected surface pressure statistics; the minimum excludes outliers.
+       const string sfc_pres_std = surface_pres_variance() < 0 ? "-9.999"
+           : (format("%.3f") % sqrt(surface_pres_variance())).str();
        os << format(fmt) % id_instrument() % id_dive() % midx++ //
            % pres_offs_num_samples() % pres_offs_num_dives() //
            % (int) is_pres_offs_valid() //
-           % XMsgFormatPressure(pres_offs());
+           % XMsgFormatPressure(pres_offs()) //
+           % XMsgFormatPressure(surface_pres_min()) % XMsgFormatPressure(surface_pres_mean()) //
+           % XMsgFormatPressure(surface_pres_max()) % sfc_pres_std;
      }
 
    }CATCH_BLOCK("Failed to generate pressure correction listing string!")

@@ -31,6 +31,9 @@
 
 /* Includes: */
 
+// std
+#include <chrono>
+
 // local
 #include "stage2_MailProcessingThread.h"
 
@@ -169,9 +172,72 @@ class XFloatMailRetrievalService:
     };
 #   endif // defined(XMTPS_DEBUG_FETCH_MAIL) && XMTPS_DEBUG_FETCH_MAIL
 
+    /** Timeout handler for the mail server connection.
+     *
+     *  VMime calls it while it waits for data from the mail server. An operation is cancelled,
+     *  with a vmime::exceptions::operation_timed_out exception, when nothing has been received
+     *  for @ref mail_server_timeout_s_ seconds, or at once when termination is signaled, so a
+     *  stalled connection cannot block the thread (and the daemon's shutdown) indefinitely.
+     */
+    class MailTimeoutHandler:
+    public vmime::net::timeoutHandler {
+
+      public:
+
+      /* Public Member Functions: */
+
+      bool isTimeOut() {
+
+        return termination_signaled_
+            || std::chrono::steady_clock::now() - start_
+                > std::chrono::seconds(mail_server_timeout_s_);
+      }
+
+      void resetTimeOut() {
+
+        start_ = std::chrono::steady_clock::now();
+      }
+
+      bool handleTimeOut() {
+
+        if(!termination_signaled_)
+          lwrn() << "No response from the mail server for " << mail_server_timeout_s_
+                 << " s: operation cancelled.";
+
+        return false;   // Cancel the operation.
+      }
+
+      private:
+
+      /* Private Data Members: */
+
+      std::chrono::steady_clock::time_point start_ = std::chrono::steady_clock::now();
+
+    };
+
+    /** Factory for @ref MailTimeoutHandler objects, one per mail server connection. */
+    class MailTimeoutHandlerFactory:
+    public vmime::net::timeoutHandlerFactory {
+
+      public:
+
+      /* Public Member Functions: */
+
+      vmime::shared_ptr<vmime::net::timeoutHandler> create() {
+
+        return vmime::make_shared<MailTimeoutHandler>();
+      }
+
+    };
+
   private:
 
     /* Static Data Members: */
+
+    /** The time, in seconds, after which a mail server operation that receives nothing is
+     *  cancelled (see @ref MailTimeoutHandler).
+     */
+    static unsigned int mail_server_timeout_s_;
 
     static bool is_reprocess_active_;
 

@@ -633,6 +633,13 @@ options_description LocalConfiguration::GenerateConfigurationFileOptionsDescript
               ->default_value("imap"),
             "Set the mail server protocol.\n")
 
+        ("mail.timeout",
+            value<unsigned int>(&XFloatMailRetrievalService::mail_server_timeout_s_) //
+              ->default_value(120) //
+              ->value_name("SEC"),
+            "Set the time, in seconds, after which a mail server operation that receives no data "
+            "is cancelled; the connection is then closed and reopened on the next check.\n")
+
         ("mail.user",
             value<string>(&XFloatMailRetrievalService::mail_server_user_) //
               ->default_value("alamo"),

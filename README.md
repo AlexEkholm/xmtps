@@ -215,6 +215,7 @@ General:
 | `mail.folder` | empty (server default) | Folder to read messages from, e.g. `INBOX`. |
 | `mail.fetchMode` | `0` | `0` fetch from the mail server; `1` read RAW mail files from `dir.mail` (renamed to `.err` if they can't be parsed). |
 | `mail.moveMessages` | `0` | Move server messages to the folder `INBOX.<YYYYMM>` for their header date once they are processed (saved to the SQL database or rejected); a message whose processing is interrupted stays in the inbox. |
+| `mail.timeout` | `120` | Seconds without data from the mail server after which an operation (connect, login, fetch, copy, delete, expunge) is cancelled; the connection is closed and reopened at the next check, and messages not yet moved are moved then. |
 | `mail.xDlyS` | `60` | Seconds to wait before checking again when no new messages are found. |
 | `mail.validSenderRegex` | `(sbdservice@sbd.iridium.com\|service@sbd.pac.disa.mil)` | Senders whose messages are accepted. |
 | `mail.validSubjectRegex` | `SBD Msg From Unit: (\d+)` | Accepted subjects; the captured number is the IMEI. |
@@ -303,7 +304,9 @@ the dive's pressures. SBE CTDs correct pressure onboard and are not corrected ag
 - **Applied to**: the fall, drift, profile, valve, pump and rise pressures in the listing. The
   surface time series (`SFC`, `sfc`, `SFD`) is listed uncorrected, since it is what
   the offset is computed from. The `PRC` line gives the offset (`presOffset`), whether it is
-  valid, and the number of samples and dives it comes from. A note above it says whether this
+  valid, and the number of samples and dives it comes from, followed by this dive's uncorrected
+  surface pressure minimum (`sfcPmin`, outliers excluded, as used for the offset), mean, maximum
+  and standard deviation (-9.999 when the dive has no usable surface data). A note above it says whether this
   listing's pressures are corrected: if so, `pres = rawPres - presOffset`, so the raw pressures
   are recovered as `rawPres = pres + presOffset` (except samples listed as -9.999, which were out
   of range after the correction).
@@ -374,7 +377,7 @@ so far. The Python tools (`xmtps-list2json.py`) parse these files.
 | `GPS` | GPS | GPS fixes: time, position, time to fix, satellites, SNR, HDOP, status. |
 | `IRI` | Iridium position | Position estimated from the Iridium sessions: weighted time and position, variance, error. |
 | `A` | Argo data | Mission phase, pressures, durations, cycle timing and sensor gains and offsets (`midx` 0–5). |
-| `PRC` | Pressure correction | Surface pressure offset (`presOffset`), whether it is valid, and the dives and samples it comes from; a note above it says whether it was subtracted from this listing's pressures and how to recover the raw ones (see [Surface pressure offset correction](#surface-pressure-offset-correction)). |
+| `PRC` | Pressure correction | Surface pressure offset (`presOffset`), whether it is valid, and the dives and samples it comes from, then the dive's uncorrected surface pressure min (outliers excluded), mean, max and standard deviation; a note above it says whether it was subtracted from this listing's pressures and how to recover the raw ones (see [Surface pressure offset correction](#surface-pressure-offset-correction)). |
 | `F` / `f` | Fall time series | Descent: time, pressure, temperature, salinity and phase code (name after `#`). |
 | `D` / `d` | Drift data | Drift/park samples: time, pressure, temperature, salinity. |
 | `PRD` / `prd` | Profile sensor columns | Name, units and description of each `pro` column. |
@@ -724,6 +727,11 @@ Decoder daemon:
 - The command echo-back message (0xDE), which floats send after a command upload, is decoded:
   each echoed command is listed on a `CMD` line under "Ground Station Upload Command Echo-Back
   Messages" (before, the section was printed empty).
+- Mail server operations time out (`mail.timeout`, default 120 s without data): a stalled
+  connection is closed and reopened at the next check instead of blocking the decoder, and a
+  shutdown during a stall no longer waits for systemd to kill the daemon.
+- The `PRC` line also lists the dive's uncorrected surface pressure minimum (outliers excluded),
+  mean, maximum and standard deviation (`sfcPmin`, `sfcPmean`, `sfcPmax`, `sfcPstd`).
 - Surface pressure offset correction: dives without a mission configuration message use the
   sensor type of the float's last one, so floats that send it only on some dives (most hurricane
   floats) are corrected on every dive even without a `.meta` file. The offset is also recomputed
