@@ -4,18 +4,21 @@
 
 Reads the per-float <id>_summary.json files written by xmtps-aggregate-json.py (given as files
 and/or directories, searched recursively and filtered by the -i regular expressions), ignoring
-files whose JSON version is not JSON_VERSION and, with --days, floats that started up (sent their
-first SBD message) more than that many days ago. Floats still in their pre-deployment tests are
-included. For each remaining float, the <id>_engineering_data.json file next to its summary gives
-the built-in test (BIT) results: one row per dive with a BIT message (E05 passed, E06 failed),
-in time order (BitOrder).
+files whose JSON version is not JSON_VERSION. For each float, the <id>_engineering_data.json file
+next to its summary gives the built-in test (BIT) results: one row per dive with a BIT message
+(E05 passed, E06 failed), in time order (BitOrder). The float sends its startup messages with
+negative dive numbers, decremented by one at each start, so the latest BIT's dive gives the
+startup number (StartupNumber), and its reported start time the startup time (StartupEpoch).
+With --days, floats that started up more than that many days ago are ignored.
 
 Writes <output>/startup.html (production: plots2/engineering/, next to the mission parameters
-page; the float links point to --plots-url) with one table row per float: its status (in startup tests, or
-deployed and the number of cycles), startup and deployment dates, last report, firmware, and the
-results of its most recent BIT: the failed tests (from the BIT results mask), the subsystem error
-flags (CTD, case vacuum, battery, air and oil pumps) and the main measurements. Failed tests and
-set error flags are highlighted. The output directory must exist.
+page; the float links point to --plots-url) with one table row per float: its status (started,
+i.e. not yet deployed, or deployed, with the startup number and the number of cycles), startup
+and deployment dates, last report, and its most recent BIT: the test duration, the result with
+the failed tests (from the BIT results mask), the subsystem error flags (CTD, case vacuum,
+battery, air and oil pumps), the firmware and the main measurements, including the CTD pressure
+after calibration. Failed tests and set error flags are highlighted. The output directory must
+exist.
 
 Example:
     xmtps-generate-startup-page.py -i"/data1/alamo/data/json/[0-9]+/[0-9]+_summary.json" -o/data1/alamo/data/plots2/engineering /data1/alamo/data/json
@@ -77,7 +80,7 @@ UNSET_VALUES = (65535, 4294967295, 655.35, 65.535, 6553.5, -9.999)
 # BIT measurement columns: (header group, header, units, engineering_data column(s), format).
 # Two columns are shown as 'start / end'. Formats are str.format specifications.
 BIT_COLUMNS = [
-    ('CTD',       'P Offset',  'dBar', ('bit.pres_offset_dbar',),                         '{:.2f}'),
+    ('CTD',       'Pressure',  'dBar', ('bit.pres_post_reset_dbar',),                     '{:.2f}'),
     ('CTD',       'Temp.',     'degC', ('bit.temp_degc',),                                '{:.3f}'),
     ('CTD',       'Saln.',     'PSU',  ('bit.saln_psu',),                                 '{:.3f}'),
     ('Case',      'Vacuum',    'inHg', ('bit.case_vac_start_inhg', 'bit.case_vac_end_inhg'), '{:.2f}'),
@@ -170,15 +173,37 @@ def EpochOrNone(dt):
     return epoch
 
 
+def BitStartEpoch(bit):
+    """Return the start time of a BIT in epoch seconds (BIT formats 9-11), or None."""
+    dt = bit.get('bit.dt_start') if bit else None
+    if not IsSet(dt) or dt.startswith('0000'):
+        return None
+    return datetime.datetime.strptime(dt[0:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=datetime.UTC).timestamp()
+
+
 def BitOrder(bit):
     """Sort key putting a float's BITs in time order: by start time (BIT formats 9-11), else by
-    dive. Pre-mission dive numbers count down (-1, -2, ...), so a lower negative dive is later."""
-    dt = bit.get('bit.dt_start')
-    epoch = 0
-    if IsSet(dt) and not dt.startswith('0000'):
-        epoch = datetime.datetime.strptime(dt[0:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=datetime.UTC).timestamp()
+    dive. The float sends its startup messages with negative dive numbers, decremented by one at
+    each start (-1, -2, ...), so a lower negative dive is later."""
     dive = bit.get('dive') or 0
-    return (epoch, -dive if dive < 0 else dive)
+    return (BitStartEpoch(bit) or 0, -dive if dive < 0 else dive)
+
+
+def StartupNumber(x):
+    """Return how many times the float has been started: minus the dive number of its latest BIT
+    (startup messages have negative dive numbers, decremented at each start), else of its latest
+    dive if that is negative, or None."""
+    dive = x['bits'][-1].get('dive') if x['bits'] else None
+    if dive is None or dive >= 0:
+        dive = x['summary']['latest'].get('cycle')
+    return -dive if dive is not None and dive < 0 else None
+
+
+def StartupEpoch(x):
+    """Return the float's startup time in epoch seconds: the start time reported in its latest BIT,
+    else the time of its first SBD message (the summary's startup time), or None."""
+    return BitStartEpoch(x['bits'][-1] if x['bits'] else None) \
+        or EpochOrNone(x['summary'].get('startup', {}).get('sbd'))
 
 
 def ProcessJsonSummaryFile(fpath):
@@ -218,15 +243,6 @@ def ProcessJsonSummaryFile(fpath):
             logger.warning('Ignoring summary file with invalid json version: ' + fpath)
             return
 
-        startup = EpochOrNone(summary.get('startup', {}).get('sbd'))
-        if startup is None:
-            logger.debug('Ignoring float without startup time: {}'.format(fpath))
-            return
-
-        if (datetime.datetime.now(datetime.UTC).timestamp() - startup) / 86400 > args.days:
-            logger.debug('Ignoring float not started up in the last {} days: {}'.format(args.days, fpath))
-            return
-
         float_id = summary['id'].whoi
 
         # BIT rows: the dives whose engineering data has a BIT section, in dive order
@@ -244,7 +260,18 @@ def ProcessJsonSummaryFile(fpath):
         else:
             logger.info('Float without engineering data file: {}'.format(float_id))
 
-        float_map[float_id] = { 'summary': summary, 'bits': bits }
+        x = { 'summary': summary, 'bits': bits }
+
+        startup = StartupEpoch(x)
+        if startup is None:
+            logger.debug('Ignoring float without startup time: {}'.format(fpath))
+            return
+
+        if (datetime.datetime.now(datetime.UTC).timestamp() - startup) / 86400 > args.days:
+            logger.debug('Ignoring float not started up in the last {} days: {}'.format(args.days, fpath))
+            return
+
+        float_map[float_id] = x
 
     except:
 
@@ -325,13 +352,9 @@ def WriteBitCells(doc, tag, text, bit):
     with tag('td'): # dive
         text('{}'.format(bit.get('dive')))
 
-    with tag('td', ('data-order', bit.get('bit.dt_start') or '')): # time
-        dt = bit.get('bit.dt_start')
-        text(dt[0:10] + ' ' + dt[11:16] if IsSet(dt) and not dt.startswith('0000') else '-')
-        if IsSet(bit.get('bit.duration_s')):
-            doc.stag('br')
-            with tag('small'):
-                text('{:.0f} min'.format(bit['bit.duration_s'] / 60))
+    duration = bit.get('bit.duration_s') if IsSet(bit.get('bit.duration_s')) else None
+    with tag('td', ('data-order', '{:.0f}'.format(duration) if duration is not None else '-1')): # duration
+        text('{:.0f}'.format(duration / 60) if duration is not None else '-')
 
     # result: from the results mask (E05 passed, E06 failed)
     if results is None:
@@ -392,7 +415,7 @@ def WriteBitHeader(doc, tag, text, float_columns):
             with tag('th', colspan=n):
                 text(name)
     with tag('tr'):
-        headers = list(float_columns) + [('Dive', ''), ('Time', 'UTC'), ('Result', ''), ('Errors', ''), ('Firmware', '')]
+        headers = list(float_columns) + [('Dive', ''), ('Duration', 'min'), ('Result', ''), ('Errors', ''), ('Firmware', '')]
         headers += [(c[1], c[2]) for c in BIT_COLUMNS]
         for header, units in headers:
             with tag('th'):
@@ -418,7 +441,7 @@ def WriteStartupFile(dpath):
         now = datetime.datetime.now(datetime.UTC).timestamp()
 
         # Floats, latest startup first
-        float_ids = sorted(float_map, key=lambda i: EpochOrNone(float_map[i]['summary']['startup']['sbd']), reverse=True)
+        float_ids = sorted(float_map, key=lambda i: StartupEpoch(float_map[i]), reverse=True)
 
         # Create document
 
@@ -483,24 +506,25 @@ def WriteStartupFile(dpath):
                                 text('ALAMO/ALTO Float Startup')
 
                         with tag('div', id='intro'):
-                            text('Floats that started up (sent their first message) in the last {:g} days, '.format(args.days))
-                            text('including floats ')
+                            text('Floats that started up in the last {:g} days (the start time of their latest built-in test, BIT), '.format(args.days))
+                            text('both ')
                             with tag('span', klass='mkey bstart'):
-                                text('still in their startup tests')
-                            text(', with the results of their most recent built-in test (BIT): ')
+                                text('started')
+                            text(' (not yet deployed) and deployed, with the results of their most recent BIT: ')
                             with tag('span', klass='mkey bpass'):
                                 text('passed')
                             text(', or ')
                             with tag('span', klass='mkey bfail'):
                                 text('failed')
                             text(' with the failed tests, and any subsystem error flags. ')
+                            text('The startup number counts the float\'s starts (its startup messages have dive numbers -1, -2, ...). ')
                             text('The BITs column counts all the BITs the float sent. Values are as reported by the float; ')
                             text('a dash means the BIT format does not report the value. Hover over a result for its results mask.')
 
                         # Floats table
 
                         with tag('h2'):
-                            text('Floats ')
+                            text('Recent Startups ')
                             with tag('small'):
                                 text('({:d})'.format(len(float_ids)))
 
@@ -539,14 +563,24 @@ def WriteStartupFile(dpath):
                                                     with tag('small'):
                                                         text(summary['ctdtype'])
 
-                                            with tag('td', klass='bstart' if in_startup else ''): # status
-                                                text('Startup tests' if in_startup else 'Deployed')
+                                            # status: started (not yet deployed) or deployed, with the startup number
+                                            number = StartupNumber(x)
+                                            with tag('td', klass='bstart' if in_startup else ''):
+                                                text('Started' if in_startup else 'Deployed')
                                                 doc.stag('br')
                                                 with tag('small'):
-                                                    text('dive {}'.format(cycle) if in_startup else '{} cycle{}'.format(cycle, '' if cycle == 1 else 's'))
+                                                    details = ['startup {}'.format(number)] if number is not None else []
+                                                    if not in_startup:
+                                                        details.append('{} cycle{}'.format(cycle, '' if cycle == 1 else 's'))
+                                                    text(', '.join(details) or '-')
 
                                             for key in ('startup', 'deployment', 'latest'):
-                                                epoch = EpochOrNone(summary.get(key, {}).get('sbd')) if not (key == 'deployment' and in_startup) else None
+                                                if key == 'startup':
+                                                    epoch = StartupEpoch(x)
+                                                elif key == 'deployment' and in_startup:
+                                                    epoch = None
+                                                else:
+                                                    epoch = EpochOrNone(summary.get(key, {}).get('sbd'))
                                                 with tag('td', ('data-order', '{:.0f}'.format(epoch) if epoch is not None else '0')):
                                                     if epoch is None:
                                                         text('-')

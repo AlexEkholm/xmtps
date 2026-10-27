@@ -675,21 +675,25 @@ the group share it. It also takes `--runtime SECONDS` for the footer, as the sum
 and, next to each, `<serial>_engineering_data.json`, and writes `<output>/startup.html` (production:
 `/data1/alamo/data/plots2/engineering/`, published at
 `http://argus.whoi.edu/etcetc/alamo/engineering/startup.html`, next to the mission parameters page;
-the float links go to `--plots-url URL`, default `..`; `update-plots-service.sh` passes `/alamo`). It shows the floats that started up (sent their first SBD message, the
-summary's `startup` time) in the last `--days DAYS` days (default 180), including floats still in
-their pre-deployment tests, latest startup first. Without `-i`, only `<serial>_summary.json` files
-are read from the given directories. Each row gives the float's status (startup tests, with the
-current dive, or deployed, with its cycles), its startup, deployment and last report times, the
-number of BITs it sent (and how many failed), and its most recent built-in test (BIT; E05 passed,
-E06 failed): dive, start time and duration, the result from the BIT results mask with the names of the
-failed tests (spec B.2.6), the subsystem error flags decoded by name (CTD, case vacuum, battery, air
-and oil pump; BIT formats 9-11), the firmware (as on the summary page, e.g. v10.12.0, with the firmware word) and BIT format, and the CTD pressure offset,
-temperature and salinity, case vacuum and battery voltage (start / end), air pump duration, cycles
-and maximum pressure, and oil pump duration and maximum current. Passed BITs are green, failed BITs and set error flags dark red, and floats in startup
-tests yellow. The most recent BIT is the latest by start time, or by dive where the format has no
-times (pre-mission dive numbers count down, so dive -13 is later than -7). The table is a
-DataTables table, sortable by any column and with a search field. It also takes `--runtime
-SECONDS`.
+the float links go to `--plots-url URL`, default `..`; `update-plots-service.sh` passes `/alamo`).
+The float sends its startup messages with negative dive numbers, decremented by one at each start
+(-1, -2, ...), so a float's startup number is minus the dive number of its latest BIT (E05 passed,
+E06 failed), and its startup time the start time reported in that BIT (the time of its first SBD
+message, the summary's `startup` time, for BIT formats without times). The page shows the floats
+that started up in the last `--days DAYS` days (default 180), latest startup first. Without `-i`,
+only `<serial>_summary.json` files are read from the given directories. Each row gives the
+float's status (Started, i.e. not yet deployed, or Deployed), with its startup number and, once
+deployed, its cycles; its startup, deployment and last report times; the number of BITs it sent
+(and how many failed); and its most recent BIT: the dive, the test duration (min), the result from
+the BIT results mask with the names of the failed tests (spec B.2.6), the subsystem error flags
+decoded by name (CTD, case vacuum, battery, air and oil pump; BIT formats 9-11), the firmware (as
+on the summary page, e.g. v10.12.0, with the firmware word) and BIT format, the CTD pressure after
+calibration (`presPostCal`, `presPostReset` in BIT format 8), temperature and salinity, case
+vacuum and battery voltage (start / end), air pump duration, cycles and maximum pressure, and oil
+pump duration and maximum current. Passed BITs are green, failed BITs and set error flags dark
+red, and started floats yellow. The most recent BIT is the latest by start time, or by dive where
+the format has no times (so dive -13 is later than -7). The table is a DataTables table, sortable
+by any column and with a search field. It also takes `--runtime SECONDS`.
 
 Example (as run by `update-plots-service.sh` for one float):
 
