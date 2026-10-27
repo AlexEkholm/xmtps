@@ -121,9 +121,19 @@ public:
         try {
 
             int cidx = 0;
-            for(const string& cmd : commands_)
+            for(string cmd : commands_) {
+
+                // List the parameter name (the text before the first space) in uppercase,
+                // leaving \xNN escapes as they are.
+                for(size_t i = 0; i < cmd.size() && cmd[i] != ' '; ++i)
+                    if(cmd[i] == '\\')
+                        i += 3;
+                    else if(cmd[i] >= 'a' && cmd[i] <= 'z')
+                        cmd[i] -= 'a' - 'A';
+
                 os << format("CMD %5d %4d %4d %4d  %s") % id_instrument() % id_dive() % eidx
                         % cidx++ % cmd << endl;
+            }
 
         }CATCH_BLOCK("Failed to generate listing string ground station command echo-back message!")
 

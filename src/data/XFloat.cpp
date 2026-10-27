@@ -2552,6 +2552,19 @@ void XFloatDiveData::DecodeXMsgData(
 
               break;
 
+            case XMSG_TYPE_ID_UNKNOWN:    // 0xFF
+
+              try {
+
+                // Decode extended record message.
+                linf() << "Decoding extended record message...";
+                AssignExtendedRecord(
+                    std::make_shared<XExtendedRecord>(id_dive(), id_instrument(), xdata));
+
+              } CATCH_BLOCK("Failed to decode extended record message!")
+
+              break;
+
             case XMSG_TYPE_ID_ENG_DIAGNOSTIC:    // 0xE0
 
               try {
@@ -2711,7 +2724,6 @@ void XFloatDiveData::DecodeXMsgData(
               // Ignore test messages, if any.
               break;
 
-            case XMSG_TYPE_ID_UNKNOWN:
             default:
 
               // Unknown X-Message ID
@@ -3254,6 +3266,26 @@ string XFloatDiveData::GenerateListingString() const {
 
       }CATCH_NOTHROW("Failed to generate listing entry for ground station upload command "
           "echo-back message!")
+
+    // Print extended record message(s).
+    if(!xmsg_extended_records_.empty())
+
+      try {
+
+        XMSG_HEADER2("Extended Record Messages (0xFF)");
+        os << "#      SN dive ridx type  ver  record" << endl;
+        int ridx = 0;
+        for_each(
+            xmsg_extended_records_.begin(),
+            xmsg_extended_records_.end(),
+            [&](const shared_ptr<XExtendedRecord>& msg) {
+
+              if(msg) os << msg->GenerateListingString(ridx++);
+
+            });
+        os << endl;
+
+      }CATCH_NOTHROW("Failed to generate listing entry for extended record message!")
 
     // Print mission configuration message(s).
     try {

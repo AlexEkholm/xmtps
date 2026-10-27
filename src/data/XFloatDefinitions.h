@@ -57,6 +57,7 @@
 #include "xmsg/XGPS.h"
 #include "xmsg/XMfaMissionCfg.h"
 #include "xmsg/XMissionCmdEcho.h"
+#include "xmsg/XExtendedRecord.h"
 #include "xmsg/XWave.h"
 //#include "../utility/NetcdfUtils.h"
 #include <vmime/vmime.hpp>                        // vmime

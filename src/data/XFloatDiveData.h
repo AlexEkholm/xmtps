@@ -541,6 +541,9 @@ class XFloatDiveData:
      */
     vector<shared_ptr<x::XMissionCmdEcho> > xmsg_mission_cmd_echoback_;
 
+    /** The extended record (0xFF) X-Message objects. */
+    vector<shared_ptr<x::XExtendedRecord> > xmsg_extended_records_;
+
     /** The MFA mission configruation object.
      *
      */
@@ -1491,6 +1494,21 @@ class XFloatDiveData:
     void AssignGps(shared_ptr<x::XGPS>& x);
 
     int AssignMailMessage(const shared_ptr<XFloatMailMessage>& msg);
+
+    /** Assign an extended record (0xFF) message to this dive data object.
+     *
+     *  @param[in]      x       A pointer to the extended record message to assign.
+     */
+    void AssignExtendedRecord(const shared_ptr<x::XExtendedRecord>& x) {
+
+      // Get an exclusive lock.
+      lock_guard<recursive_mutex> guard(mutex_);
+
+      xmsg_extended_records_.push_back(x);
+
+      // Update file status.
+      set_listing_file_updated(false);
+    }
 
     /** Assign a ground-station command echo-back message to this dive data object.
      *

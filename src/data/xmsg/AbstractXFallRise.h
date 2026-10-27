@@ -312,7 +312,7 @@ public:
      *
      *  @return         The listing entry comment string.
      */
-    static const string GenerateListingComment() {
+    static const string GenerateListingComment(bool list_temp_saln = true) {
 
         ostringstream os;
 
@@ -324,9 +324,14 @@ public:
 //            % "SN" % "dive" % "idx" % "nSam" % "time" % "pres" % "temp" % "saln" % "phaseCode" % "phaseCodeName"
 //            % "" % "" % "" % "" % "(start-time/+sec)" % "(dBar)" % "(degC)" % "(PSU)"  % "" % "";
 
-          os << "#      SN dive idx nSam                 time      pres    temp    saln phaseCode   phaseCodeName"
-             << endl
-             << "#                                  (UTC/+sec)    (dBar)  (degC)  (PSU)";
+          if(list_temp_saln)
+            os << "#      SN dive idx nSam                 time      pres    temp    saln phaseCode   phaseCodeName"
+               << endl
+               << "#                                  (UTC/+sec)    (dBar)  (degC)  (PSU)";
+          else
+            os << "#      SN dive idx nSam                 time      pres phaseCode   phaseCodeName"
+               << endl
+               << "#                                  (UTC/+sec)    (dBar)";
 
         }CATCH_BLOCK("Failed to generate fall/rise data listing comment!")
 

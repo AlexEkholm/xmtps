@@ -91,13 +91,13 @@ public:
 
         try {
 
-            os << AbstractXFallRise::GenerateListingComment();
+            os << AbstractXFallRise::GenerateListingComment(false);
             for(auto it = elements().begin(); it < elements().end(); it++)
                 if(*it) {
                     if(it > elements().begin()) {
                         os << endl;
                         XMSG_SECTION_BREAK();
-                        os << XRise::GenerateListingComment();
+                        os << XRise::GenerateListingComment(false);
                     }
                     os << endl << (*it)->GenerateListingString(pg, po, sg, so, tg, to, pc);
                 }

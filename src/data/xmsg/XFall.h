@@ -117,7 +117,7 @@ namespace util {
                   [&](const XSensorTripletCodeCounts& sensor_data) {
 
                     os << format(fmt) % id_instrument() % id_dive() % (int) xmsg_index() % sam++
-                    << sensor_data.GenerateListingString(pg, po, sg, so, tg, to, pc);
+                    << sensor_data.GenerateListingString(pg, po, sg, so, tg, to, pc, false);
 
                   });
             }

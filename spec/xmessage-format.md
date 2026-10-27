@@ -100,6 +100,7 @@ The MRV documents and the SOLO-II PDF are in the Float Group's `mrv/doc` folder.
 | 0xEC | Engineering, ice detection | B.7 | versions 0x10–0x11 | `E0C`, `e0c` |
 | 0xF0 | Argo data (mission summary, gains and offsets) | A.6 | v2.1–v2.4 | `A` |
 | 0xF1 | Test pattern | — | no | — |
+| 0xFF | Extended records (event, reset, serial number, CTD exchange, fault dump) | C.6 | since build 3314 (format inferred) | `XFF` |
 
 IDs not listed are unassigned. In types 0x1n–0x8n and 0x9n–0xBn, the low nibble of the ID is the part number of a multi-part series (A.3).
 
@@ -219,7 +220,7 @@ packets in the production RAW files (all floats and firmware, 2014–2026) have 
    `XMessage::CheckXMsgData`; the size must be at least 4). Extra bytes produce a warning; a missing
    terminator is an error.
 5. IDs without a decoder are logged as `Unknown X message ID: 0x..` and skipped, for example
-   0xC2, 0x70–0x77 and 0xFF. 0xF1 (test pattern) is ignored silently.
+   0xC2 and 0x70–0x77 (and 0xFF before build 3314, C.6). 0xF1 (test pattern) is ignored silently.
 
 #### A.1.4 Byte order, bit order, epochs
 
@@ -713,7 +714,9 @@ Typical sizes [X] (N = index of the last record):
 - Fall, rise and the profile use the profile gains/offsets and the optional pressure correction.
   Surface uses the surface gains/offsets and is never corrected.
 - **Listing:** one group per part: `F|R|SFC SN dive idx nSam startTime`, then
-  `f|r|sfc SN dive idx sam +sec pres temp saln phaseCode # phaseName`.
+  `sfc SN dive idx sam +sec pres temp saln phaseCode # phaseName`, or for fall and rise
+  `f|r SN dive idx sam +sec pres phaseCode # phaseName` (the temp and saln columns were dropped from
+  `f` and `r` in build 3314; only the 9-byte packing format carries them, last used by 9035 and 9050).
 - Surface parts are also combined into the derived `SFD` line: number of valid samples, and the
   minimum, mean, maximum and variance of the surface pressure.
 
@@ -2431,6 +2434,7 @@ This part covers these blob types:
 | 0xDE | Mission command echo | `XMissionCmdEcho` | Decoded since build 3310; one `CMD` listing line per command. |
 | 0xC1, 0xC3 | Ocean surface waves | `XWave`, `XWaveSpectralSample`, `XWaveRawSample` | Spectral versions 0-2 are decoded. The raw IMU format is not. |
 | 0xCA | Marginal-ice-zone (MIZ) acoustics | `XAcousticPosition` | Subtypes 3 and 5 are decoded. Subtypes 1 and 2 are seen in production but ignored. |
+| 0xFF | Extended records | `XExtendedRecord` | Decoded since build 3314; one `XFF` listing line per record. The format is inferred from production messages (C.6). |
 
 ### C.0 Conventions
 
@@ -3013,14 +3017,14 @@ The commands use the mission-parameter mnemonics, with a phase index where the p
 
 - `XMissionCmdEcho` calls `CheckXMsgData(data, 0xDE, -1)`. That checks the ID, that `jj` (lower 12 bits) is at least 4 and no more than the data received, and that the terminator is at `jj - 1`.
 - Since build 3310 the text is decoded. Leading NULs are skipped, the text ends at the next NUL, and it is split at `;` into commands. Blank entries are dropped, surrounding spaces are trimmed, and other non-printable bytes are kept as `\xNN`. The trailing `MIC 1` is listed as a command like the others. (Before build 3310 the echo was checked but not decoded, and the listing section was printed empty.)
-- Listing: under the section banner "Ground Station Upload Command Echo-Back Messages" (printed whenever a dive has at least one 0xDE blob), one line per command:
+- Listing: under the section banner "Ground Station Upload Command Echo-Back Messages" (printed whenever a dive has at least one 0xDE blob), one line per command. The parameter name (the text before the first space) is listed in uppercase, as the mission parameter listings name them; the rest of the command is listed as received:
 
 ```
 #      SN dive eidx cidx  command
-CMD  9213    3    0    0  dft 0 100
-CMD  9213    3    0    1  dft 1 100
-CMD  9213    3    0    2  dft 2 100
-CMD  9213    3    0    3  duc 100
+CMD  9213    3    0    0  DFT 0 100
+CMD  9213    3    0    1  DFT 1 100
+CMD  9213    3    0    2  DFT 2 100
+CMD  9213    3    0    3  DUC 100
 CMD  9213    3    0    4  MIC 1
 ```
 
@@ -3363,6 +3367,70 @@ Acoustics:
 
 ---
 
+### C.6 Extended records (0xFF)
+
+No format document describes ID 0xFF; the decoder's ID list calls it `UNKNOWN`. Everything below
+is **[inferred]** from the 6,262 0xFF blobs in the production RAW files (survey of 2026-10-27, 160
+floats, all firmware from 10.2 to 10.14, WIMS and not). Before build 3314 the decoder logged each
+one as `Unknown X message ID: 0xff` and dropped it (several hundred warnings a day).
+
+**Layout.** The usual ID and 12-bit size (bytes 0-2, A.1.3) and `;` terminator, with a record type
+at byte 3 and, except for 0xDB, its version at byte 4. Several record types are also X-message IDs
+(0xCA, 0xD1, 0xDB, 0xEC), but the records do not match those messages: the type is a separate code
+space.
+
+| Type | Version | Size | Blobs | Floats | When | Record (byte offsets in the blob) |
+|---|---|---|---|---|---|---|
+| 0xCA | 0x20 | 17 | 2,821 | 160 | 95% pre-mission | event: u24 code @5 (0x004002 in 83%; also 0x000100, 0x004000-0x004003, 0x002000, 0x000600, 0x001000), u32 time @8, f32 value @12 |
+| 0xD1 | 0x10 | 22 | 2,809 | 155 | 95% pre-mission | u16 counter @5, u32 time @7, u16 count @11, u32 time @13, u32 value @17 (0 in nearly all) |
+| 0xAE | 0x11 (0x10) | 13 (12) | 483 | 117 | pre-mission only | u16 0 @5, u16 float serial number @7, then 3 (v0x10: 2) configuration bytes |
+| 0xEC | 0x05, 0x08 | 15, 10 | 89 | 4 | in mission (2 pre-mission) | not decoded, e.g. `05 01 0e 00 01 07 01 0b 00 01` (11151) |
+| 0xFA | 0x0A, 0x02 | 281 | 24 | 10 | 23 pre-mission | text: a processor fault dump, or all NUL |
+| 0xDB | — | 12-328 | 36 | 4 | in mission | CTD exchange: u16 command length @4, command, u16 reply length, reply |
+
+- **Times** are UNIX seconds (e.g. 0x62BF7945 = 2022-07-01T22:46:29Z, 23 minutes before that
+  packet's Iridium session), or seconds since the controller started when they are below
+  2000-01-01 (37% of the 0xCA times, e.g. 402). The decoder lists the latter as `+402s`.
+- **0xCA** records come in pairs with a 0xD1 record 8-17 s earlier, several pairs per startup
+  packet. The value is a few tenths of a unit around zero (-0.32 to +0.10 in the examples), most
+  likely the surface pressure in dBar measured at the event; code 0x004002 is the most common
+  event. The 0xD1 counter increases by one per pair across a float's life (4 on 9166 in 2022; 71-73
+  on 9304 in 2026), so it is probably a controller start (reset) count, with the start time and,
+  in the second time field, an uptime in seconds (`+207s`). What `count` counts is unknown.
+- **0xAE** carries the float's serial number (0x23FB = 9211, 0x245B = 9307, 0x2D6D = 11629) and
+  2-3 small configuration values, sent during the startup tests. They may be the pump and battery
+  types that the BIT format 11 "traveler" errors (B.2.6, MissingPumpType, MissingBatteryType)
+  refer to.
+- **0xFA** is an ARM Cortex-M fault report: `r7`, `sp`, `excrt` (EXC_RETURN), `psr`, the fault
+  status registers `hfsr`, `cfsr`, `mmfar`, `bfar`, `shcsr`, and the stacked `s.r0`-`s.r3`,
+  `s.r12`, `s.lr`, `s.pc`, `s.psr`, one per line (CR LF), in hex. It records a controller crash,
+  for example 9304 dive 0 (firmware 10.12.1.31) with `cfsr 00000082` (a data access violation at
+  a precise address). Empty reports are all NUL.
+- **0xDB** records the RBR CTD exchanges of 9280 (10.6.2.1) and three other floats (11148, 11151, 11330): the command
+  text, e.g. `ctdrw fetch\r|5` (a literal backslash-r; the `|` digit is perhaps a timeout), and the
+  CTD's reply, e.g. `2024-03-15 22:57:12.000, 25.1567, 10.1491, 117.6462, 25.6469\r\n` or a
+  calibration (`calibration 3 label = pressure_00, ...`) or `id model = RBRargo3, ...` line. The
+  lengths account for every byte of the blob.
+
+**Listing.** Under the section banner "Extended Record Messages (0xFF)", one line per record:
+`XFF SN dive ridx 0xTT 0xVV record`, where `record` is the decoded fields of the record types
+above, the text of 0xDB and 0xFA records (CR, LF and other non-printable bytes escaped as `\r`,
+`\n` and `\xNN`), or `hex` and the record bytes for other types:
+
+```
+#      SN dive ridx type  ver  record
+XFF  9166   -1    0 0xCA 0x20  event 0x004002  time 2022-07-01T22:46:29Z  value -0.0100
+XFF  9166   -1    1 0xD1 0x10  counter 4  time 2022-07-01T22:46:12Z  count 1  time +62s  value 0
+XFF  9211  -15    0 0xAE 0x11  serial 9211  config 0x01 0x02 0x01
+XFF  9280    2    5 0xDB 0x00  command "ctdrw fetch\r|5"  reply "2024-03-15 22:57:12.000, 25.1567, 10.1491, 117.6462, 25.6469\r\n"
+XFF  9304    0   35 0xFA 0x0A  text "\nr7    20016E60\r\nsp    20016E30\r\nexcrt FFFFFFFD\r\n..."
+```
+
+Open questions: the meaning of the 0xCA event codes and value, the 0xD1 `count` and last field,
+the 0xAE configuration bytes, the 0xEC records, and the `|` digit of the CTD commands.
+
+---
+
 ### Appendix C.A: Offset maps of every MFA layout (decoder)
 
 `NAME@offset` gives the decoder's read offset, counted from the ID byte. Fields are U2 unless a suffix says otherwise (`:U1`, `:U4`, `:I2`, `:R4`). `T_DESCENT`, `T_PARK`, `T_ASCENT` and `T_SURFACE` are U4 state start times in seconds since 2000-01-01. Gaps between fields are bytes that exist but aren't decoded (see C.1.9). In layouts from 4.2.62 on, offset 8 is the parameters version and offset 9 the CTD type (shown as `(params ver.)` and `(CTD type)`).
@@ -3415,3 +3483,4 @@ Acoustics:
 - **Fw0A080004 D1**: PSD@3, PST@5, PSV@7, PSW@9, PSS@11:U1, ASN@12, ARR@14, APM@16, APS@18, APN@20, APF@22, ASI@24:U4, ASD@28, ADD@30, ADT@32, ARC@34, AHR@36, AHD@38, SFN@40, SDC@42:I2, SGT@44, SET@46, SBM@48:U1, SBT@49, SSA@51, SSI@53:U4, SDS@57, SAM@59:U1, SAX@60, SAN@62, SAO@64, SPT@66, SSP@68, PPC0@70:R4, PPC1@74:R4, PPC2@78:R4, PPC3@82:R4, PPE@86:U1
 - **Fw0A080031 D0**: (params ver.)@8:U1, (CTD type)@9:U1, MSN@10, MPS@12:U1, MPC@13, MNM0@15, MNM1@17, MNM2@19, MNS0@21:U1, MNS1@22:U1, MNS2@23:U1, DTD0@24, DTD1@26, DTD2@28, MDS@30, APT@32:U1, BTM@33:U1, DDB@34:U1, XAS@35:U1, CPS@36:U1, CST@37:U1, CTF@38, CTL@40, CTU@42, CTC@44:U1, CSP@45:U4, CPB1@49, CPB2@51, CPB3@53, CPN1@55, CPN2@57, CPN3@59, CPP1@61, CPP2@63, CPP3@65, CRD@67, CRS@69, MTD@71, MTT@73:U4, MTS@77:U4, MAM@81:U1, MAT1@82, MAT2@84, MAP@86, ACA@88, ACG@90, ACR@92, PBL@94, PBH@96, PP0@98, PP1@100, PVL@102, PVH@104, PV0@106, PV5@108, PC0@110, PC1@112, ICM@114:U1, IMM@115, ICA0@117, ICA1@119, ICB0@121, ICB1@123, IMT0@125, IMT1@127, ILT0@129, ILT1@131, ICN@133, ICX@135, ICT@137:I2, ICS@139, ISS0@141:U1, ISS1@142:U1, ISM@143:U1, IST@144, ISO@146, ISP@148:U1, IUE0@149:U1, IUE1@150:U1, ICD0@151, ICD1@153, ICR0@155:U4, ICR1@159:U4, ICG0@163:U1, ICG1@164:U1, ISA@165:U1, ISD@166, IAT@168, ISV@170, ISW@172, ICO0@174, ICO1@176, ICF@178:U4, ICW@182:U4, DNS@186, DRA@188, DSD0@190, DSD1@192, DSD2@194, DST0@196, DST1@198, DST2@200, DDF@202, DDC@204, DSI@206:U4, DDD@210, DDT@212, DFT0@214, DFT1@216, DFT2@218, DCM@220:U1, DAL@221:U1, DCT0@222, DCT1@224, DCT2@226, DCA@228:U1, DRC@229, DRT@231, DCX@233, DCP@235, DCF@237, DCD@239, DCR@241, DSW@243, DUC@245, DPT@247, DUT@249, DPD@251, DVT@253, DVD@255, DVW@257, PFR@259, PFC@261, DDP@263, DDS@265, PNS@267, PTO0@269:U4, PTO1@273:U4, PTO2@277:U4, PTH0@281:U4, PTH1@285:U4, PTH2@289:U4, PTD@293:U4, PSA@297:U1, PSI@298:U4, PFM0@302:U1, PFM1@303:U1, PFM2@304:U1, PFT0@305, PFT1@307, PFT2@309, PFD0@311, PFD1@313, PFD2@315, PFV0@317, PFV1@319, PFV2@321, PDT@323, PSM@325:U1
 - **Fw0A080031 D1**: PSD@3, PST@5, PSV@7, PSW@9, PSS@11:U1, ASN@12, ARR@14, APM@16, APS@18, APN@20, APF@22, ASI@24:U4, ASD@28, ADD@30, ADT@32, ARC@34, AHR@36, AHD@38, SFN@40, SDC@42:I2, SGT@44, SET@46, SBM@48:U1, SBT@49, SSA@51, SSI@53:U4, SDS@57, SAM@59:U1, SAX@60, SAN@62, SAO@64, SPT@66, SSP@68, WMT@70, PPC0@72:R4, PPC1@76:R4, PPC2@80:R4, PPC3@84:R4, PPE@88:U1
+

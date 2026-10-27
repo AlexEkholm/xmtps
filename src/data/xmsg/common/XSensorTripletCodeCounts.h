@@ -103,6 +103,7 @@ public:
      *  @param[in]  to      The temperature sensor offset, in degC.
      *  @param[in]  pc      The pressure correction, in dBar, to be subtracted computed pressure
      *                      value.
+     *  @param[in]  list_temp_saln  Whether to list the temperature and salinity columns.
      *
      *  @throw      log::MessageException if an error occurs while generating the listing string.
      *
@@ -115,16 +116,16 @@ public:
             uint16_t so,
             uint16_t tg,
             uint16_t to,
-            float pc) const {
+            float pc,
+            bool list_temp_saln = true) const {
         ostringstream os;
 
         try {
-            const format fmt("%+20d %9s %7.3f %7.3f %9d # %s");
-            os
-                    << format(fmt) % (int) elapsed_seconds_since_reference_time()
-                            % XMsgFormatPressure(PressureValue(pg, po, pc)) % TemperatureValue(tg, to)
-                            % SalinityValue(sg, so) % (int) phase_code()
-                            % phase_code_name();
+            os << format("%+20d %9s") % (int) elapsed_seconds_since_reference_time()
+                    % XMsgFormatPressure(PressureValue(pg, po, pc));
+            if(list_temp_saln)
+                os << format(" %7.3f %7.3f") % TemperatureValue(tg, to) % SalinityValue(sg, so);
+            os << format(" %9d # %s") % (int) phase_code() % phase_code_name();
         }CATCH_BLOCK("Failed to generate listing string for sensor triplet object!")
 
         return os.str();
