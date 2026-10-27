@@ -39,8 +39,6 @@
 --     reprocessing) and active_idx (the floats active in the last 90 days, read from the index
 --     alone). They replace id_dac_idx, id_wmo_idx, id_dive_idx (the old primary key's first
 --     column), id_instrument and iridium_position_datetime_idx.
---
--- bin/migrate-xfloatmail.sh applies these changes to an existing database.
 -- =================================================================================================
 
 CREATE TABLE IF NOT EXISTS `XFloat` (

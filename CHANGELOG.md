@@ -69,12 +69,12 @@ Decoder daemon (version 1.0):
 
 Database and operations:
 
-- `XFloatMail`, migrated in production on 2026-10-26 with `bin/migrate-xfloatmail.sh`:
+- `XFloatMail`, migrated in production on 2026-10-26:
   `msg_body_text` and `msg_header_raw_text` (both in `msg_raw_text`) are no longer stored, and
   `id_dac` and `id_wmo` are dropped. The primary key starts with `id_imei` instead of `id_dive`,
   and the new indexes `inst_dive_idx` (`id_instrument`, `id_dive`) and `active_idx`
   (`iridium_position_datetime`, `msg_is_valid`, `id_instrument`) replace the old ones.
-- `bin/move-mysql-datadir.sh` moves the MySQL data directory to `/data1`; the database had
+- The MySQL data directory moved to `/data1`; the database had
   filled the root filesystem.
 - `xmtps-alamo.service`: `TimeoutStopSec=300` (was systemd's default, 90 s).
 - `bin/py/update-plots-service.sh` matches the version on argus (run-time limit, run time
