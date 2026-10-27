@@ -118,11 +118,11 @@ def DecoderVersion(binary=DECODER_BINARY):
 
 
 def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None):
-    """Write the footer status line into a yattag document.
+    """Write the footer status lines into a yattag document.
 
     Args:
         doc, tag, text: the yattag Doc and its tag and text functions.
-        json_version: the Python tools' JSON format version, shown as the python version.
+        json_version: the Python tools' JSON format version, shown as the Python utility version.
         runtime_s: the duration of the JSON and plot update run in seconds, or None to leave the
             runtime out.
     """
@@ -133,7 +133,11 @@ def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None):
              ('runtime', runtime)):
         if runtime:
             text('(runtime: ' + runtime + ')')
-    text(' - python version ' + json_version
-         + ' - decoder status: ' + DecoderStatus()
-         + ' - xmtps version ' + DecoderVersion())
+    # One item per line. The breaks are tags, not text (text() escapes them), and the first one
+    # is outside the span, whose text the script replaces.
+    for line in ('Python utility version ' + json_version,
+                 'Decoder status: ' + DecoderStatus(),
+                 'XMTPS version ' + DecoderVersion()):
+        doc.stag('br')
+        text(line)
     doc.asis(ELAPSED_SCRIPT)

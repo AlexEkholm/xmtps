@@ -742,9 +742,9 @@ when none of its dive files is newer, unless `-f` is given.
 
 Float summary page footer:
 
-- The footer now reads, for example, "Page last updated 2026-10-26T17:40Z (105 minutes ago,
-  runtime: 3 minutes) - python version 0.11 - decoder status: active (uptime: 3 hours,
-  4 minutes) - xmtps version 1.0.3318b (built 2026-10-26)". The runtime is that of the JSON and
+- The footer now reads, for example (one item per line), "Page last updated 2026-10-26T17:40Z
+  (105 minutes ago, runtime: 3 minutes)", "Python utility version 0.11", "Decoder status: active
+  (uptime: 3 hours, 4 minutes)", "XMTPS version 1.0.3318b (built 2026-10-26)". The runtime is that of the JSON and
   plot updates before the page is generated: `update-plots-service.sh` passes it with the new
   `--runtime` option. The decoder's status and uptime come from `systemctl show xmtps-alamo` and
   its version from `xmtps --version`; the time since the update is filled in by the browser
