@@ -683,11 +683,12 @@ current dive, or deployed, with its cycles), its startup, deployment and last re
 number of BITs it sent (and how many failed), and its most recent built-in test (BIT; E05 passed,
 E06 failed): dive, start time and duration, the result from the BIT results mask with the names of the
 failed tests (spec B.2.6), the subsystem error flags decoded by name (CTD, case vacuum, battery, air
-and oil pump; BIT formats 9-11), the firmware and BIT format, and the CTD pressure offset,
+and oil pump; BIT formats 9-11), the firmware (as on the summary page, e.g. v10.12.0, with the firmware word) and BIT format, and the CTD pressure offset,
 temperature and salinity, case vacuum and battery voltage (start / end), air pump duration, cycles
 and maximum pressure, and oil pump duration and maximum current. Passed BITs are green, failed BITs and set error flags dark red, and floats in startup
 tests yellow. The most recent BIT is the latest by start time, or by dive where the format has no
-times (pre-mission dive numbers count down, so dive -13 is later than -7). It also takes `--runtime
+times (pre-mission dive numbers count down, so dive -13 is later than -7). The table is a
+DataTables table, sortable by any column and with a search field. It also takes `--runtime
 SECONDS`.
 
 Example (as run by `update-plots-service.sh` for one float):

@@ -287,6 +287,14 @@ def BitFailures(bit):
     return results, failed, errors
 
 
+def FirmwareString(fwver):
+    """Format a firmware word '0xMMmmppbb' as on the summary page, e.g. 'v10.12.1', or return '' if
+    it is not one."""
+    if not re.fullmatch('0x[0-9A-Fa-f]{8}', fwver or ''):
+        return ''
+    return 'v{:02d}.{}.{}'.format(int(fwver[2:4], 16), int(fwver[4:6], 16), int(fwver[6:8], 16))
+
+
 def FormatValue(bit, columns, fmt):
     """Format one or two (start / end) BIT values, '-' for missing values."""
     return ' / '.join(fmt.format(bit[c]) if IsSet(bit.get(c)) else '-' for c in columns)
@@ -299,11 +307,17 @@ def FormatTime(epoch):
 
 def WriteBitCells(doc, tag, text, bit):
     """Write the cells of one BIT: dive, time, result and errors, and the BIT_COLUMNS values. A
-    float without BIT messages (bit is None) gets empty cells."""
+    float without BIT messages (bit is None) gets one cell per column (DataTables does not allow
+    cells spanning columns in the body), its Time cell saying so."""
 
     if bit is None:
-        with tag('td', colspan=5 + len(BIT_COLUMNS)):
+        with tag('td'):
+            text('-')
+        with tag('td'):
             text('No BIT messages received')
+        for _ in range(3 + len(BIT_COLUMNS)):
+            with tag('td'):
+                text('-')
         return
 
     results, failed, errors = BitFailures(bit)
@@ -342,12 +356,19 @@ def WriteBitCells(doc, tag, text, bit):
         else:
             text('none' if any(c in bit for c in BIT_ERROR_BITS) else '-')
 
-    with tag('td'): # firmware and BIT format
-        text(bit.get('bit.sw_version') or '-')
-        if IsSet(bit.get('bit.version')):
+    with tag('td'): # firmware (as on the summary page) and BIT format
+        fwver = bit.get('bit.sw_version') or ''
+        if FirmwareString(fwver):
+            text(FirmwareString(fwver))
             doc.stag('br')
             with tag('small'):
-                text('BIT v{:.0f}'.format(bit['bit.version']))
+                text(fwver + (', BIT v{:.0f}'.format(bit['bit.version']) if IsSet(bit.get('bit.version')) else ''))
+        else:
+            text(fwver or '-')
+            if IsSet(bit.get('bit.version')):
+                doc.stag('br')
+                with tag('small'):
+                    text('BIT v{:.0f}'.format(bit['bit.version']))
 
     for _, _, _, columns, fmt in BIT_COLUMNS:
         with tag('td'):
@@ -415,7 +436,7 @@ def WriteStartupFile(dpath):
 
                 doc.asis('<script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>')
                 doc.asis('<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.12.1/datatables.min.css"/>')
-                doc.asis('<script type="text/javascript">$(document).ready(function () { $("table#sfloats").DataTable({ order: [[3, \'desc\']], paging: false, info: false, searching: false }); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
+                doc.asis('<script type="text/javascript">$(document).ready(function () { $("table#sfloats").DataTable({ order: [[3, \'desc\']], paging: false, info: false, searching: true }); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
 
                 with(tag('style')):
 
