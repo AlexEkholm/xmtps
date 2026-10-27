@@ -50,7 +50,7 @@ Each part ends with its own list of discrepancies and open questions: [A.7](#a7-
 | [S] | SOLO2 | *Format of SOLOII X messages*, Argo version manual/decoder v2.0, 31 Mar 2014 (`SOLO2_Xformat_v2.0_20Mar2014.pdf`). |
 | [X] | XF2.4 | ALAMO X-format specification v2.4 spreadsheet (`xfmt-format-spec-2.4-alamo_2018-05-15.xlsx`). |
 | [M] | NG10.5, NG10.12, DF7.3.5 | MRV firmware definitions: `nextgen_v10.5.0_blobs.txt`, `nextgen-10.12.0-xmessage.txt`, `DataFormat-v7.3.5.yaml`, plus `xfs.txt` (on-float storage) and `system-error-codes.txt`. |
-| [I] | [inferred] | Not documented anywhere. Worked out from production data or decoder behaviour. |
+| [I] | [inferred] | Not documented anywhere. Worked out from production data or decoder behavior. |
 
 The MRV documents and the SOLO-II PDF are in the Float Group's `mrv/doc` folder. The ALAMO spreadsheets, v2.2 to v2.4 (2015–2018), are in this repository's `doc/` folder, which git doesn't track.
 
@@ -124,7 +124,7 @@ rise (0x5n), pump (0x6n), surface time series (0x8n) and valve (0xEB); Argo data
 
 - Offsets are byte offsets counted from the blob's ID byte = 0, unless the table says otherwise.
 - `u8/u16/u24/u32` are unsigned and `i8/i16/i24/i32` are two's-complement signed big-endian integers.
-  `u4` / `u20` denote nibble-aligned fields that share a byte with a neighbour (see the Notes column).
+  `u4` / `u20` denote nibble-aligned fields that share a byte with a neighbor (see the Notes column).
 - "counts" are raw integers converted with a gain and offset from the 0xF0 Argo message
   (section A.1.5).
 - Listing tags (`GPS`, `PRO`/`pro`, `F`/`f`, …) refer to the XMTPS listing file (README, "Listing
@@ -215,7 +215,7 @@ packets in the production RAW files (all floats and firmware, 2014–2026) have 
    every type.** This is harmless because a blob is always smaller than 4096 bytes (SBD ≤ 340), so the
    high nibble of a 16-bit size is always 0.
 3. When the buffer reaches the size, the blob is dispatched on its ID byte and the buffer is cleared.
-   A trailing incomplete blob is silently dropped. A wrong size desynchronises the rest of the packet.
+   A trailing incomplete blob is silently dropped. A wrong size desynchronizes the rest of the packet.
 4. Each class decoder checks the ID, a minimum length, and that `buf[size−1] == ';'` (most of them via
    `XMessage::CheckXMsgData`; the size must be at least 4). Extra bytes produce a warning; a missing
    terminator is an error.
@@ -363,7 +363,7 @@ which the fix was taken. There is one layout for all phases.
   start-of-mission or deployment time are ignored.
 - **Profile position selection:**
   - A 0x02 fix of the same dive is the profile position.
-  - A 0x01 fix labelled with dive N+1 is valid for dive N.
+  - A 0x01 fix labeled with dive N+1 is valid for dive N.
   - A 0x00 fix is used only for dive 0.
   - 0x03 and 0x05 are never used as profile positions.
 - **Listing:** one `GPS` line per fix: `GPS SN dive idx date/time position TTF nSat SNRmin SNRavg
@@ -603,7 +603,7 @@ alongside the primary temperature parts, which carry the same IDs with format 1 
   - It must have the same count as the primary temperature.
   - Listed as the `temp2` column (`temp1` = CTD temperature), and as `tcnd` in the JSON.
 - **Limitations [D]:**
-  - The aux flag is honoured only for binned 0x2n. A format-3 high-resolution (0xAn) or drift (0xA8+)
+  - The aux flag is honored only for binned 0x2n. A format-3 high-resolution (0xAn) or drift (0xA8+)
     part would be merged into the primary channel, and fail with a duplicate index.
   - The legacy `AXT`/`axt` listing section (`XCompositeAuxTemp`) is no longer written.
 - The spreadsheet [X] and the SOLO-II document [S] don't document format 3.
@@ -1091,7 +1091,7 @@ or a zero gain gives the fill value −9.999.
 
 **Fill values.** Fields that a message version does not carry keep the decoder's fill value:
 `0xFF` (`u8`), `0xFFFF` (`u16`), `0xFFFFFFFF` (`u32`), `−32768` (`i16`), or not-a-date/time.
-Some classes leave such fields uninitialised; this is noted per message. Fill values matter
+Some classes leave such fields uninitialized; this is noted per message. Fill values matter
 only to code that reads the decoded objects: the listings print only the fields each version
 carries.
 
@@ -1678,7 +1678,7 @@ Each threshold is an `f32`. The decoder skips them.
 - **Pressure offset** (format 8, offset 16) is read unsigned and divided by 1000; a negative
   offset (signed per the spreadsheet and YAML) would list as about 65.5 dbar.
 - **Fill values**: formats 6–8 start every `u16` at 0xFFFF, the status at 0xFFFFFF and the CTD
-  status at 0xFFFFFFFF; `XAlamoBit2` does not initialise its fields (all are set by every
+  status at 0xFFFFFFFF; `XAlamoBit2` does not initialize its fields (all are set by every
   format it accepts).
 
 #### B.2.10 Listing output
@@ -1909,7 +1909,7 @@ carries the start time and pressure of the fall from park to profile depth.
 #### B.5.4 Decoding notes and listing
 
 Exact sizes are required (13, 13, 19); other versions are rejected. `XEngAscent` does not
-initialise its fields, so fields a version does not carry are undefined rather than fill
+initialize its fields, so fields a version does not carry are undefined rather than fill
 values (none of them is listed). No error list.
 
 - 0x10: `E09` `midx` 0: engVer, start-of-ascent, sysI (A), pumpT (s).
@@ -2034,7 +2034,7 @@ The spreadsheet gives the size as "6N+49", but its own terminator offset (6N+49)
 | 10 | 2 | u16 | transmission attempts, previous dive | | |
 | 12 | 2 | u16 | case vacuum at start | ÷100 → inHg | |
 | 14 | 2 | u16 | case vacuum at end | ÷100 → inHg | |
-| 16 | 2 | i16 | GPS − RTC time difference before synchronisation | s | |
+| 16 | 2 | i16 | GPS − RTC time difference before synchronization | s | |
 | 18 | 4 | u32 | CTD status | | firmware lists: 4 characters |
 | 22 | 2 | u16 | first raw profile pressure | CTD counts | |
 | 24 | 2 | u16 | first raw profile temperature | CTD counts | |
@@ -2415,13 +2415,13 @@ Between the decoder and the documents:
 19. **Unexplained bytes.** 0xE7 v0x10 bytes 14–21 (23-byte form) / 20–25 (27-byte form), 0xEA
     v0x10 bytes 22–45 and 0xEA v0x12 bytes 12–13 are undocumented and not decoded.
 
-Decoder behaviour worth knowing (not format discrepancies):
+Decoder behavior worth knowing (not format discrepancies):
 
 - 0xEA v0x10 with errors: the error heading has more format fields than values, which makes
   boost::format throw during listing generation (inferred).
 - 0xEA `nErr` lines are tagged `e0A` in v0x11/0x12 and `E0A` in v0x13/0x14.
 - BIT formats 9–11 are accepted at any size (warning only) because `XMSG_DEBUG_BIST` is on.
-- `XEngAscent`, `XEngIce` and `XAlamoBit2` leave some members uninitialised; the listings do not
+- `XEngAscent`, `XEngIce` and `XAlamoBit2` leave some members uninitialized; the listings do not
   print those members.
 
 ## Part C — Mission configuration, command echo, waves and acoustics
@@ -2440,7 +2440,7 @@ This part covers these blob types:
 
 - Offsets count from the blob's ID byte, which is offset 0. The common blob header is `ID` (offset 0, U1), `jj` (offsets 1-2, U2, the blob length including ID, `jj`, data and terminator) and the `;` (0x3B) terminator at offset `jj - 1`.
 - Multi-byte integers are big-endian. Types: U1, U2 and U4 are unsigned 8-, 16- and 32-bit integers; I1, I2 and I4 are two's-complement signed; R4 is an IEEE-754 single-precision float sent as a big-endian 32-bit word (the decoder reads a U4 and bit-casts it, `f32()` in `XDefinitions.h`).
-- **[inferred]** marks something worked out from production messages or decoder behaviour, not from a format document. **[decoder]** marks behaviour of the XMTPS implementation, not of the format itself.
+- **[inferred]** marks something worked out from production messages or decoder behavior, not from a format document. **[decoder]** marks behavior of the XMTPS implementation, not of the format itself.
 - Sources:
   - *Decoder*: `src/data/xmsg/` in the XMTPS repository, as of 2026-10-25.
   - *XF2.4*: the ALAMO X-format spec v2.4 spreadsheet (`xfmt-format-spec-2.4-alamo_2018-05-15.xlsx`).
@@ -2753,7 +2753,7 @@ Offsets 0-7 are the common header (C.1.4).
 | 178 | 4 | U4 | ICF | bit mask | ICF: ice-free (summer) month mask. |
 | 182 | 4 | U4 | ICW | bit mask | ICW: iced-over (winter) month mask. |
 | 186 | 2 | U2 | DNS | - | DNS: descent-phase cycle number. |
-| 188 | 2 | U2 | DRA | cm/s | DRA: target descent rate. The decoder stores it in 8 bits, so values above 255 are truncated. Listed raw, labelled `[m/s]`. |
+| 188 | 2 | U2 | DRA | cm/s | DRA: target descent rate. The decoder stores it in 8 bits, so values above 255 are truncated. Listed raw, labeled `[m/s]`. |
 | 190 | 2 | U2 | DSD0 | dBar | DSD0: first-pump pressure during descent, phase 0. |
 | 192 | 2 | U2 | DSD1 | dBar | DSD1: first-pump pressure, phase 1. |
 | 194 | 2 | U2 | DSD2 | dBar | DSD2: first-pump pressure, phase 2. |
@@ -2840,7 +2840,7 @@ Offsets 0-7 are the common header (C.1.4).
 | 28 | 2 | U2 | ASD | dBar | ASD: surface pressure threshold. |
 | 30 | 2 | U2 | ADD | dBar | ADD: rise time-series storage pressure interval. |
 | 32 | 2 | U2 | ADT | s | ADT: rise time-series storage time interval. |
-| 34 | 2 | U2 | ARC | ms (decoder) | ARC: rise-rate calculation adjustment. Listed as value/1000 s, labelled "sample delay correction". |
+| 34 | 2 | U2 | ARC | ms (decoder) | ARC: rise-rate calculation adjustment. Listed as value/1000 s, labeled "sample delay correction". |
 | 36 | 2 | U2 | AHR | see notes | AHR: rise rate below which the ascent halts. The 10.5.0 doc says cm/s; the decoder lists value/1000 as m/s. |
 | 38 | 2 | U2 | AHD | dBar | AHD: halt pressure delta. |
 | 40 | 2 | U2 | SFN | - | SFN: surface cycle number. |
@@ -2967,9 +2967,9 @@ The "Mission Configuration" section is printed once per dive, from the dive's D0
 - If no D0 has arrived, the firmware word is still 0xFFFFFFFF and the section is the single line `# Incomplete mission parameters.`
 - Listing bugs [decoder]:
   - The `DRT` line prints `DRA`'s value. *(Fixed in build 3309.)*
-  - In the dynamic-correction section, the `PPC0` line (labelled tau) prints alpha (`PPC1`), and the `PPC1` line (labelled alpha) prints tau. The README notes this as unfixed. *(Fixed in build 3309.)*
+  - In the dynamic-correction section, the `PPC0` line (labeled tau) prints alpha (`PPC1`), and the `PPC1` line (labeled alpha) prints tau. The README notes this as unfixed. *(Fixed in build 3309.)*
   - The `0A070101` listing, which covers 10.7 to 10.14 RBR/SBE including 10.12.0.x, has the dynamic-correction section commented out. `PPC`/`PPE` are decoded but not listed for those floats.
-  - `DRA` is labelled `[m/s]` but printed raw (cm/s per NG10.5).
+  - `DRA` is labeled `[m/s]` but printed raw (cm/s per NG10.5).
 
 ---
 
@@ -3218,7 +3218,7 @@ wvm  9287  325   51 -99.0000  -1000.0000  -1000.0000  -1000.0000  -1000.0000  -1
   - `again`: G;
   - `essf`.
 - `wvs` (`%8.4f` frequency, `%+11.5f` values) gives one line per bin, idx = 0 … N/2 - 1, with the acceleration spectra in g²/Hz. The columns are always in the order **zz, yy, xx, xy, zx, zy**: Szz, Syy, Sxx, Cxy, Qzx, Qzy.
-- `wvm` (`%+11.4f`) gives the same bins as displacement spectra in m²/Hz. It **must use the same column order as `wvs`** (zz, yy, xx, xy, zx, zy) under the same header. Builds 3234-3289 (2025-09 to 2026-10-24) printed `wvm` as xx, xy, yy, zz, zx, zy under the zz-first header, so `wvm` columns in listings from those builds are mislabelled. The 2026-10-24 fix restored the `wvs` order. Nothing downstream parses `wvm`.
+- `wvm` (`%+11.4f`) gives the same bins as displacement spectra in m²/Hz. It **must use the same column order as `wvs`** (zz, yy, xx, xy, zx, zy) under the same header. Builds 3234-3289 (2025-09 to 2026-10-24) printed `wvm` as xx, xy, yy, zz, zx, zy under the zz-first header, so `wvm` columns in listings from those builds are mislabeled. The 2026-10-24 fix restored the `wvs` order. Nothing downstream parses `wvm`.
 - Fill: a component never received is -999.99999 in `wvs`. In `wvm` the same fill prints as `-1000.0000`, because `%+11.4f` rounds -999.99999. Unfilled bins have frequency -99.0000.
 
 ---
@@ -3337,7 +3337,7 @@ Mission configuration:
     - `ASI` (NG10.5: s; listed value/1000 s).
     - `IST` (header comment: 1/10 PSU; listed value/100).
     - `SAN`/`SAX` (NG10.5: psi; listed value/1000).
-    - `DRA` labelled m/s, printed raw.
+    - `DRA` labeled m/s, printed raw.
     - `XAS` and `CST` codes differ between NG10.5 and XF2.4.
 
     These need confirming with MRV.

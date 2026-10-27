@@ -217,7 +217,7 @@ General:
 | `mail.folder` | empty (server default) | Folder to read messages from, e.g. `INBOX`. |
 | `mail.fetchMode` | `0` | `0` fetch from the mail server; `1` read RAW mail files from `dir.mail` (renamed to `.err` if they can't be parsed). |
 | `mail.moveMessages` | `0` | Move server messages to the folder `INBOX.<YYYYMM>` for their header date once they are processed (saved to the SQL database or rejected); a message whose processing is interrupted stays in the inbox. |
-| `mail.timeout` | `120` | Seconds without data from the mail server after which an operation (connect, login, fetch, copy, delete, expunge) is cancelled; the connection is closed and reopened at the next check, and messages not yet moved are moved then. |
+| `mail.timeout` | `120` | Seconds without data from the mail server after which an operation (connect, login, fetch, copy, delete, expunge) is canceled; the connection is closed and reopened at the next check, and messages not yet moved are moved then. |
 | `mail.xDlyS` | `60` | Seconds to wait before checking again when no new messages are found. |
 | `mail.validSenderRegex` | `(sbdservice@sbd.iridium.com\|service@sbd.pac.disa.mil)` | Senders whose messages are accepted. |
 | `mail.validSubjectRegex` | `SBD Msg From Unit: (\d+)` | Accepted subjects; the captured number is the IMEI. |
@@ -650,11 +650,11 @@ Their tables have a search field, like the summary page.
 - **Phases:** `DTD`, `PFD`, `PFM`, `PTO` and `DFT` have a column per phase, P0–P2 (firmware without
   phases uses P0). The current phase is `MPS`, or `MNS<MPS>` once `MPC` reaches `MNM<MPS>`; its
   values are bold and underlined, and the Phase column shows `MPC`/`MNM`. Phases the mission
-  never reaches, or with `MNM` 0, are grey and left out of the statistics.
-- **Colours:** in groups of three or more floats, each value is coloured by how rare it is in its
+  never reaches, or with `MNM` 0, are gray and left out of the statistics.
+- **Colors:** in groups of three or more floats, each value is colored by how rare it is in its
   group (1 − its floats / the most common value's floats): yellow to red above the most common
-  value, blue below. `DFT` is coloured by its distance from the group median instead (white
-  within 25%, full colour at 200%). The footer shows the most common value (`DFT`: the median) and
+  value, blue below. `DFT` is colored by its distance from the group median instead (white
+  within 25%, full color at 200%). The footer shows the most common value (`DFT`: the median) and
   the 10th–90th percentile range. Unset values (255, 65535, ...) are shown as "unknown" and not
   counted; impossible values (phase outside 0–2, drift pressure outside 0–7000 dBar, drift or
   profile pressure deeper than `MDS`) are dark red. Hovering over a cell shows the parameter, its
@@ -673,7 +673,7 @@ in the last `--days` days (default 180), latest first:
   calibration with temperature and salinity, vacuum and battery voltage (start / end), and for the
   air and oil pumps the duration and current, voltage and power (formats 9-11 report all of them,
   format 8 only the maximum currents and battery voltage).
-- **Colours:** passed BITs green, failed BITs and error flags dark red, started floats yellow.
+- **Colors:** passed BITs green, failed BITs and error flags dark red, started floats yellow.
   The table is sortable by any column.
 
 Example (as run by `update-plots-service.sh` for one float):
