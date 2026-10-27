@@ -536,14 +536,6 @@ It only creates tables that do not exist yet. The server's `sql_mode` must allow
 (production uses `STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION`), because
 XMTPS writes unset date/times as zero dates.
 
-[`bin/migrate-xfloatmail.sh`](bin/migrate-xfloatmail.sh) brings an existing `XFloatMail` table to
-the current layout (dropped columns, primary key starting with `id_imei`, and the indexes for the
-daemon's queries; see the comments in `sql/xmtps-schema.sql`). Run it as root after deploying a
-build that no longer writes the dropped columns; it refuses to run otherwise, and also while the
-MySQL data directory is on the root filesystem, since the rebuild needs room for a second copy of
-the table. [`bin/move-mysql-datadir.sh`](bin/move-mysql-datadir.sh) moves the data directory from
-`/var/lib/mysql` to `/data1/mysql`.
-
 ## Deployment
 
 The `bin/*.service` files are systemd units:
