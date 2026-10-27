@@ -61,9 +61,14 @@ while [ 1 ]; do
 done
 
 
-# make summary page, with the run time of the JSON and plot updates in its footer
+# make summary, mission parameters and startup pages, with the run time of the JSON and plot updates in their footers
 epoch_now=`date +%s`
 python $DBIN/xmtps-generate-summary-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT" --runtime "$(($epoch_now - $epoch_start))" $DJSON
+# engineering pages, published at /etcetc/alamo/engineering/ (a link to $DPLOT/engineering); their
+# float links go to the float pages at /alamo/
+mkdir -p "$DPLOT/engineering"
+python $DBIN/xmtps-generate-mission-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" --plots-url /alamo --runtime "$(($epoch_now - $epoch_start))" $DJSON
+python $DBIN/xmtps-generate-startup-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" --plots-url /alamo --runtime "$(($epoch_now - $epoch_start))" $DJSON
 
 
 epoch_now=`date +%s`

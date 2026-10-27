@@ -422,6 +422,9 @@ def ParseEngineeringLine(engineering, line, header, units_line, group):
     section = ENG_SECTIONS.get(x[0].upper(), x[0].lower())
     fields = HeaderFields(header, units_line) if header else []
     data = x[4:]
+    # A last column listed as a comment, e.g. the BIT sensorTypeName ('... 0 # RBR')
+    if '#' in line and len(fields) == len(data) + 1:
+        data.append(line.split('#', 1)[1].strip())
     if len(fields) != len(data):
         raise Exception('Engineering line does not match its header: \'' + line + '\'')
 
@@ -685,7 +688,9 @@ def ProcessListingFile(fpath_list):
                     dive_data.descent.pres.append(float(x[6]))
                     dive_data.descent.n += 1
                     
-                    dive_data.descent.phase_code.append(int(x[9]))
+                    # The phase code precedes the '#' comment (older listings have temp and
+                    # saln columns before it).
+                    dive_data.descent.phase_code.append(int(x[x.index('#') - 1]))
                     
                     del x
                     
@@ -936,7 +941,7 @@ def ProcessListingFile(fpath_list):
                     dive_data.ascent.pres.append(float(x[6]))
                     dive_data.ascent.n += 1
                     
-                    dive_data.ascent.phase_code.append(int(x[9]))
+                    dive_data.ascent.phase_code.append(int(x[x.index('#') - 1]))
                     
                     del x
                     del dt_ref_delta_sec

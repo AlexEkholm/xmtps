@@ -403,7 +403,8 @@ so far. The Python tools (`xmtps-list2json.py`) parse these files.
 | `APS` | Acoustic position | Acoustic listening windows and receive statistics. |
 | `MIS` / `m` | Mission configuration | Configuration message and firmware version, then one parameter per `m` line: name, value, units, `# description`. |
 | `mis` | Mission configuration (older firmware) | The same parameters in fixed-column groups. |
-| `CMD` | Command echo-back | One line per command the float echoed back after a command upload (X-message 0xDE): SN, dive, echo index, command index and the command text, e.g. `dft 0 100`. |
+| `CMD` | Command echo-back | One line per command the float echoed back after a command upload (X-message 0xDE): SN, dive, echo index, command index and the command text, with the parameter name in uppercase, e.g. `DFT 0 100`. |
+| `XFF` | Extended records | One line per X-message 0xFF record (format inferred; spec C.6): SN, dive, record index, record type and version, and the decoded record: event code, time and value (0xCA), reset counter and times (0xD1), serial number and configuration bytes (0xAE), CTD command and reply (0xDB), processor fault dump text (0xFA), or the bytes in hex. |
 | `SHX` / `shx` | SBD message hex data | Each SBD message as a hex dump, 16 bytes per line. |
 
 ### Examples
@@ -437,15 +438,16 @@ SBD  9287  325  275 000000002214760  3639     0   8 2026-10-25T12:03:20Z +12.731
 ```
 
 A time series: the `F` line gives the number of samples and the start time, and each `f` line the
-offset in seconds, the sample and the phase code:
+offset in seconds, the pressure and the phase code. The fall and rise series (`f`, `r`) list no
+temperature or salinity; the surface series (`sfc`) adds them after the pressure:
 
 ```
-#      SN dive idx nSam                 time      pres    temp    saln phaseCode   phaseCodeName
-#                                  (UTC/+sec)    (dBar)  (degC)  (PSU)
+#      SN dive idx nSam                 time      pres phaseCode   phaseCodeName
+#                                  (UTC/+sec)    (dBar)
 F    9287  325   0   16 2026-10-24T07:37:09Z
-f    9287  325   0    0                   +0      0.12  -9.999  -9.999         1 # start of descent
-f    9287  325   0    1                 +293     30.08  -9.999  -9.999        10 # descending
-f    9287  325   0    2                 +387     43.52  -9.999  -9.999         2 # first descent pump
+f    9287  325   0    0                   +0      0.12         1 # start of descent
+f    9287  325   0    1                 +293     30.08        10 # descending
+f    9287  325   0    2                 +387     43.52         2 # first descent pump
 ```
 
 The binned profile, with its column descriptions:
@@ -570,9 +572,11 @@ Requires Python 3 with `numpy`, `scipy`, `pandas`, `plotly` (plus `kaleido` for 
 | `xmtps-list2json.py` | Converts listing files into per-dive JSON (`<out>/<serial>/dives/<serial>_<dive>.json`), adding density and σ₀ from `RhoLUT.py` and wave statistics from `FloatClasses.py`. |
 | `xmtps-aggregate-json.py` | Aggregates a float's dive JSON into per-float JSON files (`<serial>_profile.json`, `_wave_spectra.json`, `_summary.json`, ...) and, with `-p DIR`, writes the plot images and the float's HTML page. |
 | `xmtps-generate-summary-page.py` | Builds the fleet summary page from the per-float `_summary.json` files. |
-| `update-plots-service.sh` | Loop used by the plot service: regenerates JSON and plots for floats with recent listings, then the summary page. |
+| `xmtps-generate-mission-page.py` | Builds the mission parameters page (`engineering/params.html`): the latest mission parameters of each deployed float, coloured by how abnormal they are. |
+| `xmtps-generate-startup-page.py` | Builds the float startup page (`engineering/startup.html`): the floats that started up recently, with the results of their built-in tests. |
+| `update-plots-service.sh` | Loop used by the plot service: regenerates JSON and plots for floats with recent listings, then the summary and mission parameters pages. |
 
-All three scripts share JSON version `0.11`; JSON files with a different version are ignored.
+All these scripts share JSON version `0.11`; JSON files with a different version are ignored.
 
 ### Command-line options
 
@@ -580,7 +584,7 @@ Each script takes one or more input paths (directories and/or files) as position
 Paths matching an include pattern are tested with a regular-expression search on the full path
 (using `/` separators), so a pattern only needs to match part of it.
 
-Options common to all three scripts:
+Options common to these scripts:
 
 | Option | Default | Description |
 |---|---|---|
@@ -632,6 +636,60 @@ files (searching input directories recursively) and writes the fleet summary pag
 with the decoder's status, uptime and version. It always rebuilds the page from all matching
 summary files.
 
+`xmtps-generate-mission-page.py [options] PATH ...` — reads the same `<serial>_summary.json`
+files and, next to each, `<serial>_mission.json`, and writes `<output>/params.html` (production:
+`/data1/alamo/data/plots2/engineering/`, published at `http://argus.whoi.edu/etcetc/alamo/engineering/params.html`
+through the link `/data1/www/etcetc/alamo/engineering`; `update-plots-service.sh` creates the
+directory). Links to the float pages and the status icons go to `--plots-url URL`/`<serial>` and
+`URL/img/` (default `..`, the summary page's directory; `update-plots-service.sh` passes `/alamo`,
+where the float pages are published).
+Each table has a search field, as on the summary page. It shows every deployed float that
+has reported mission parameters: floats without a completed cycle with a profile (as on the
+summary page, so floats in pre-deployment tests are left out) and floats that never sent mission
+parameters are left out. `--days DAYS` also leaves out floats that have not reported within
+`DAYS` days (default: no limit). For each float it shows the mission parameters of its latest
+dive that has any (floats need not send them every dive), with the firmware version, the last
+report, the status as on the summary page (ACTIVE within 30 days, OVERDUE within 180 days,
+ARCHIVED otherwise) and the dive the parameters come from. Columns: mission phase `MPS`; drift, profile, maximum, cut-off and
+surface pressures (`DTD`, `PFD` and fall mode `PFM`, `MDS`, `CTF`, `ASD`); drift duration `PTO`,
+GPS and Iridium timeouts (`SGT`, `SET`), `APT`; first descent pump `DFT`, seek modes `DCM` and
+`PSM`; ascent rate `ARR` and maximum pump `APM`; surface oil and air pump (`SSP`, `SAM`, `SAO`);
+ice detection (`ICM`, `ICT`); `PPE` and the WIMS timeout (`WST`/`WMT`). Phase-dependent
+parameters are those of the float's current phase. There is one table per float type, whose floats
+are compared with each other: ALAMO (including WIMS and MM2 floats) and ALTO. In groups
+of at least three floats, each parameter value (not the firmware) is coloured by how abnormal it
+is in its group: 1 − (floats with this value) / (floats with the most common value), so the most
+common value stays white and a value only one float has gets nearly the full colour; the colour
+fades to white as the score falls. Values above the most common value go from white through
+yellow to red, values below it from white to blue. `DFT`, which is tuned per float, is instead
+scaled by its distance from the group median: white up to 25% from the median, full colour at
+200% or more, and blue below the median. The table footer shows the most common values (`DFT`: the median) and the
+typical range, from the 10th to the 90th percentile of the group's values (nearest rank, so both
+ends are values floats use). Unset values (255, 65535, ..., sent before a mission is loaded) are
+shown as "unknown", without colour, and left out of the group statistics. A phase outside 0–2, a
+drift pressure outside 0–7000 dBar, and drift or profile (fall mode on) pressures deeper than
+`MDS` are marked dark red. Hovering over a cell shows the parameter name, its value and how many floats of
+the group share it. It also takes `--runtime SECONDS` for the footer, as the summary page.
+
+`xmtps-generate-startup-page.py [options] PATH ...` — reads the same `<serial>_summary.json` files
+and, next to each, `<serial>_engineering_data.json`, and writes `<output>/startup.html` (production:
+`/data1/alamo/data/plots2/engineering/`, published at
+`http://argus.whoi.edu/etcetc/alamo/engineering/startup.html`, next to the mission parameters page;
+the float links go to `--plots-url URL`, default `..`; `update-plots-service.sh` passes `/alamo`). It shows the floats that started up (sent their first SBD message, the
+summary's `startup` time) in the last `--days DAYS` days (default 180), including floats still in
+their pre-deployment tests, latest startup first. Without `-i`, only `<serial>_summary.json` files
+are read from the given directories. Each row gives the float's status (startup tests, with the
+current dive, or deployed, with its cycles), its startup, deployment and last report times, the
+number of BITs it sent (and how many failed), and its most recent built-in test (BIT; E05 passed,
+E06 failed): dive, start time and duration, the result from the BIT results mask with the names of the
+failed tests (spec B.2.6), the subsystem error flags decoded by name (CTD, case vacuum, battery, air
+and oil pump; BIT formats 9-11), the firmware and BIT format, and the CTD pressure offset,
+temperature and salinity, case vacuum and battery voltage (start / end), air pump duration, cycles
+and maximum pressure, and oil pump duration and maximum current. Passed BITs are green, failed BITs and set error flags dark red, and floats in startup
+tests yellow. The most recent BIT is the latest by start time, or by dive where the format has no
+times (pre-mission dive numbers count down, so dive -13 is later than -7). It also takes `--runtime
+SECONDS`.
+
 Example (as run by `update-plots-service.sh` for one float):
 
 ```
@@ -641,6 +699,10 @@ xmtps-aggregate-json.py -i "/data1/alamo/data/json/[0-9]+/dives/[0-9]+_-?[0-9]+.
     -o /data1/alamo/data/json -p /data1/alamo/data/plots2 /data1/alamo/data/json/9308/dives
 xmtps-generate-summary-page.py -i "/data1/alamo/data/json/[0-9]+/[0-9]+_summary.json" \
     -o /data1/alamo/data/plots2 --runtime 185 /data1/alamo/data/json
+xmtps-generate-mission-page.py -i "/data1/alamo/data/json/[0-9]+/[0-9]+_summary.json" \
+    -o /data1/alamo/data/plots2/engineering --runtime 185 /data1/alamo/data/json
+xmtps-generate-startup-page.py -i "/data1/alamo/data/json/[0-9]+/[0-9]+_summary.json" \
+    -o /data1/alamo/data/plots2/engineering --runtime 185 /data1/alamo/data/json
 ```
 
 ### JSON files
@@ -739,6 +801,84 @@ when none of its dive files is newer, unless `-f` is given.
 ## Changelog
 
 ### 2026-10-26
+
+Listings (decoder):
+
+- `CMD` lines list the command's parameter name in uppercase (`DFT 0 100`), as the mission
+  parameter listings name them.
+- The fall and rise time series (`f`, `r`) no longer list temperature and salinity columns: only
+  the 9-byte packing format carries them, and only 9035 and 9050 used it. The surface series
+  (`sfc`) keeps them. `xmtps-list2json.py` reads the phase code of either layout.
+
+- X-message 0xFF, logged as unknown and dropped until now (several hundred warnings a day), is
+  decoded: its records are listed on `XFF` lines under "Extended Record Messages (0xFF)". The
+  format is inferred from the 6,262 0xFF blobs in the production RAW files (spec C.6): a record
+  type and version, then event records with a time and value (0xCA, likely surface pressure),
+  controller reset records (0xD1), the float serial number with configuration bytes (0xAE, at
+  startup), RBR CTD commands and replies (0xDB) and processor fault dumps (0xFA, ARM Cortex-M
+  fault registers: a controller crash).
+
+Float startup page (`bin/py/xmtps-generate-startup-page.py`, new), written to
+`plots2/engineering/startup.html` (published at `http://argus.whoi.edu/etcetc/alamo/engineering/startup.html`) by
+`update-plots-service.sh`: the floats that started up in the last 180
+days, including those still in pre-deployment tests, with the results of their most recent built-in
+test (failed tests and subsystem error flags decoded by name, and the main measurements).
+
+`xmtps-list2json.py`: the first line of BIT formats 9-11 (`BITVer FWVer BITResults sensorType
+sensorTypeName`) was skipped, because its last column is listed as a comment (`# RBR`), so the BIT
+results mask, firmware and sensor type of every float with BIT formats 9-11 were missing from the
+JSON. An engineering line one value short of its header now takes the comment as its last value.
+Existing dive JSON files are only fixed when their listings are converted again (`-f`).
+
+Mission parameters page (`bin/py/xmtps-generate-mission-page.py`, new), written to
+`plots2/engineering/params.html` (published at `http://argus.whoi.edu/etcetc/alamo/engineering/params.html`):
+
+- One table per float type (ALAMO, including WIMS and MM2 floats, and ALTO) with the
+  firmware and the most recently reported mission parameters of every deployed float (with a
+  profile) that has sent any: drift and profile pressures, timings, descent and ascent pumps,
+  seek modes, surface pumps, ice detection, `PPE` and the WIMS timeout. Floats need not send
+  their mission parameters every dive, so the page uses each float's latest dive that has them
+  and shows which dive that is. A status column (ACTIVE, OVERDUE, ARCHIVED) is as on the summary
+  page. `--days` can limit it to recently reporting floats.
+- A colour scale shows how abnormal each parameter value is within its group: how rare the
+  value is compared with the most common one (first descent pump duration: its distance from
+  the group median, white up to 25% and full colour from 200%). Values above the most common value go from white through yellow to red,
+  values below it from white to blue, so values close to typical stay nearly white.
+  Out-of-range values and drift or profile pressures deeper than the maximum pressure are marked
+  dark red as errors. Unset values (sent before a mission is loaded) are shown as "unknown",
+  without colour.
+- Each table's footer shows the group's most common values and their typical range (10th to
+  90th percentile). Each table has a search field.
+- `update-plots-service.sh` writes it after the summary page, creating `plots2/engineering/`.
+
+Air pump plots (`xmtps-aggregate-json.py`, `WriteAirPumpPlots`), in a new "Air Pump" section of
+each float page, for floats whose surface engineering data has air pump fields:
+
+- `<serial>_air_pump_duration`: the air pump run time at the surface (`APRunT`) of each dive, as
+  bars. The hover text also gives the mission's air-assist duration setting (`SAO`); it is not
+  drawn, since it is about ten times the run times (900 or 1080 s against 30–100 s).
+- `<serial>_air_pump_pres`: the maximum air bladder pressure of each dive (`AirBladMxP`, PSI),
+  with the mission's air-assist minimum and maximum pressures (`SAN`, `SAX`) as dashed steps,
+  carried forward from each mission message to the following dives. Unset configurations
+  (`SAM` 255, sent before a mission is loaded) are skipped.
+- Both also mark the air pump test of BIT messages (duration and maximum pressure).
+
+No message reports a measured minimum air pressure; the minimum shown is the configured `SAN`.
+
+Engineering plots (`WriteEngineeringPlots`), in the "Hydraulic System" section:
+
+- `<serial>_phase_vac`: the case vacuum at the start (`vac0`) and end (`vac1`) of the descent,
+  park/drift, ascent and surface phases (the `E07` to `E0A` engineering lines), with the eight
+  phase points on the x axis ("Descent start", "Descent end", ... "Surface end"). Each dive's
+  start and end of a phase are circle markers joined by a line, with a gap between phases;
+  dives are colored from blue (first dives) to red, with the latest dive in black.
+- `<serial>_pump_first_duration`: the duration of each dive's first pump (the first `pmp`
+  record, the first descent pump) as bars, with the mission's first descent pump duration
+  (`DFT<phase>`, carried forward to the following dives) as a dashed step, and the descent and
+  drift seek pump time adjustments (`seekPumpAdjT`) on a second y axis.
+
+The new plots by dive open at dive 0 (pre-mission dives are off the default x range but can be
+panned to), and their pressure and vacuum axes start at 0.
 
 Float summary page footer:
 

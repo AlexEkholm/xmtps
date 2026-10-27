@@ -2336,7 +2336,11 @@ def WriteHtmlFile(float_id):
                     doc.stag('br') 
                     with tag('a', href='#pump'):
                         text('Hydraulic System')
-                    doc.stag('br') 
+                    doc.stag('br')
+                    if 'air_pump_duration' in figs_meta_dict or 'air_pump_pres' in figs_meta_dict:
+                        with tag('a', href='#air'):
+                            text('Air Pump')
+                        doc.stag('br')
                     with tag('a', href='#sat'):
                         text('Satcom')
                     doc.stag('br') 
@@ -2622,10 +2626,12 @@ def WriteHtmlFile(float_id):
                                 # 'pump_power', 'pump_power_avg', '', 
                                 'pump_energy', 'pump_energy_v_max_pres', '',
                                 'pump_num_ops', '', 
-                                'pump_time_sum', '',                                    
+                                'pump_time_sum', '',
+                                'pump_first_duration', '',
                                 'pump_energy_sum', '',
                                 'pump_vac', 'pump_vac_avg', '', 
-                                'pump_vac_v_time', 'pump_vac_v_pres', '',                                     
+                                'pump_vac_v_time', 'pump_vac_v_pres', '',
+                                'phase_vac', '',
                                 ]:
                                 
                                 if (len(id) == 0) and (count > 0) :
@@ -2646,6 +2652,25 @@ def WriteHtmlFile(float_id):
                                             src=fig_meta['fpath_img_small'])
                                     count = count + 1                            
                         
+                        # air pump plots
+
+                        if 'air_pump_duration' in figs_meta_dict or 'air_pump_pres' in figs_meta_dict:
+
+                            with tag('h2', id='air'):
+                                text('Air Pump')
+
+                            for id in ['air_pump_duration', 'air_pump_pres']:
+                                if id in figs_meta_dict:
+                                    fig_meta = figs_meta_dict[id]
+                                    with tag('a', href=fig_meta['fpath_html']):
+                                        doc.stag(
+                                            'img',
+                                            alt=fig_meta['title'],
+                                            klass=fig_meta['size'],
+                                            title=fig_meta['title'],
+                                            src=fig_meta['fpath_img_small'])
+                                    doc.stag('br')
+
                         # satcom plots
                         
                         with tag('h2', id='sat'):
@@ -8872,6 +8897,473 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
     return figs_meta
 
 
+def WriteAirPumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
+    """Write the aggregate air pump plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data and dpath_float.
+
+    Plots the 'engineering_data' air pump fields (category 'air', shown in the Air Pump section):
+    air_pump_duration, the surface air pump run time of each dive (APRunT), and
+    air_pump_pres, the maximum air bladder pressure of each dive (AirBladMxP) with the
+    air-assist minimum and maximum pressures of the mission configuration (SAN, SAX) as steps.
+    Both also show the air pump test of BIT messages (duration, maximum pressure) as markers.
+    The configured air-assist duration (SAO) is in the duration plot's hover text; it is a
+    limit an order of magnitude above the run times, so it is not drawn.
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if no dive has air
+    pump data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
+
+    figs_meta = []
+
+    df_eng = float_aggregate_data.get('engineering_data')
+    if df_eng is None or 'surface.air_pump_runtime_s' not in df_eng.columns \
+            or df_eng['surface.air_pump_runtime_s'].notna().sum() < 1:
+        logger.debug('No air pump data for float {}'.format(float_id))
+        return figs_meta
+
+    try:
+
+        # Preprocess data: one row per dive, the last reported values
+
+        cols = [c for c in ('surface.air_pump_runtime_s', 'surface.air_bladder_max_pres_psi',
+                            'bit.air_pump_test_s', 'bit.air_pump_max_pres_psi') if c in df_eng.columns]
+        df_air = df_eng[['dive'] + cols].apply(pd.to_numeric, errors = 'coerce')
+        df_air = df_air[df_air['dive'].notna()].groupby('dive').last()
+        df_air = df_air.reindex(columns = ['surface.air_pump_runtime_s', 'surface.air_bladder_max_pres_psi',
+                                           'bit.air_pump_test_s', 'bit.air_pump_max_pres_psi'])
+
+        # Mission air-assist settings by dive, carried forward to the following dives. Unset
+        # configurations (SAM 255, sent before a mission is loaded) are skipped.
+
+        df_cfg = None
+        df_mission = float_aggregate_data.get('mission')
+        if df_mission is not None and all(k in df_mission.columns for k in ('dive', 'SAM', 'SAN', 'SAX', 'SAO')):
+            df_cfg = df_mission[['dive', 'SAM', 'SAN', 'SAX', 'SAO']].apply(pd.to_numeric, errors = 'coerce')
+            df_cfg = df_cfg[df_cfg['dive'].notna() & df_cfg['SAM'].isin([0, 1])].groupby('dive').last()
+            if len(df_cfg) > 0:
+                all_dives = range(int(min(df_cfg.index.min(), df_air.index.min())),
+                                  int(max(df_cfg.index.max(), df_air.index.max())) + 1)
+                df_cfg = df_cfg.reindex(all_dives).ffill()
+            else:
+                df_cfg = None
+        sao = df_cfg['SAO'].reindex(df_air.index) if df_cfg is not None else pd.Series(np.nan, index = df_air.index)
+
+        # Generate figures. The x axis starts at dive 0 (pre-mission dives are off the default
+        # range); the pressure axis starts at 0.
+
+        layout = dict(
+            showlegend = False,
+            xaxis=dict(
+                title='Dive',
+                range=[-0.5, max(df_air.index.max(), 0) + 0.5],
+                ),
+            hoverlabel=dict(
+                font=dict(
+                    family='Consolas, monospace',
+                    size=14,
+                    ),
+                ),
+            bargap=0,
+            hovermode='x',
+            plot_bgcolor='white',
+            margin=dict(l=10,r=10,b=20,t=50,pad=4)
+            )
+        figs = dict(
+            air_pump_duration = go.Figure(layout=dict(layout,
+                title = dict(text='{}: Air Pump Duration'.format(float_id)),
+                # Sized to the dives in the default x range, so the pre-mission BIT tests
+                # (several minutes) do not flatten the run times
+                yaxis=dict(title='Duration [seconds]', range=[0, 1.1 * np.nanmax(np.append(
+                    df_air.loc[df_air.index >= 0, ['surface.air_pump_runtime_s', 'bit.air_pump_test_s']].values.ravel(), 1))]),
+                )),
+            air_pump_pres = go.Figure(layout=dict(layout,
+                title = dict(text='{}: Air Bladder Pressure'.format(float_id)),
+                yaxis=dict(title='Pressure [PSI]', rangemode='tozero'),
+                )),
+            )
+
+        # Add traces to figures
+
+        figs['air_pump_duration'].add_trace(go.Bar(
+            x=df_air.index.values,
+            y=df_air['surface.air_pump_runtime_s'],
+            customdata=sao.values,
+            hovertemplate='<br>'.join([
+                'Dive <b>%{x}</b>',
+                'surface: %{y:.0f} s',
+                'SAO = %{customdata:.0f} s',
+                '<extra></extra>',
+                ]),
+            marker=dict(
+                color='rgb(220,220,220)',
+                line=dict(
+                    color='rgb(188, 188, 188)',
+                    width=0.5,
+                    ),
+                ),
+            name='surface',
+            ))
+        figs['air_pump_pres'].add_trace(go.Scatter(
+            x=df_air.index.values,
+            y=df_air['surface.air_bladder_max_pres_psi'],
+            hovertemplate='surface max. = %{y:.3f} PSI<extra></extra>',
+            line=dict(
+                color='rgb(0,0,0)',
+                width=1.2,
+                ),
+            marker=dict(
+                color='rgb(0,0,0)',
+                size=3,
+                ),
+            mode='lines+markers',
+            name='surface max.',
+            ))
+
+        if df_cfg is not None:
+            for key, label, color in (('SAX', 'SAX (max.)', 'rgb(255,0,0)'), ('SAN', 'SAN (min.)', 'rgb(0,0,255)')):
+                figs['air_pump_pres'].add_trace(go.Scatter(
+                    x=df_cfg.index.values,
+                    y=df_cfg[key],
+                    hovertemplate=label + ' = %{y:.3f} PSI<extra></extra>',
+                    line=dict(
+                        color=color,
+                        width=1.5,
+                        dash='dash',
+                        shape='hv',
+                        ),
+                    mode='lines',
+                    name=label,
+                    ))
+
+        df_bit = df_air[df_air['bit.air_pump_test_s'].notna() | df_air['bit.air_pump_max_pres_psi'].notna()]
+        if len(df_bit) > 0:
+            for fig, col, fmt in (('air_pump_duration', 'bit.air_pump_test_s', 'BIT test: %{y:.0f} s'),
+                                  ('air_pump_pres', 'bit.air_pump_max_pres_psi', 'BIT test max. = %{y:.3f} PSI')):
+                figs[fig].add_trace(go.Scatter(
+                    x=df_bit.index.values,
+                    y=df_bit[col],
+                    hovertemplate=fmt + '<extra></extra>',
+                    marker=dict(
+                        color='rgb(255,140,0)',
+                        size=7,
+                        symbol='diamond',
+                        ),
+                    mode='markers',
+                    name='BIT test',
+                    ))
+
+        # Write plot files
+
+        for fig in figs.keys():
+
+            fig_meta = WritePlotImageFiles(
+                id_str = fig,
+                figure = figs[fig],
+                float_id = float_id,
+                dpath_float = dpath_float,
+                category = 'air',
+                size = 'figWideXS',
+                ts_pos = [1.00, -0.06],
+                showlegend = True,
+                )
+            if fig_meta is not None:
+                figs_meta.append(fig_meta)
+
+        # Cleanup
+
+        if 'figs' in locals(): del figs
+        if 'df_air' in locals(): del df_air
+        if 'df_cfg' in locals(): del df_cfg
+        gc.collect()
+
+    except:
+        errstr = 'Failed to generate air pump plots for float {}'.format(float_id)
+        if hasattr(args, 'halt') and args.halt:
+            raise Exception(errstr)
+        logger.error(errstr)
+
+    return figs_meta
+
+
+def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
+    """Write the aggregate engineering plots for one float; return their figure metadata.
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive) and uses float_id, float_aggregate_data and dpath_float.
+
+    Plots phase_vac and pump_first_duration (category 'pump', Hydraulic System section):
+    phase_vac, the case vacuum at the start (vac0) and end (vac1) of the descent, drift, ascent
+    and surface phases, from the 'engineering_data' sections: one line per dive across the eight
+    phase points (x axis 'Descent start' ... 'Surface end'), colored by dive, the last in black;
+    pump_first_duration, the duration of each dive's first pump (the first 'pump' record, the
+    first descent pump) as bars, with the mission's first descent pump duration (DFT<phase>,
+    carried forward to the following dives) as a dashed step, and the descent and drift seek
+    pump time adjustments (seekPumpAdjT) on a second y axis.
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no data
+    for either plot. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
+
+    figs_meta = []
+    figs = dict()
+    fig_size = dict()
+
+    df_eng = float_aggregate_data.get('engineering_data')
+    df_pump = float_aggregate_data.get('pump')
+
+    hoverlabel = dict(
+        font=dict(
+            family='Consolas, monospace',
+            size=14,
+            ),
+        )
+
+    try:
+
+        # Case vacuum at the start and end of each phase
+
+        phases = [(sec, label) for sec, label in (('descent', 'Descent'), ('drift', 'Park/Drift'),
+                                                  ('ascent', 'Ascent'), ('surface', 'Surface'))
+                  if df_eng is not None and sec + '.vac0' in df_eng.columns]
+        if phases:
+
+            cols = [sec + '.' + v for sec, _ in phases for v in ('vac0', 'vac1') if sec + '.' + v in df_eng.columns]
+            df_vac = df_eng[['dive'] + cols].apply(pd.to_numeric, errors = 'coerce')
+            df_vac = df_vac[df_vac['dive'].notna()].groupby('dive').last()
+            # Fill and out-of-range values (0 or below, above 30 inHg) are gaps
+            df_vac = df_vac.where((df_vac > 0) & (df_vac < 30))
+
+            # One line per dive through the cycle's phase points, colored from blue (first
+            # dives) to red, the last dive in black, as in the surface plots
+            points = [(sec + '.' + v, '{} {}'.format(label, name))
+                      for sec, label in phases for v, name in (('vac0', 'start'), ('vac1', 'end'))
+                      if sec + '.' + v in df_vac.columns]
+            df_vac = df_vac[[c for c, _ in points]].dropna(how = 'all')
+            vac_dives = df_vac.index.values
+            n = len(vac_dives)
+            colors = [colorsys.hsv_to_rgb(x*.666/max(n-1, 1),.8,1) for x in range(n)][::-1]
+            colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
+            if n > 0:
+                colors[n-1] = 'rgb(0,0,0)'
+
+            # Each phase's start and end are joined, with a gap (and a blank x position) between
+            # phases: the start of phase k is at x = 3k, its end at 3k + 1.
+            xpos = [3 * (j // 2) + j % 2 for j in range(len(points))]
+            x_gapped, labels_gapped = [], []
+            for j, (x, (_, label)) in enumerate(zip(xpos, points)):
+                if j > 0 and x - xpos[j-1] > 1:
+                    x_gapped.append(None)
+                    labels_gapped.append(None)
+                x_gapped.append(x)
+                labels_gapped.append(label)
+
+            fig = go.Figure(
+                layout=dict(
+                    showlegend = False,
+                    title = dict(text='{}: Case Vacuum through the Dive Cycle'.format(float_id)),
+                    xaxis=dict(
+                        title='Phase',
+                        tickvals=xpos,
+                        ticktext=[label for _, label in points],
+                        # Padding so the markers at either end are drawn whole
+                        range=[min(xpos) - 0.3, max(xpos) + 0.3],
+                        showgrid=False,
+                        zeroline=False,
+                        ),
+                    yaxis=dict(
+                        title='Vacuum [inHg]',
+                        rangemode='tozero',
+                        ),
+                    hoverlabel=hoverlabel,
+                    legend=dict(
+                        title='Dive',
+                        ),
+                    plot_bgcolor='white',
+                    margin=dict(l=10,r=10,b=20,t=50,pad=4)
+                    )
+                )
+            for i, dive in enumerate(vac_dives):
+                values = iter(df_vac.loc[dive].values)
+                fig.add_trace(go.Scatter(
+                    x=x_gapped,
+                    y=[None if x is None else next(values) for x in x_gapped],
+                    text=labels_gapped,
+                    hovertemplate='<br>'.join([
+                        'Dive <b>{:d}</b>'.format(int(dive)),
+                        '%{text}',
+                        'vac = %{y:.2f} inHg',
+                        '<extra></extra>',
+                        ]),
+                    line=dict(
+                        color=colors[i],
+                        width=2 if i == n-1 else 1.2,
+                        ),
+                    marker=dict(
+                        color=colors[i],
+                        size=7 if i == n-1 else 5,
+                        symbol='circle',
+                        ),
+                    mode='lines+markers',
+                    connectgaps=False,
+                    name='{:d}'.format(int(dive)),
+                    ))
+            figs['phase_vac'] = fig
+            fig_size['phase_vac'] = 'figWide'
+
+        # First pump duration and seek pump time adjustments
+
+        if df_pump is not None and len(df_pump) > 0 and 'time' in df_pump.columns:
+
+            # The records are in time order within each dive
+            first = df_pump[['dive', 'time']].apply(pd.to_numeric, errors = 'coerce')
+            first = first[first['dive'].notna()].groupby('dive', sort = True)['time'].first()
+
+            # Configured first descent pump duration of the dive's mission phase, as in
+            # WriteTrajectoryPlots: unset configurations (MPS outside 0-9) are skipped, and a phase
+            # whose cycle count is used up (MPC >= MNM<n>) drifts in the next phase MNS<n>.
+            dft = {}
+            df_mission = float_aggregate_data.get('mission')
+            if df_mission is not None:
+                for _, mrow in df_mission.iterrows():
+                    mps = pd.to_numeric(mrow.get('MPS'), errors = 'coerce')
+                    if pd.notna(mps) and not 0 <= mps <= 9:
+                        continue
+                    if pd.notna(mps):
+                        mnm, mns, mpc = (pd.to_numeric(mrow.get(k), errors = 'coerce')
+                                         for k in ('MNM{:d}'.format(int(mps)), 'MNS{:d}'.format(int(mps)), 'MPC'))
+                        if pd.notna(mnm) and pd.notna(mns) and pd.notna(mpc) and mpc >= mnm and 0 <= mns <= 9:
+                            mps = mns
+                    keys = (['DFT{:d}'.format(int(mps))] if pd.notna(mps) else []) + ['DFT0', 'DFT']
+                    value = next((pd.to_numeric(mrow[k], errors = 'coerce') for k in keys
+                                  if k in mrow and pd.notna(pd.to_numeric(mrow[k], errors = 'coerce'))), None)
+                    if value is not None and 0 < value < 65535:
+                        dft[int(mrow['dive'])] = float(value)
+            if dft:
+                dft = pd.Series(dft).sort_index()
+                dft = dft.reindex(range(int(min(dft.index.min(), first.index.min())),
+                                        int(max(dft.index.max(), first.index.max())) + 1)).ffill()
+
+            fig = go.Figure(
+                layout=dict(
+                    showlegend = False,
+                    title = dict(text='{}: First Pump Duration and Seek Adjustment'.format(float_id)),
+                    xaxis=dict(
+                        title='Dive',
+                        range=[-0.5, max(first.index.max(), 0) + 0.5],
+                        ),
+                    yaxis=dict(
+                        title='First pump [seconds]',
+                        # Sized to the dives in the default x range
+                        range=[0, 1.1 * np.nanmax(np.append(first[first.index >= 0].values, 1))],
+                        ),
+                    yaxis2=dict(
+                        title='Seek adjustment [seconds]',
+                        overlaying='y',
+                        side='right',
+                        zeroline=True,
+                        zerolinecolor='rgb(188,188,188)',
+                        ),
+                    bargap=0,
+                    hoverlabel=hoverlabel,
+                    hovermode='x',
+                    plot_bgcolor='white',
+                    margin=dict(l=10,r=10,b=20,t=50,pad=4)
+                    )
+                )
+            fig.add_trace(go.Bar(
+                x=first.index.values,
+                y=first.values,
+                hovertemplate='<br>'.join([
+                    'Dive <b>%{x}</b>',
+                    'first pump: %{y:.0f} s',
+                    '<extra></extra>',
+                    ]),
+                marker=dict(
+                    color='rgb(220,220,220)',
+                    line=dict(
+                        color='rgb(188, 188, 188)',
+                        width=0.5,
+                        ),
+                    ),
+                name='first pump',
+                ))
+            if len(dft) > 0:
+                fig.add_trace(go.Scatter(
+                    x=dft.index.values,
+                    y=dft.values,
+                    hovertemplate='DFT = %{y:.0f} s<extra></extra>',
+                    line=dict(
+                        color='rgb(0,0,255)',
+                        width=1.5,
+                        dash='dash',
+                        shape='hv',
+                        ),
+                    mode='lines',
+                    name='DFT (configured)',
+                    ))
+            # Drift first, so the descent adjustments (more often nonzero) are drawn on top
+            for sec, label, color in (('drift', 'drift seek adj.', 'rgb(255,0,0)'),
+                                      ('descent', 'descent seek adj.', 'rgb(0,0,0)')):
+                col = sec + '.seek_pump_adj_s'
+                if df_eng is None or col not in df_eng.columns:
+                    continue
+                adj = df_eng[['dive', col]].apply(pd.to_numeric, errors = 'coerce')
+                adj = adj[adj['dive'].notna()].groupby('dive')[col].last()
+                if adj.notna().sum() < 1:
+                    continue
+                fig.add_trace(go.Scatter(
+                    x=adj.index.values,
+                    y=adj.values,
+                    yaxis='y2',
+                    hovertemplate=label + ' = %{y:+.0f} s<extra></extra>',
+                    line=dict(
+                        color=color,
+                        width=1.2,
+                        ),
+                    marker=dict(
+                        color=color,
+                        size=3,
+                        ),
+                    mode='lines+markers',
+                    name=label,
+                    ))
+            figs['pump_first_duration'] = fig
+            fig_size['pump_first_duration'] = 'figWideS'
+
+        # Write plot files
+
+        for fig in figs.keys():
+
+            fig_meta = WritePlotImageFiles(
+                id_str = fig,
+                figure = figs[fig],
+                float_id = float_id,
+                dpath_float = dpath_float,
+                category = 'pump',
+                size = fig_size[fig],
+                ts_pos = [1.00, -0.06],
+                showlegend = True,
+                )
+            if fig_meta is not None:
+                figs_meta.append(fig_meta)
+
+        # Cleanup
+
+        if 'figs' in locals(): del figs
+        if 'df_vac' in locals(): del df_vac
+        gc.collect()
+
+    except:
+        errstr = 'Failed to generate engineering plots for float {}'.format(float_id)
+        if hasattr(args, 'halt') and args.halt:
+            raise Exception(errstr)
+        logger.error(errstr)
+
+    return figs_meta
+
+
 def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
     """Write the aggregate surface plots for one float; return their figure metadata.
 
@@ -12392,6 +12884,8 @@ PLOT_WRITERS = [
     WriteDescentPlots,
     WriteDriftPlots,
     WritePumpPlots,
+    WriteAirPumpPlots,
+    WriteEngineeringPlots,
     WriteSurfacePlots,
     WriteSatcomPlots,
     WriteWavePlots,
