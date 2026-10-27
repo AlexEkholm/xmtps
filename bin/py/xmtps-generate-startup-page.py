@@ -344,12 +344,10 @@ def FormatTime(epoch):
 def WriteBitCells(doc, tag, text, bit):
     """Write the cells of one BIT: duration, result, errors, firmware and the BIT_COLUMNS values. A
     float without BIT messages (bit is None) gets one cell per column (DataTables does not allow
-    cells spanning columns in the body), its first cell saying so."""
+    cells spanning columns in the body), each holding "-" (the BITs column shows 0)."""
 
     if bit is None:
-        with tag('td'):
-            text('No BIT messages received')
-        for _ in range(3 + len(BIT_COLUMNS)):
+        for _ in range(4 + len(BIT_COLUMNS)):
             with tag('td'):
                 text('-')
         return
