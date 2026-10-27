@@ -88,8 +88,17 @@ BIT_COLUMNS = [
     ('Air Pump',  'Duration',  's',    ('bit.air_pump_test_s',),                          '{:.0f}'),
     ('Air Pump',  'Cycles',    '',     ('bit.air_pump_cycles',),                          '{:.0f}'),
     ('Air Pump',  'Max. Pres.', 'PSI', ('bit.air_pump_max_pres_psi',),                    '{:.3f}'),
+    ('Air Pump',  'currAvg',   'A',    ('bit.air_pump_current_avg_a',),                   '{:.3f}'),
+    ('Air Pump',  'currMax',   'A',    ('bit.air_pump_current_max_a',),                   '{:.3f}'),
+    ('Air Pump',  '12VCurrMax', 'A',   ('bit.air_pump_current_max_12v_a',),               '{:.3f}'),
+    ('Air Pump',  'batMax',    'V',    ('bit.air_pump_battery_max_v',),                   '{:.3f}'),
+    ('Air Pump',  'powerMax',  'W',    ('bit.air_pump_power_max_w',),                     '{:.3f}'),
     ('Oil Pump',  'Duration',  's',    ('bit.oil_pump_test_s',),                          '{:.0f}'),
-    ('Oil Pump',  'Max. Curr.', 'A',   ('bit.oil_pump_current_max_a',),                   '{:.3f}'),
+    ('Oil Pump',  'currAvg',   'A',    ('bit.oil_pump_current_avg_a',),                   '{:.3f}'),
+    ('Oil Pump',  'currMax',   'A',    ('bit.oil_pump_current_max_a',),                   '{:.3f}'),
+    ('Oil Pump',  '12VCurrMax', 'A',   ('bit.oil_pump_current_max_12v_a',),               '{:.3f}'),
+    ('Oil Pump',  'batMax',    'V',    ('bit.oil_pump_battery_max_v',),                   '{:.3f}'),
+    ('Oil Pump',  'powerMax',  'W',    ('bit.oil_pump_power_max_w',),                     '{:.3f}'),
 ]
 
 """
@@ -333,13 +342,11 @@ def FormatTime(epoch):
 
 
 def WriteBitCells(doc, tag, text, bit):
-    """Write the cells of one BIT: dive, time, result and errors, and the BIT_COLUMNS values. A
+    """Write the cells of one BIT: duration, result, errors, firmware and the BIT_COLUMNS values. A
     float without BIT messages (bit is None) gets one cell per column (DataTables does not allow
-    cells spanning columns in the body), its Time cell saying so."""
+    cells spanning columns in the body), its first cell saying so."""
 
     if bit is None:
-        with tag('td'):
-            text('-')
         with tag('td'):
             text('No BIT messages received')
         for _ in range(3 + len(BIT_COLUMNS)):
@@ -348,9 +355,6 @@ def WriteBitCells(doc, tag, text, bit):
         return
 
     results, failed, errors = BitFailures(bit)
-
-    with tag('td'): # dive
-        text('{}'.format(bit.get('dive')))
 
     duration = bit.get('bit.duration_s') if IsSet(bit.get('bit.duration_s')) else None
     with tag('td', ('data-order', '{:.0f}'.format(duration) if duration is not None else '-1')): # duration
@@ -403,7 +407,7 @@ def WriteBitHeader(doc, tag, text, float_columns):
     with tag('tr'):
         with tag('th', colspan=len(float_columns)):
             text('Float')
-        with tag('th', colspan=5):
+        with tag('th', colspan=4):
             text('BIT')
         groups = []
         for c in BIT_COLUMNS:
@@ -415,7 +419,7 @@ def WriteBitHeader(doc, tag, text, float_columns):
             with tag('th', colspan=n):
                 text(name)
     with tag('tr'):
-        headers = list(float_columns) + [('Dive', ''), ('Duration', 'min'), ('Result', ''), ('Errors', ''), ('Firmware', '')]
+        headers = list(float_columns) + [('Duration', 'min'), ('Result', ''), ('Errors', ''), ('Firmware', '')]
         headers += [(c[1], c[2]) for c in BIT_COLUMNS]
         for header, units in headers:
             with tag('th'):

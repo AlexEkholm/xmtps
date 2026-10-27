@@ -684,13 +684,15 @@ that started up in the last `--days DAYS` days (default 180), latest startup fir
 only `<serial>_summary.json` files are read from the given directories. Each row gives the
 float's status (Started, i.e. not yet deployed, or Deployed), with its startup number and, once
 deployed, its cycles; its startup, deployment and last report times; the number of BITs it sent
-(and how many failed); and its most recent BIT: the dive, the test duration (min), the result from
+(and how many failed); and its most recent BIT: the test duration (min), the result from
 the BIT results mask with the names of the failed tests (spec B.2.6), the subsystem error flags
 decoded by name (CTD, case vacuum, battery, air and oil pump; BIT formats 9-11), the firmware (as
 on the summary page, e.g. v10.12.0, with the firmware word) and BIT format, the CTD pressure after
 calibration (`presPostCal`, `presPostReset` in BIT format 8), temperature and salinity, case
-vacuum and battery voltage (start / end), air pump duration, cycles and maximum pressure, and oil
-pump duration and maximum current. Passed BITs are green, failed BITs and set error flags dark
+vacuum and battery voltage (start / end), air pump duration, cycles and maximum pressure, oil
+pump duration, and for both pumps the average and maximum current, maximum 12 V current, maximum
+battery voltage and maximum power (`currAvg`, `currMax`, `12VCurrMax`, `batMax`, `powerMax`; BIT
+formats 9-11 report all of them, format 8 only the maximum currents and battery voltage). Passed BITs are green, failed BITs and set error flags dark
 red, and started floats yellow. The most recent BIT is the latest by start time, or by dive where
 the format has no times (so dive -13 is later than -7). The table is a DataTables table, sortable
 by any column and with a search field. It also takes `--runtime SECONDS`.
