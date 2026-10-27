@@ -100,7 +100,7 @@ The MRV documents and the SOLO-II PDF are in the Float Group's `mrv/doc` folder.
 | 0xEC | Engineering, ice detection | B.7 | versions 0x10–0x11 | `E0C`, `e0c` |
 | 0xF0 | Argo data (mission summary, gains and offsets) | A.6 | v2.1–v2.4 | `A` |
 | 0xF1 | Test pattern | — | no | — |
-| 0xFF | Extended records (event, reset, serial number, CTD exchange, fault dump) | C.6 | since build 3314 (format inferred) | `XFF` |
+| 0xFF | Extended records (event, reset, serial number, CTD exchange, fault dump) | C.6 | since build 3321 (format inferred) | `XFF` |
 
 IDs not listed are unassigned. In types 0x1n–0x8n and 0x9n–0xBn, the low nibble of the ID is the part number of a multi-part series (A.3).
 
@@ -220,7 +220,7 @@ packets in the production RAW files (all floats and firmware, 2014–2026) have 
    `XMessage::CheckXMsgData`; the size must be at least 4). Extra bytes produce a warning; a missing
    terminator is an error.
 5. IDs without a decoder are logged as `Unknown X message ID: 0x..` and skipped, for example
-   0xC2 and 0x70–0x77 (and 0xFF before build 3314, C.6). 0xF1 (test pattern) is ignored silently.
+   0xC2 and 0x70–0x77 (and 0xFF before build 3321, C.6). 0xF1 (test pattern) is ignored silently.
 
 #### A.1.4 Byte order, bit order, epochs
 
@@ -716,7 +716,7 @@ Typical sizes [X] (N = index of the last record):
 - **Listing:** one group per part: `F|R|SFC SN dive idx nSam startTime`, then
   `sfc SN dive idx sam +sec pres temp saln phaseCode # phaseName`, or for fall and rise
   `f|r SN dive idx sam +sec pres phaseCode # phaseName` (the temp and saln columns were dropped from
-  `f` and `r` in build 3314; only the 9-byte packing format carries them, last used by 9035 and 9050).
+  `f` and `r` in build 3321; only the 9-byte packing format carries them, last used by 9035 and 9050).
 - Surface parts are also combined into the derived `SFD` line: number of valid samples, and the
   minimum, mean, maximum and variance of the surface pressure.
 
@@ -2434,7 +2434,7 @@ This part covers these blob types:
 | 0xDE | Mission command echo | `XMissionCmdEcho` | Decoded since build 3310; one `CMD` listing line per command. |
 | 0xC1, 0xC3 | Ocean surface waves | `XWave`, `XWaveSpectralSample`, `XWaveRawSample` | Spectral versions 0-2 are decoded. The raw IMU format is not. |
 | 0xCA | Marginal-ice-zone (MIZ) acoustics | `XAcousticPosition` | Subtypes 3 and 5 are decoded. Subtypes 1 and 2 are seen in production but ignored. |
-| 0xFF | Extended records | `XExtendedRecord` | Decoded since build 3314; one `XFF` listing line per record. The format is inferred from production messages (C.6). |
+| 0xFF | Extended records | `XExtendedRecord` | Decoded since build 3321; one `XFF` listing line per record. The format is inferred from production messages (C.6). |
 
 ### C.0 Conventions
 
@@ -3371,7 +3371,7 @@ Acoustics:
 
 No format document describes ID 0xFF; the decoder's ID list calls it `UNKNOWN`. Everything below
 is **[inferred]** from the 6,262 0xFF blobs in the production RAW files (survey of 2026-10-27, 160
-floats, all firmware from 10.2 to 10.14, WIMS and not). Before build 3314 the decoder logged each
+floats, all firmware from 10.2 to 10.14, WIMS and not). Before build 3321 the decoder logged each
 one as `Unknown X message ID: 0xff` and dropped it (several hundred warnings a day).
 
 **Layout.** The usual ID and 12-bit size (bytes 0-2, A.1.3) and `;` terminator, with a record type

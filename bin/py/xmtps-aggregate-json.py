@@ -227,6 +227,61 @@ lastprocessed_pending = []
 Function Definitions:
 """
 
+# Fill values of the listing, by aggregate DataFrame and column (regular expression, matched in
+# order, the first match applies): (frame, column regex, fill values). The decoder lists a value it
+# could not decode or that is out of range with the fill value of its type and scale: -9.999 for
+# pressures, temperatures and salinities, -9.99 for vacuums and rates, -99999 for counts, and the
+# all-ones raw value for unsigned fields (65535 = 0xFFFF and its scaled forms 6553.5, 655.35 and
+# 65.535; 4294967295 = 0xFFFFFFFF; 255 = 0xFF) or -32768 for signed ones. Each value is only listed
+# for the columns where it cannot be a real value: a profile pressure of 655.35 dBar or a time
+# offset of 6553.5 s are real and are kept, and the mission table is not filtered at all (its
+# 65535s mark an unset configuration, which its readers check for).
+U16_FILLS = (65535, 6553.5, 655.35, 65.535)
+FILL_VALUES = [
+    ('ascent|descent|drift|profile|pump|surface', r'pres|temp|saln|tcnd|saln_corr|pres_corr', (-9.999,)),
+    ('ascent|descent',              r'rate',                    (-9.99,)),
+    ('pump',                        r'vac',                     (-9.99, 655.35)),
+    ('pump',                        r'time',                    (65535,)),
+    ('engineering',                 r'.*_vac[01]',              (-9.99, 655.35)),
+    ('engineering_data',            r'.*\.vac[01]|.*_inhg',     (-9.99, 655.35)),
+    ('engineering_data',            r'.*_(dbar|degc|psu)|.*\.test_temp', (-9.999,)),
+    ('engineering_data',            r'.*_counts',               (-99999,)),
+    ('engineering_data',            r'(?!dive$).*',             U16_FILLS + (4294967295, -32768, -99999, -9.999, -9.99)),
+    ('gps',                         r'snr_(min|avg|max)',       (255,)),
+    ('gps|sbd',                     r'cep_km',                  (999999,)),
+    ('wave_spectra',                r'freq',                    (-99.0,)),
+    ('wave_spectra',                r'.*_g',                    (-1000.0, -999.99999)),
+    ('wave_spectra',                r'Szz|Syy|Sxx|Cxy|Qzx|Qzy', (-9.99, -9.999)),
+    ]
+
+def RemoveFillValues(float_id, float_aggregate_data):
+    """Replace the listing fill values in a float's aggregate DataFrames with NaN.
+
+    Applies FILL_VALUES to the DataFrames in float_aggregate_data in place: in each numeric
+    column, cells equal to one of the column's fill values (within 1e-6) become NaN. Other
+    columns, other values and string columns are left alone. Called once the per-dive data is
+    aggregated, so no plot, derived table or aggregate JSON file sees a fill value.
+    """
+
+    for key, df in float_aggregate_data.items():
+        if not isinstance(df, pd.DataFrame) or len(df) < 1:
+            continue
+        rules = [(re.compile(c), v) for f, c, v in FILL_VALUES if re.fullmatch(f, key)]
+        if not rules:
+            continue
+        for col in df.columns:
+            fills = next((v for c, v in rules if c.fullmatch(col)), None)
+            if fills is None or not pd.api.types.is_numeric_dtype(df[col]):
+                continue
+            mask = np.isclose(df[col].astype(float).values[:, None], np.array(fills, dtype=float)[None, :],
+                              rtol=0, atol=1e-6).any(axis=1)
+            if mask.any():
+                logger.debug('Float {}: {} fill value(s) in {}.{} set to NaN'.format(
+                    float_id, int(mask.sum()), key, col))
+                if not pd.api.types.is_float_dtype(df[col]):
+                    df[col] = df[col].astype(float)
+                df.loc[mask, col] = np.nan
+
 def AggregateDiveData():
     """Aggregate the dives of each float in float_map into float_aggregate_map.
 
@@ -1154,6 +1209,10 @@ def AggregateDiveData():
                     float_aggregate_data.pop('wave_spectra', None)
                     
                            
+                # Listing fill values become NaN before anything is derived or plotted
+
+                RemoveFillValues(float_id, float_aggregate_data)
+
                 # Post process -- get dive/profile positions and date/times
                 
                 logger.debug('Processing profile positions for float {:04d}...'.format(float_id))
@@ -2620,14 +2679,14 @@ def WriteHtmlFile(float_id):
                         
                             count = 0
                             for id in [
-                                'pump_pres', 'pump_power_v_pres', '', 
+                                'pump_first_duration', '',
+                                'pump_pres', 'pump_power_v_pres', '',
                                 'pump_volt', 'pump_volt_avg', '', 
                                 'pump_curr', 'pump_curr_avg', '', 
                                 # 'pump_power', 'pump_power_avg', '', 
                                 'pump_energy', 'pump_energy_v_max_pres', '',
                                 'pump_num_ops', '', 
                                 'pump_time_sum', '',
-                                'pump_first_duration', '',
                                 'pump_energy_sum', '',
                                 'pump_vac', 'pump_vac_avg', '', 
                                 'pump_vac_v_time', 'pump_vac_v_pres', '',
@@ -9132,8 +9191,9 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
             cols = [sec + '.' + v for sec, _ in phases for v in ('vac0', 'vac1') if sec + '.' + v in df_eng.columns]
             df_vac = df_eng[['dive'] + cols].apply(pd.to_numeric, errors = 'coerce')
             df_vac = df_vac[df_vac['dive'].notna()].groupby('dive').last()
-            # Fill and out-of-range values (0 or below, above 30 inHg) are gaps
-            df_vac = df_vac.where((df_vac > 0) & (df_vac < 30))
+            # Fill values are already NaN (RemoveFillValues); values out of range (below 0, 30 inHg
+            # or more) are gaps too. A real 0.00 inHg is kept.
+            df_vac = df_vac.where((df_vac >= 0) & (df_vac < 30))
 
             # One line per dive through the cycle's phase points, colored from blue (first
             # dives) to red, the last dive in black, as in the surface plots
@@ -9214,123 +9274,137 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
 
         # First pump duration and seek pump time adjustments
 
-        if df_pump is not None and len(df_pump) > 0 and 'time' in df_pump.columns:
+        # Its own try block, so a failure here does not also lose the case vacuum plot.
 
-            # The records are in time order within each dive
-            first = df_pump[['dive', 'time']].apply(pd.to_numeric, errors = 'coerce')
-            first = first[first['dive'].notna()].groupby('dive', sort = True)['time'].first()
+        try:
 
-            # Configured first descent pump duration of the dive's mission phase, as in
-            # WriteTrajectoryPlots: unset configurations (MPS outside 0-9) are skipped, and a phase
-            # whose cycle count is used up (MPC >= MNM<n>) drifts in the next phase MNS<n>.
-            dft = {}
-            df_mission = float_aggregate_data.get('mission')
-            if df_mission is not None:
-                for _, mrow in df_mission.iterrows():
-                    mps = pd.to_numeric(mrow.get('MPS'), errors = 'coerce')
-                    if pd.notna(mps) and not 0 <= mps <= 9:
-                        continue
-                    if pd.notna(mps):
-                        mnm, mns, mpc = (pd.to_numeric(mrow.get(k), errors = 'coerce')
-                                         for k in ('MNM{:d}'.format(int(mps)), 'MNS{:d}'.format(int(mps)), 'MPC'))
-                        if pd.notna(mnm) and pd.notna(mns) and pd.notna(mpc) and mpc >= mnm and 0 <= mns <= 9:
-                            mps = mns
-                    keys = (['DFT{:d}'.format(int(mps))] if pd.notna(mps) else []) + ['DFT0', 'DFT']
-                    value = next((pd.to_numeric(mrow[k], errors = 'coerce') for k in keys
-                                  if k in mrow and pd.notna(pd.to_numeric(mrow[k], errors = 'coerce'))), None)
-                    if value is not None and 0 < value < 65535:
-                        dft[int(mrow['dive'])] = float(value)
-            if dft:
-                dft = pd.Series(dft).sort_index()
-                dft = dft.reindex(range(int(min(dft.index.min(), first.index.min())),
-                                        int(max(dft.index.max(), first.index.max())) + 1)).ffill()
+            first = None
+            if df_pump is not None and len(df_pump) > 0 and 'time' in df_pump.columns:
 
-            fig = go.Figure(
-                layout=dict(
-                    showlegend = False,
-                    title = dict(text='{}: First Pump Duration and Seek Adjustment'.format(float_id)),
-                    xaxis=dict(
-                        title='Dive',
-                        range=[-0.5, max(first.index.max(), 0) + 0.5],
-                        ),
-                    yaxis=dict(
-                        title='First pump [seconds]',
-                        # Sized to the dives in the default x range
-                        range=[0, 1.1 * np.nanmax(np.append(first[first.index >= 0].values, 1))],
-                        ),
-                    yaxis2=dict(
-                        title='Seek adjustment [seconds]',
-                        overlaying='y',
-                        side='right',
-                        zeroline=True,
-                        zerolinecolor='rgb(188,188,188)',
-                        ),
-                    bargap=0,
-                    hoverlabel=hoverlabel,
-                    hovermode='x',
-                    plot_bgcolor='white',
-                    margin=dict(l=10,r=10,b=20,t=50,pad=4)
+                # The records are in time order within each dive
+                first = df_pump[['dive', 'time']].apply(pd.to_numeric, errors = 'coerce')
+                first = first[first['dive'].notna()].groupby('dive', sort = True)['time'].first()
+                first = first.dropna()
+
+            if first is not None and len(first) > 0:
+
+                # Configured first descent pump duration of the dive's mission phase, as in
+                # WriteTrajectoryPlots: unset configurations (MPS outside 0-9) are skipped, and a phase
+                # whose cycle count is used up (MPC >= MNM<n>) drifts in the next phase MNS<n>.
+                dft = {}
+                df_mission = float_aggregate_data.get('mission')
+                if df_mission is not None:
+                    for _, mrow in df_mission.iterrows():
+                        mps = pd.to_numeric(mrow.get('MPS'), errors = 'coerce')
+                        if pd.notna(mps) and not 0 <= mps <= 9:
+                            continue
+                        if pd.notna(mps):
+                            mnm, mns, mpc = (pd.to_numeric(mrow.get(k), errors = 'coerce')
+                                             for k in ('MNM{:d}'.format(int(mps)), 'MNS{:d}'.format(int(mps)), 'MPC'))
+                            if pd.notna(mnm) and pd.notna(mns) and pd.notna(mpc) and mpc >= mnm and 0 <= mns <= 9:
+                                mps = mns
+                        keys = (['DFT{:d}'.format(int(mps))] if pd.notna(mps) else []) + ['DFT0', 'DFT']
+                        value = next((pd.to_numeric(mrow[k], errors = 'coerce') for k in keys
+                                      if k in mrow and pd.notna(pd.to_numeric(mrow[k], errors = 'coerce'))), None)
+                        if value is not None and 0 < value < 65535:
+                            dft[int(mrow['dive'])] = float(value)
+                if dft:
+                    dft = pd.Series(dft).sort_index()
+                    dft = dft.reindex(range(int(min(dft.index.min(), first.index.min())),
+                                            int(max(dft.index.max(), first.index.max())) + 1)).ffill()
+
+                fig = go.Figure(
+                    layout=dict(
+                        showlegend = False,
+                        title = dict(text='{}: First Pump Duration and Seek Adjustment'.format(float_id)),
+                        xaxis=dict(
+                            title='Dive',
+                            range=[-0.5, max(first.index.max(), 0) + 0.5],
+                            ),
+                        yaxis=dict(
+                            title='First pump [seconds]',
+                            # Sized to the dives in the default x range
+                            range=[0, 1.1 * np.nanmax(np.append(first[first.index >= 0].values, 1))],
+                            ),
+                        yaxis2=dict(
+                            title='Seek adjustment [seconds]',
+                            overlaying='y',
+                            side='right',
+                            zeroline=True,
+                            zerolinecolor='rgb(188,188,188)',
+                            ),
+                        bargap=0,
+                        hoverlabel=hoverlabel,
+                        hovermode='x',
+                        plot_bgcolor='white',
+                        margin=dict(l=10,r=10,b=20,t=50,pad=4)
+                        )
                     )
-                )
-            fig.add_trace(go.Bar(
-                x=first.index.values,
-                y=first.values,
-                hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    'first pump: %{y:.0f} s',
-                    '<extra></extra>',
-                    ]),
-                marker=dict(
-                    color='rgb(220,220,220)',
-                    line=dict(
-                        color='rgb(188, 188, 188)',
-                        width=0.5,
-                        ),
-                    ),
-                name='first pump',
-                ))
-            if len(dft) > 0:
-                fig.add_trace(go.Scatter(
-                    x=dft.index.values,
-                    y=dft.values,
-                    hovertemplate='DFT = %{y:.0f} s<extra></extra>',
-                    line=dict(
-                        color='rgb(0,0,255)',
-                        width=1.5,
-                        dash='dash',
-                        shape='hv',
-                        ),
-                    mode='lines',
-                    name='DFT (configured)',
-                    ))
-            # Drift first, so the descent adjustments (more often nonzero) are drawn on top
-            for sec, label, color in (('drift', 'drift seek adj.', 'rgb(255,0,0)'),
-                                      ('descent', 'descent seek adj.', 'rgb(0,0,0)')):
-                col = sec + '.seek_pump_adj_s'
-                if df_eng is None or col not in df_eng.columns:
-                    continue
-                adj = df_eng[['dive', col]].apply(pd.to_numeric, errors = 'coerce')
-                adj = adj[adj['dive'].notna()].groupby('dive')[col].last()
-                if adj.notna().sum() < 1:
-                    continue
-                fig.add_trace(go.Scatter(
-                    x=adj.index.values,
-                    y=adj.values,
-                    yaxis='y2',
-                    hovertemplate=label + ' = %{y:+.0f} s<extra></extra>',
-                    line=dict(
-                        color=color,
-                        width=1.2,
-                        ),
+                fig.add_trace(go.Bar(
+                    x=first.index.values,
+                    y=first.values,
+                    hovertemplate='<br>'.join([
+                        'Dive <b>%{x}</b>',
+                        'first pump: %{y:.0f} s',
+                        '<extra></extra>',
+                        ]),
                     marker=dict(
-                        color=color,
-                        size=3,
+                        color='rgb(220,220,220)',
+                        line=dict(
+                            color='rgb(188, 188, 188)',
+                            width=0.5,
+                            ),
                         ),
-                    mode='lines+markers',
-                    name=label,
+                    name='first pump',
                     ))
-            figs['pump_first_duration'] = fig
-            fig_size['pump_first_duration'] = 'figWideS'
+                if len(dft) > 0:
+                    fig.add_trace(go.Scatter(
+                        x=dft.index.values,
+                        y=dft.values,
+                        hovertemplate='DFT = %{y:.0f} s<extra></extra>',
+                        line=dict(
+                            color='rgb(0,0,255)',
+                            width=1.5,
+                            dash='dash',
+                            shape='hv',
+                            ),
+                        mode='lines',
+                        name='DFT (configured)',
+                        ))
+                # Drift first, so the descent adjustments (more often nonzero) are drawn on top
+                for sec, label, color in (('drift', 'drift seek adj.', 'rgb(255,0,0)'),
+                                          ('descent', 'descent seek adj.', 'rgb(0,0,0)')):
+                    col = sec + '.seek_pump_adj_s'
+                    if df_eng is None or col not in df_eng.columns:
+                        continue
+                    adj = df_eng[['dive', col]].apply(pd.to_numeric, errors = 'coerce')
+                    adj = adj[adj['dive'].notna()].groupby('dive')[col].last()
+                    if adj.notna().sum() < 1:
+                        continue
+                    fig.add_trace(go.Scatter(
+                        x=adj.index.values,
+                        y=adj.values,
+                        yaxis='y2',
+                        hovertemplate=label + ' = %{y:+.0f} s<extra></extra>',
+                        line=dict(
+                            color=color,
+                            width=1.2,
+                            ),
+                        marker=dict(
+                            color=color,
+                            size=3,
+                            ),
+                        mode='lines+markers',
+                        name=label,
+                        ))
+                figs['pump_first_duration'] = fig
+                fig_size['pump_first_duration'] = 'figWideS'
+
+        except:
+            errstr = 'Failed to generate first pump duration plot for float {}'.format(float_id)
+            if hasattr(args, 'halt') and args.halt:
+                raise Exception(errstr)
+            logger.error(errstr)
 
         # Write plot files
 

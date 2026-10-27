@@ -95,6 +95,12 @@ public:
             const uint8_t* d = CheckXMsgData(data, XMSG_TYPE_ID_UNKNOWN, 6);
             const size_t len = 0x0FFF & u16(d, 1);
 
+            // CheckXMsgData checks the data length, but the record ends at the size field, which
+            // need only be 4 or more: the header (ID, size, type, version) and terminator need 6.
+            if(len < 6)
+                EXC_THROW("Extended record message too short: size " + lexical_cast<string>(len)
+                          + ", but at least 6 bytes are required!");
+
             record_type_ = d[3];
             record_version_ = d[4];
             record_.assign(d + 5, d + len - 1);

@@ -14,7 +14,8 @@ Writes <output>/params.html (production: plots2/engineering/, so that the float 
 icons are one level up, see --plots-url) with one table per float type (ALAMO, including WIMS and MM2
 floats, and ALTO), one row per float with its firmware, the dive the parameters come from and a selection
 of important parameters (COLUMNS). Phase-dependent parameters (DTD0-2, PFD0-2, ...) are shown for
-the float's current mission phase MPS. Each value is coloured by how abnormal it is in its group
+each mission phase, marking the float's current phase and greying out phases its mission does not
+use (MissionPhases). Each value is coloured by how abnormal it is in its group
 (how rare it is, or for MEDIAN_COLUMNS how far from the median), and values that are out of
 range or inconsistent (drift or profile pressure deeper than the maximum depth) are marked as
 errors. Unset values (255, 65535, ...) are shown as unknown, without colour. The output
@@ -55,12 +56,16 @@ UNSET_VALUES = (255, 65535, 4294967295, 655.35, 65.535, 6553.5, 4294967.295, -32
 # Groups with fewer floats than this are not checked against their most common values
 MIN_GROUP_SIZE = 3
 
+# Mission phases of phase-dependent parameters
+PHASES = (0, 1, 2)
+
 # Table columns: (header group, header, units, parameter, format, description). A parameter
-# ending in '#' is phase-dependent: '#' is replaced by the float's current mission phase (MPS),
-# or removed for firmware without phases. Formats: 'd' integer, 'f' as listed, 'h' seconds shown
-# in hours, 'b' 0/1 shown as off/on.
+# ending in '#' is phase-dependent and gets one column per mission phase: '#' is replaced by the
+# phase (firmware without phases sends it without index, shown as phase 0). The 'MPS' column
+# shows the current phase (MissionPhases). Formats: 'd' integer, 'f' as listed, 'h' seconds
+# shown in hours, 'b' 0/1 shown as off/on.
 COLUMNS = [
-    ('Mission',     'Phase',     '',        'MPS',  'd', 'MPS: current mission phase'),
+    ('Mission',     'Phase',     '',        'MPS',  'd', 'Current mission phase: MPS, or the next phase MNS once the cycle count MPC has reached MNM'),
     ('Pressures',   'Drift',     'dBar',    'DTD#', 'd', 'DTD: target drift/park pressure'),
     ('Pressures',   'Profile',   'dBar',    'PFD#', 'd', 'PFD: target profile pressure (used when the fall mode PFM is on)'),
     ('Pressures',   'Fall',      '',        'PFM#', 'b', 'PFM: fall to the profile pressure after the drift phase'),
@@ -239,7 +244,7 @@ def ProcessJsonSummaryFile(fpath):
             logger.info('Ignoring float without mission parameters: {}'.format(float_id))
             return
 
-        float_map[float_id] = { 'summary': summary, 'mission': latest }
+        float_map[float_id] = { 'summary': summary, 'mission': latest, 'phases': MissionPhases(latest) }
 
     except:
 
@@ -257,21 +262,79 @@ def FirmwareString(fwver):
     return 'v{:d}.{:d}.{:d}'.format(int(fwver[2:4], 16), int(fwver[4:6], 16), int(fwver[6:8], 16))
 
 
-def ParameterValue(mission, param):
+def TableCells():
+    """Yield (column, phase) for each data column of the table: phase 0-2 for each mission phase
+    of a phase-dependent COLUMNS entry, None for the others."""
+    for col in COLUMNS:
+        if col[3].endswith('#'):
+            for phase in PHASES:
+                yield col, phase
+        else:
+            yield col, None
+
+
+def ParameterValue(mission, param, phase=None):
     """Return (name, value) of a COLUMNS parameter in a mission row, resolving the phase index '#'
-    and ALIASES; value is None if the float doesn't send the parameter."""
+    (firmware without phases sends the parameter without index, shown as phase 0) and ALIASES;
+    value is None if the float doesn't send the parameter."""
     names = [param]
     if param.endswith('#'):
-        # Phase 0 when the phase is unset or invalid, so that unset values still show
-        phase = mission.get('MPS')
-        phase = int(phase) if phase is not None and 0 <= phase <= 2 else 0
         base = param[:-1]
-        names = [base + '{:d}'.format(phase), base]
+        names = [base + '{:d}'.format(phase)] + ([base] if phase == 0 else [])
     names += list(ALIASES.get(param, ()))
     for name in names:
         if mission.get(name) is not None:
             return name, mission[name]
     return names[0], None
+
+
+def CellValue(x, param, phase):
+    """Return (name, value) of a table cell of float_map entry x: the current phase
+    (MissionPhases) for 'MPS' (the reported MPS if that is unset), otherwise ParameterValue."""
+    if param == 'MPS':
+        current = x['phases'][0]
+        return 'MPS', current if current is not None else x['mission'].get('MPS')
+    return ParameterValue(x['mission'], param, phase)
+
+
+def MissionPhases(mission):
+    """Return (current, used, description) of a float's mission phases.
+
+    current is the phase of the float's next dive: the reported phase MPS, or, once its cycle
+    count MPC has reached the phase's number of cycles MNM<MPS>, the next phase MNS<MPS> (repeated,
+    as a phase with MNM 0 is passed through at once). It is None if the phase is unset or invalid.
+    used is the set of phases the mission runs: those reached from phase 0 through MNS, except
+    phases with MNM 0, plus the current and reported phases. Firmware without phases (no MPS)
+    has current phase 0 and uses phase 0 only. description explains the current phase.
+    """
+    def get(key):
+        value = mission.get(key)
+        return None if value is None or value in UNSET_VALUES else int(value)
+
+    if mission.get('MPS') is None:
+        return 0, {0}, 'firmware without mission phases'
+    mps, mpc = get('MPS'), get('MPC')
+    if mps not in PHASES:
+        return None, set(PHASES), 'mission phase unset or invalid'
+
+    mnm = get('MNM{:d}'.format(mps))
+    description = 'reported phase MPS {:d}, cycle MPC {} of MNM{:d} {}'.format(
+        mps, '?' if mpc is None else mpc, mps, '?' if mnm is None else mnm)
+    current, count = mps, mpc
+    for _ in PHASES:
+        mnm_current, mns = get('MNM{:d}'.format(current)), get('MNS{:d}'.format(current))
+        if count is None or mnm_current is None or mns not in PHASES or count < mnm_current:
+            break
+        current, count = mns, 0
+    if mpc is not None and mnm is not None and mpc >= mnm:
+        description += '; phase done, next phase {:d} (MNS{:d})'.format(current, mps)
+
+    used, phase = set(), 0
+    while phase in PHASES and phase not in used:
+        used.add(phase)
+        phase = get('MNS{:d}'.format(phase))
+    used = {p for p in used if get('MNM{:d}'.format(p)) != 0} | {current, mps}
+    return current, used, description
 
 
 def FormatValue(value, fmt):
@@ -289,9 +352,9 @@ def FormatValue(value, fmt):
     return '{:g}'.format(value)
 
 
-def CheckValue(mission, param, value):
-    """Return an error text for an out-of-range or inconsistent value, or '' (also for unset
-    values, which are shown as unknown)."""
+def CheckValue(mission, param, value, phase=None):
+    """Return an error text for an out-of-range or inconsistent value (of the given phase, for
+    phase-dependent parameters), or '' (also for unset values, which are shown as unknown)."""
     if value is None or value in UNSET_VALUES:
         return ''
     base = param.rstrip('#')
@@ -305,7 +368,7 @@ def CheckValue(mission, param, value):
         if mds_ok and value > mds:
             return 'drift pressure deeper than the maximum pressure MDS ({:g} dBar)'.format(mds)
     if base == 'PFD' and mds_ok and value > mds:
-        _, pfm = ParameterValue(mission, 'PFM#')
+        _, pfm = ParameterValue(mission, 'PFM#', phase)
         if pfm == 1:
             return 'profile pressure deeper than the maximum pressure MDS ({:g} dBar)'.format(mds)
     return ''
@@ -419,6 +482,9 @@ def WriteMissionFile(dpath):
                     text('table.mtable td[style] small { color: #555; } ')
                     text('table.mtable tfoot td { color: #777; font-style: italic; } ')
                     text('table.mtable tfoot tr:first-child td { border-top: 1px solid #111; } ')
+                    text('table.mtable th.mphases { text-align: center; } ')
+                    text('.mcur { font-weight: bold; box-shadow: inset 0 -3px 0 #555; } ')
+                    text('.munused { color: #ccc; } ')
                     text('.merr { background-color: #b71c1c !important; color: #fff; font-weight: bold; } ')
                     text('.mkey { display: inline-block; padding: 1px 6px; } ')
                     text('.mscale { background: linear-gradient(to right, hsl(55, 100%, 100%), hsl(28, 100%, 83%), hsl(0, 100%, 65%)); padding: 1px 30px; } ')
@@ -445,7 +511,13 @@ def WriteMissionFile(dpath):
                             if args.days is not None:
                                 text(' that reported in the last {:g} days'.format(args.days))
                             text(', from the latest dive with mission parameters (floats need not send them every dive; floats that never sent any are left out). ')
-                            text('Phase-dependent parameters are those of the current mission phase. ')
+                            text('Phase-dependent parameters are shown for each mission phase (P0-P2): the float\'s ')
+                            with tag('span', klass='mkey mcur'):
+                                text('current phase')
+                            text(' (the next phase once the cycle count MPC has reached MNM), and ')
+                            with tag('span', klass='mkey munused'):
+                                text('phases its mission does not use')
+                            text(' (not reached from phase 0 through MNS, or with MNM 0), which are not compared. ')
                             text('Floats are compared within their group (groups of at least {:d} floats); the colour shows how abnormal a value is: '.format(MIN_GROUP_SIZE))
                             with tag('span', klass='mkey mscale'):
                                 text('higher: less common \u2192 rare')
@@ -461,26 +533,29 @@ def WriteMissionFile(dpath):
 
                             float_ids = sorted(groups[group], key=lambda i: float_map[i]['summary']['latest']['sbd'].dt_epoch, reverse=True)
 
-                            # Statistics of each column over the group's floats with set values:
-                            # (most common value or median, its count, number of values, counts),
-                            # and the typical range (TypicalRange)
+                            # Statistics of each column (parameter and phase) over the group's floats
+                            # with set values, in phases their mission uses: (most common value or
+                            # median, its count, number of values, counts), and the typical range
+                            # (TypicalRange)
 
                             modes, ranges = {}, {}
-                            for col in COLUMNS:
+                            for col, phase in TableCells():
                                 param = col[3]
                                 values = []
                                 for float_id in float_ids:
-                                    value = ParameterValue(float_map[float_id]['mission'], param)[1]
+                                    value = CellValue(float_map[float_id], param, phase)[1]
+                                    if phase is not None and phase not in float_map[float_id]['phases'][1]:
+                                        continue
                                     if value is not None and value not in UNSET_VALUES:
                                         values.append(value)
                                 if values:
                                     counts = collections.Counter(values)
                                     most_common = counts.most_common(1)[0]
                                     if param in MEDIAN_COLUMNS:
-                                        modes[param] = (statistics.median(values), None, len(values), counts)
+                                        modes[param, phase] = (statistics.median(values), None, len(values), counts)
                                     else:
-                                        modes[param] = (most_common[0], most_common[1], len(values), counts)
-                                    ranges[param] = TypicalRange(values)
+                                        modes[param, phase] = (most_common[0], most_common[1], len(values), counts)
+                                    ranges[param, phase] = TypicalRange(values)
 
                             check_group = len(float_ids) >= MIN_GROUP_SIZE
 
@@ -491,29 +566,36 @@ def WriteMissionFile(dpath):
 
                             with tag('table', klass='mtable stripe'):
 
-                                # Table header: column groups, then the columns
+                                # Table header: column groups, then the columns, then the phases of
+                                # phase-dependent columns
 
                                 with tag('thead'):
                                     with tag('tr'):
                                         with tag('th', colspan=6):
                                             text('Float')
-                                        for header_group, n in [(k, len(list(g))) for k, g in itertools.groupby(c[0] for c in COLUMNS)]:
+                                        for header_group, n in [(k, len(list(g))) for k, g in itertools.groupby(c[0] for c, _ in TableCells())]:
                                             with tag('th', colspan=n):
                                                 text(header_group)
                                     with tag('tr'):
                                         for header, units in (('ID', ''), ('Type', ''), ('Firmware', ''), ('Last Report', 'UTC'), ('Status', ''), ('Dive No.', '')):
-                                            with tag('th'):
+                                            with tag('th', rowspan=2):
                                                 text(header)
                                                 if units:
                                                     doc.stag('br')
                                                     with tag('small'):
                                                         text('[' + units + ']')
                                         for _, header, units, param, _, description in COLUMNS:
-                                            with tag('th', title=description):
+                                            span = ('colspan', len(PHASES)) if param.endswith('#') else ('rowspan', 2)
+                                            with tag('th', span, title=description, klass='mphases' if param.endswith('#') else ''):
                                                 text(header)
                                                 doc.stag('br')
                                                 with tag('small'):
                                                     text(param.replace('#', '') + (' [' + units + ']' if units else ''))
+                                    with tag('tr'):
+                                        for col, phase in TableCells():
+                                            if phase is not None:
+                                                with tag('th', title='{}, mission phase {:d}'.format(col[5], phase)):
+                                                    text('P{:d}'.format(phase))
 
                                 # Table body
 
@@ -577,25 +659,41 @@ def WriteMissionFile(dpath):
                                                         with tag('small'):
                                                             text('of {}'.format(summary['latest']['cycle']))
 
-                                                for _, _, _, param, fmt, description in COLUMNS:
+                                                current, used, phase_description = x['phases']
+                                                for col, phase in TableCells():
 
-                                                    name, value = ParameterValue(mission, param)
-                                                    error = CheckValue(mission, param, value)
-                                                    klass, style, title = '', '', name
+                                                    param, fmt = col[3], col[4]
+                                                    name, value = CellValue(x, param, phase)
+                                                    stat = modes.get((param, phase))
+                                                    klasses, style, title = [], '', name
                                                     if value is not None:
                                                         title += ' = {:g}'.format(value)
+                                                    if param == 'MPS':
+                                                        title += ': ' + phase_description
+                                                    if phase is not None and phase == current:
+                                                        klasses.append('mcur')
+                                                        title += ' (current phase)'
+                                                    error = CheckValue(mission, param, value, phase)
                                                     if value in UNSET_VALUES:
                                                         title += ': unknown (unset; the firmware sends {:g} before a mission is loaded)'.format(value)
+                                                    elif phase is not None and phase not in used:
+                                                        klasses.append('munused')
+                                                        title += ': phase {:d} not used by the mission'.format(phase)
                                                     elif error:
-                                                        klass = 'merr'
+                                                        klasses.append('merr')
                                                         title += ': ' + error
-                                                    elif check_group and value is not None and param in modes:
-                                                        score, description = Abnormality(param, value, modes[param])
+                                                    elif check_group and value is not None and stat is not None:
+                                                        score, description = Abnormality(param, value, stat)
                                                         title += ': ' + description
                                                         if score >= MIN_SCORE:
-                                                            style = ScoreStyle(score, value < modes[param][0])
-                                                    with tag('td', klass=klass, style=style, title=title):
+                                                            style = ScoreStyle(score, value < stat[0])
+                                                    with tag('td', klass=' '.join(klasses), style=style, title=title):
                                                         text(FormatValue(value, fmt))
+                                                        if param == 'MPS' and value is not None and value not in UNSET_VALUES and mission.get('MPC') is not None:
+                                                            doc.stag('br')
+                                                            with tag('small'):
+                                                                mnm = mission.get('MNM{:d}'.format(int(mission['MPS'])))
+                                                                text('{:.0f}/{:.0f}'.format(mission['MPC'], mnm) if mnm is not None else '')
 
                                         except:
                                             errstr = 'Failed to create mission row for float {}'.format(float_id)
@@ -610,10 +708,11 @@ def WriteMissionFile(dpath):
                                     with tag('tr'):
                                         with tag('td', colspan=6, klass='mfoot'):
                                             text('Most common')
-                                        for _, _, _, param, fmt, _ in COLUMNS:
+                                        for col, phase in TableCells():
+                                            param, fmt = col[3], col[4]
                                             with tag('td'):
-                                                text(FormatValue(modes[param][0], fmt) if param in modes else '-')
-                                                if param in MEDIAN_COLUMNS and param in modes:
+                                                text(FormatValue(modes[param, phase][0], fmt) if (param, phase) in modes else '-')
+                                                if param in MEDIAN_COLUMNS and (param, phase) in modes:
                                                     doc.stag('br')
                                                     with tag('small'):
                                                         text('median')
@@ -623,14 +722,15 @@ def WriteMissionFile(dpath):
                                             doc.stag('br')
                                             with tag('small'):
                                                 text('{:.0f}th-{:.0f}th percentile'.format(TYPICAL_RANGE_PERCENTILE, 100 - TYPICAL_RANGE_PERCENTILE))
-                                        for _, _, _, param, fmt, _ in COLUMNS:
+                                        for col, phase in TableCells():
+                                            param, fmt = col[3], col[4]
                                             with tag('td'):
-                                                if param not in ranges:
+                                                if (param, phase) not in ranges:
                                                     text('-')
-                                                elif ranges[param][0] == ranges[param][1]:
-                                                    text(FormatValue(ranges[param][0], fmt))
+                                                elif ranges[param, phase][0] == ranges[param, phase][1]:
+                                                    text(FormatValue(ranges[param, phase][0], fmt))
                                                 else:
-                                                    text(FormatValue(ranges[param][0], fmt) + ' – ' + FormatValue(ranges[param][1], fmt))
+                                                    text(FormatValue(ranges[param, phase][0], fmt) + ' – ' + FormatValue(ranges[param, phase][1], fmt))
 
                         # Create footer
 

@@ -183,11 +183,16 @@ def EpochOrNone(dt):
 
 
 def BitStartEpoch(bit):
-    """Return the start time of a BIT in epoch seconds (BIT formats 9-11), or None."""
+    """Return the start time of a BIT in epoch seconds (BIT formats 9-11), or None, also when the
+    time cannot be parsed (so one bad BIT does not drop the float from the page)."""
     dt = bit.get('bit.dt_start') if bit else None
-    if not IsSet(dt) or dt.startswith('0000'):
+    if not isinstance(dt, str) or not IsSet(dt) or dt.startswith('0000'):
         return None
-    return datetime.datetime.strptime(dt[0:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=datetime.UTC).timestamp()
+    try:
+        return datetime.datetime.strptime(dt[0:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=datetime.UTC).timestamp()
+    except ValueError:
+        logger.debug('Unparseable BIT start time: {!r}'.format(dt))
+        return None
 
 
 def BitOrder(bit):
