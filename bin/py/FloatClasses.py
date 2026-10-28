@@ -1777,6 +1777,14 @@ class CompositePosition(Position):
     time, lat, lon and cep_km hold the combined result (see compute()).
     """
 
+    # GPS-calibrated error term (km) added to the composite CEP. The SBD positions of a
+    # transmission session are not independent (they often repeat, and each float has an offset
+    # that changes from session to session), so sqrt(1 / sum(CEP^-2)) alone was overconfident:
+    # against interpolated GPS fixes (40,518 composites from 234 floats, 2026-10-27) the error was
+    # <= it in only 25% of composites, and about 2 km whatever the number of positions. With
+    # this term the error is <= cep_km in 50% of composites, as a CEP should be.
+    BIAS_CEP_KM = 1.55
+
     def __init__(self, pos: Position = None, compute = True):
         """Initialize, adding pos (and computing the composite if compute) if given.
 
@@ -1827,8 +1835,9 @@ class CompositePosition(Position):
         Each valid position (see Position.is_valid) is converted to a unit vector on the
         sphere; the weighted mean vector is converted back to lat/lon (degrees, rounded to 4
         decimals), so the average is correct across the dateline. The time is the weighted mean
-        time (whole seconds since epoch) and cep_km = sqrt(1 / sum(1 / cep_km^2)), rounded to
-        1 m, as for independent estimates. num_pos is set to the number of positions used.
+        time (whole seconds since epoch) and cep_km = sqrt(1 / sum(1 / cep_km^2) + BIAS_CEP_KM^2),
+        rounded to 1 m: the CEP of independent estimates plus the GPS-calibrated error term.
+        num_pos is set to the number of positions used.
 
         Raises:
             Exception: 'Failed to compute composite position.' if there are no valid positions
@@ -1879,7 +1888,7 @@ class CompositePosition(Position):
                 
             # get weighted averages
                         
-            self.cep_km = round(math.sqrt(1/cep_sum), 3)
+            self.cep_km = round(math.sqrt(1/cep_sum + self.BIAS_CEP_KM**2), 3)
             
             self.dt_from_epoch(round(dt_epoch_sum/weight_sum))
             

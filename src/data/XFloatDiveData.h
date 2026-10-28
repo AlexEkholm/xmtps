@@ -699,8 +699,6 @@ class XFloatDiveData:
 
     shared_ptr<x::XCompositeFall> GenerateCompositeFallTimeSeriesData() const;
 
-    shared_ptr<x::XCompositeIridiumPosition> GenerateCompositeIridiumPosition() const;
-
     shared_ptr<x::XCompositePump> GenerateCompositePumpTimeSeriesData() const;
 
     shared_ptr<x::XCompositeRise> GenerateCompositeRiseTimeSeriesData() const;

@@ -36,7 +36,6 @@
 #include "xmsg/XCompositeDrift.h"
 #include "xmsg/XCompositeFall.h"
 #include "xmsg/XCompositeHiResProfile.h"
-#include "xmsg/XCompositeIridiumPosition.h"
 #include "xmsg/XCompositeProfile.h"
 #include "xmsg/XCompositePump.h"
 #include "xmsg/XCompositeRise.h"

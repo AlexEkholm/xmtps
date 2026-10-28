@@ -8,8 +8,19 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 Decoder daemon:
 
 - An extended record message (0xFF) with a size field under 6 bytes is rejected as too short.
+- The composite Iridium position (the listing's "Iridium Position" section, `IRI` line, and
+  `XCompositeIridiumPosition`) is removed. Its listed uncertainty was not calibrated (against GPS
+  the error was within its `stdError` in 7% of dives); the Python tools compute their own,
+  GPS-calibrated composite from the `SBD` lines. `xmtps-list2json.py` still skips `IRI` lines in
+  older listings.
 
 Python tools:
+
+- Composite Iridium positions: `cep_km` adds a GPS-calibrated error term,
+  `sqrt(1 / sum(CEP^-2) + 1.55^2)` (`CompositePosition.BIAS_CEP_KM`). Without it the CEP was
+  overconfident: against GPS the error (about 2 km whatever the number of positions) was within
+  it in 25% of composites instead of 50%. Composites fill the profile position of a dive without
+  a GPS fix up to a CEP of 2 km (`CPOS_MAX_CEP_KM`, was 1 km), about half of those dives.
 
 - Mission parameters page: phase-dependent parameters (drift and profile pressure, fall mode,
   drift duration, first descent pump) are shown per mission phase (P0–P2), with per-phase

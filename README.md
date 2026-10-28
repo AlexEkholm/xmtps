@@ -383,7 +383,6 @@ so far. The Python tools (`xmtps-list2json.py`) parse these files.
 | `LIS` | Listing details | Serial number, dive, DAC ID, IMEI, WMO ID. |
 | `SBD` | SBD messages | One line per message: size, IMEI, MOMSN, MTMSN, packet ID, session time and position, CEP. |
 | `GPS` | GPS | GPS fixes: time, position, time to fix, satellites, SNR, HDOP, status. |
-| `IRI` | Iridium position | Position estimated from the Iridium sessions: weighted time and position, variance, error. |
 | `A` | Argo data | Mission phase, pressures, durations, cycle timing and sensor gains and offsets (`midx` 0–5). |
 | `PRC` | Pressure correction | Surface pressure offset (`presOffset`), whether it is valid, and the dives and samples it comes from, then the dive's uncorrected surface pressure min (outliers excluded), mean, max and standard deviation; a note above it says whether it was subtracted from this listing's pressures and how to recover the raw ones (see [Surface pressure offset correction](#surface-pressure-offset-correction)). |
 | `F` / `f` | Fall time series | Descent: time, pressure and phase code (name after `#`); listings before build 3321 also have temperature and salinity columns before the phase code. |
@@ -749,8 +748,8 @@ Read one with `pandas.read_json(path, orient="split")`.
 | `_pump` | pump action | `pres`, `time`, `volt`, `curr`, `curr_adj`, `vac`, `power`, `energy` |
 | `_gps` | GPS fix | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `idx`, `ttf_sec`, `nsat`, `snr_min`, `snr_avg`, `snr_max`, `hdop` |
 | `_sbd` | SBD message | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `size_b`, `momsn`, `mtmsn`, `pid` |
-| `_iridium_position` | dive | Iridium position composited from the dive's messages: time (with its range `dt_min_*`/`dt_max_*`), `lat`, `lon`, `cep_km`, `num_pos` |
-| `_profile_position` | dive | Position assigned to the profile: time, `lat`, `lon`, `cep_km`, `src` (`gps` or `iridium`) |
+| `_iridium_position` | dive | Iridium position composited from the dive's messages (CEP⁻²-weighted): time (with its range `dt_min_*`/`dt_max_*`), `lat`, `lon`, `cep_km` (GPS-calibrated: `sqrt(1 / sum(CEP^-2) + 1.55^2)`), `num_pos` |
+| `_profile_position` | dive | Position assigned to the profile: time, `lat`, `lon`, `cep_km`, `src` (`gps`; `iridium`, the composite, for a dive without a GPS fix when its `cep_km` is at most 2 km; or `none`) |
 | `_displacement_surface`, `_displacement_submerged` | dive | Displacement between two positions: `azi` (°), `dist_m`, `duration_s`, `speed_mps`, and `pos1_*`/`pos2_*` |
 | `_cycle_timing` | dive | Start time and duration of descent, drift, ascent and surface, and `total_duration_s` |
 | `_wave` | dive | `swh`, `mwd`, `declination` (°, east positive; NaN if not applied), `direction_ref` (`true` or `magnetic`), `period_peak`, `period_avg`, `period_zero` |

@@ -533,33 +533,6 @@ shared_ptr<x::XCompositeFall> XFloatDiveData::GenerateCompositeFallTimeSeriesDat
   return composite_fall;
 }
 
-/** Generate a composite Iridium position for this dive.
- *
- *  @throw          util::log::MessageException if an error occurs while generating the composite
- *                  data.
- *
- *  @return         The composite Iridium position for this dive.
- */
-shared_ptr<x::XCompositeIridiumPosition> XFloatDiveData::GenerateCompositeIridiumPosition() const {
-
-  using namespace x;
-
-  shared_ptr<x::XCompositeIridiumPosition> composite_iridium_position;
-
-  try {
-
-    // Get an exclusive lock.
-    lock_guard<recursive_mutex> guard(mutex_);
-
-    ldbg() << "Generating composite Iridium position...";
-    composite_iridium_position = make_shared<XCompositeIridiumPosition>();
-    composite_iridium_position->AppendAllElements< XMSG_MAX_MAIL>(mail_messages_);
-    composite_iridium_position->ComputeAverageIrdiumPosition();
-
-  }CATCH_BLOCK("Failed to generate composite Iridium position from dive data!")
-
-  return composite_iridium_position;
-}
 
 /** Get the composite pump time-series data for this dive.
  *

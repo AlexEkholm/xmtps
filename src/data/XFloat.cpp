@@ -2890,16 +2890,6 @@ string XFloatDiveData::GenerateListingString() const {
               });
         }
 
-        if(!mail_messages_.empty()) {
-
-          // Print composite Iridium position.
-          XMSG_SECTION("Iridium Position");
-          os << GenerateCompositeIridiumPosition()->GenerateListingString(
-                 parent_instrument_->id_instrument(),
-                 id_dive())
-             << endl;
-        }
-
         os << endl;
 
       } CATCH_BLOCK("Failed to generate position data listing entry from dive data object!")

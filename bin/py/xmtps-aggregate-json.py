@@ -80,7 +80,9 @@ Static configuration:
 """
 
 CPOS_SPAN_SECONDS = 3600
-CPOS_MAX_CEP_KM = 1.0
+# Largest (GPS-calibrated) composite Iridium CEP used for a dive's profile position when the dive
+# has no GPS fix; 2 km gives a position to about half of the deployed dives without one
+CPOS_MAX_CEP_KM = 2.0
 
 JSON_VERSION = "0.11"
 
