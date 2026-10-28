@@ -379,6 +379,14 @@ def ParseValue(s):
         return float(s)
     return s
 
+WAVE_SPECTRA_FILL = -999.99999    # XWaveSpectralSample::SPECTRA_FILL_VALUE
+
+def ParseWaveSpectrum(s):
+    """Convert a wvs spectral value, in g^2/Hz, to a float, or NaN for the fill value of a bin that
+    was not received."""
+    v = float(s)
+    return np.nan if v <= WAVE_SPECTRA_FILL + 0.5e-5 else v
+
 def HeaderFields(names_line, units_line):
     """Return the (name, unit) pairs for the columns of an engineering header after 'SN dive midx'.
 
@@ -447,6 +455,54 @@ def ParseEngineeringLine(engineering, line, header, units_line, group):
             key = name + ('_' + unit if name in extra and unit else '')
             extra[key] = ParseValue(value)
 
+def PreviousValidFix(fpath_list, dive_num):
+    """Return the most recent valid GPS fix of the float before dive dive_num, or None.
+
+    Searches the listing files of earlier dives of the same float (lisNNNN-DDDD.txt, in the
+    directory of fpath_list), from the most recent dive back to dive 0, and returns the latest
+    valid fix of the first one that has a valid fix. Dives with negative numbers, which are
+    tests before deployment, are not searched. Used for the magnetic declination of wave spectra
+    from a dive without a valid fix.
+    """
+    dpath = os.path.dirname(fpath_list)
+    m = re.match(r'(lis\d+-)', os.path.basename(fpath_list))
+    if m is None:
+        return None
+    dives = []
+    for fname in os.listdir(dpath):
+        mm = re.match(re.escape(m.group(1)) + r'(-?\d+)\.txt$', fname)
+        if mm and 0 <= int(mm.group(1)) < dive_num:     # negative dives: tests before deployment
+            dives.append((int(mm.group(1)), fname))
+    for _, fname in sorted(dives, reverse = True):
+        fixes = []
+        try:
+            with open(os.path.join(dpath, fname), 'r', errors = 'replace') as f:
+                for line in f:
+                    if not re.match('^GPS ', line):
+                        continue
+                    x = line.split()
+                    try:
+                        gps = Gps()
+                        gps.idx = int(x[3])
+                        gps.dt_from_iso8601_str(x[4])
+                        gps.pos_from_iso6709_str(x[5])
+                        gps.ttf_sec = int(x[6])
+                        gps.nsat = int(x[7])
+                        gps.snr_min = int(x[8])
+                        gps.snr_avg = int(x[9])
+                        gps.snr_max = int(x[10])
+                        gps.hdop = float(x[11])
+                        gps.EstimateUncertainty()
+                    except (IndexError, ValueError, AttributeError):
+                        continue
+                    if gps.is_valid():
+                        fixes.append(gps)
+        except OSError:
+            continue
+        if fixes:
+            return max(fixes, key = lambda g: g.dt_epoch)
+    return None
+
 def ProcessListingFile(fpath_list):
     """Parse one listing file into a Dive object and write its JSON file.
 
@@ -466,7 +522,7 @@ def ProcessListingFile(fpath_list):
         SFC, sfc     surface time series (pres, temp, saln)
         PRC          surface pressure offset correction (offset, valid flag, samples, dives)
         pmp         pump records (pres, time, voltage, current, vacuum)
-        WVS, wvs     wave spectra (wvm is ignored)
+        WVS, wvs     wave spectra; fill values of bins not received become NaN (wvm is ignored)
 
     Drift and profile samples get density and sigma0 from RhoLUT; temperatures and salinities at
     or below the lookup table minimum become NaN. A, PMP, PRD/prd, IRI, SFD, SHX/shx, VLV/vlv and
@@ -1059,12 +1115,13 @@ def ProcessListingFile(fpath_list):
                     idx = int(x[3])
                     
                     # dive_data.wave.freq[idx]   = float(x[4])
-                    dive_data.wave.Szz_g[idx]  = float(x[5])# if float(x[5]) < 500 else np.nan
-                    dive_data.wave.Syy_g[idx]  = float(x[6])# if float(x[6]) < 500 else np.nan
-                    dive_data.wave.Sxx_g[idx]  = float(x[7])# if float(x[7]) < 500 else np.nan
-                    dive_data.wave.Cxy_g[idx]  = float(x[8])# if (float(x[8]) < 500) and (float(x[8]) > -500)  else np.nan
-                    dive_data.wave.Qzx_g[idx]  = float(x[9])# if (float(x[9]) < 500) and (float(x[9]) > -500) else np.nan
-                    dive_data.wave.Qzy_g[idx]  = float(x[10])# if (float(x[10]) < 500) and (float(x[10]) > -500) else np.nan
+                    # Bins that were not received hold the fill value -999.99999; they become NaN.
+                    dive_data.wave.Szz_g[idx]  = ParseWaveSpectrum(x[5])
+                    dive_data.wave.Syy_g[idx]  = ParseWaveSpectrum(x[6])
+                    dive_data.wave.Sxx_g[idx]  = ParseWaveSpectrum(x[7])
+                    dive_data.wave.Cxy_g[idx]  = ParseWaveSpectrum(x[8])
+                    dive_data.wave.Qzx_g[idx]  = ParseWaveSpectrum(x[9])
+                    dive_data.wave.Qzy_g[idx]  = ParseWaveSpectrum(x[10])
 
                     del x
                 
@@ -1106,10 +1163,16 @@ def ProcessListingFile(fpath_list):
                 else:
                     logger.error(errstr)
         
-        # Post process                     
-        
-        try: 
-            dive_data.PostProcess()
+        # Post process
+
+        try:
+            fallback_fix = None
+            if dive_data.wave is not None and dive_data.SurfaceFix() is None:
+                fallback_fix = PreviousValidFix(fpath_list, dive_data.dive_num)
+                if fallback_fix is not None:
+                    logger.debug('No valid fix; using the fix of {} for the magnetic declination'.format(
+                        fallback_fix.dt_str))
+            dive_data.PostProcess(fallback_fix = fallback_fix)
         
         except: 
             

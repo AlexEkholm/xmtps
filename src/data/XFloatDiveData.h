@@ -709,6 +709,8 @@ class XFloatDiveData:
 
     vector<int> GenerateOrderedMomsnList() const;
 
+    void ResolveWaveBinSpacing();
+
     /** Update the derived surface pressure fields from the surface time-series data.
      *
      *  Computes the surface pressure maximum, mean, minimum, number of samples and variance from

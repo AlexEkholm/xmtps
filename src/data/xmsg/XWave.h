@@ -169,10 +169,15 @@ private:
      */
     uint16_t sample_rate_div_;
 
-    /** The sample rate of the ocean surface wave measurements, in Hz.
+    /** The sample rate that sets the spectral bin spacing, in Hz.
      *
+     *  This is the effective sample rate of the ocean surface wave measurements, or twice it for
+     *  spectra that hold only every other bin (see @ref set_every_other_bin()).
      */
     float sample_rate_effective_;
+
+    /** Whether the spectra hold only every other bin (see @ref set_every_other_bin()). */
+    bool every_other_bin_;
 
     /** The power-of-two segment length for spectral data.
      *
@@ -213,6 +218,7 @@ public:
                     sample_rate_base_(0),
                     sample_rate_div_(0),
                     sample_rate_effective_(0),
+                    every_other_bin_(false),
                     segment_len_(0),
                     version_(0xFF),
                     wave_data_spectral_() {
@@ -230,24 +236,80 @@ public:
 
     const string GenerateListingString() const;
 
-    unsigned int effective_ssf() const {
-      return ( assf_ * gain_accel_q3_ * gain_accel_q3_ ) >> 6;
+    /** Get the effective spectral sensitivity scale factor, G_s, in LSB/(g^2/Hz).
+     *
+     *  G_s = 2^(30 - 2 log2(fsra)) * G_sa^2 * U * f_e^2 / (2 * slen^2), from the WIMS user manual
+     *  (rev 3.15, "Scale Sensitivity"). assf_ holds 2^(15 - 2 log2(fsra)). G_sa is the
+     *  acceleration software gain, or 1 when it is 0. U is the mean square of the firmware's Tukey
+     *  window, 1 - (5 L / 4 + 1) / slen, where L = round((slen - 1) * twalp / 256) is the taper
+     *  length, for wav.twalp = 64, which the message header does not include (U = 0.68359 for
+     *  slen = 256). f_e is the true effective sample rate, not the doubled rate used for the bin
+     *  spacing of every-other-bin spectra. For fsra 4, gaina 32 and slen 256, G_s is 35000 at
+     *  f_e = 2.5 Hz and 140000 at f_e = 5 Hz.
+     *
+     *  @note           Up to 2026-10-27, this was 2^(15 - 2 log2(fsra)) * G_sa^2, the formula of
+     *                  manual revisions up to 3.14, which ignores f_e, slen and the window.
+     */
+    double effective_ssf() const {
+      static const unsigned int twalp = 64;
+      const unsigned int n = segment_len();
+      if(n < 2) return 0.0;                                            // no spectral bins
+      const unsigned int taper = ((n - 1) * twalp + 128) / 256;        // L, halves rounded up
+      const double u = taper ? 1.0 - (1.25 * taper + 1.0) / n : 1.0;
+      const double gsa = gain_accel_q3_ ? gain_accel_q3_ / 8.0 : 1.0;
+      const double fe = sample_rate_true();
+      return assf_ * 32768.0 * gsa * gsa * u * fe * fe / (2.0 * n * n);
     }
 
-    /** Fix MRV's 9000th data encoding fuckup.
+    /** Get the true effective sample rate, srate / (srdiv + 1), in Hz. */
+    double sample_rate_true() const {
+      return (double)sample_rate_base_ / (sample_rate_div_ + 1);
+    }
+
+    /** Set whether the spectra hold only every other bin (MRV's 9000th data encoding fuckup).
      *
-     *  For select firmware versions, only every other spectral value is returned. The seconds half
-     *  of the spectra is all zeros. Here we fix this by doubling the effective sample rate
+     *  For select firmware versions, only every other spectral value is returned. The second half
+     *  of the spectra is all zeros. These are fixed by doubling the rate that sets the bin
+     *  spacing; the scale factor still uses the true effective sample rate. Calling this again
+     *  with the same value has no effect.
      *
+     *  @param[in]  every_other_bin Whether the spectra hold only every other bin.
      */
-    void FixFuckup9000() {
-      sample_rate_effective_ = 2.0 * (float)sample_rate_base_ / (sample_rate_div_ + 1);
+    void set_every_other_bin(bool every_other_bin) {
+      every_other_bin_ = every_other_bin;
+      sample_rate_effective_ = (every_other_bin_ ? 2.0 : 1.0) * sample_rate_true();
 
-      for(unsigned int i = 0; i < (unsigned int)(segment_len() >> 1); ++i) {
+      for(unsigned int i = 0; i < wave_data_spectral_.size(); ++i) {
 
-        wave_data_spectral_.at(i).freq_
-            = sample_rate_effective_*i/segment_len();     // bin 0 is the DC bin
+        if(wave_data_spectral_[i].freq_ >= 0)             // bins not received keep their fill value
+          wave_data_spectral_[i].freq_
+              = sample_rate_effective_*i/segment_len();   // bin 0 is the DC bin
       }
+    }
+
+    /** Check whether the spectra look like they hold only every other bin.
+     *
+     *  For floats whose firmware version is not known, the every-other-bin encoding is recognized
+     *  from the data: every bin in the upper half of the spectra has been received and is zero in
+     *  all six components, and some bin in the lower half has a nonzero vertical auto-spectrum.
+     *  Spectra that are truncated to a range of frequencies leave the upper bins unreceived, not
+     *  zero, so they do not match.
+     *
+     *  @return     Whether the spectra look like they hold only every other bin.
+     */
+    bool LooksLikeEveryOtherBin() const {
+      const unsigned int n = wave_data_spectral_.size();
+      if(n < 4) return false;
+
+      for(unsigned int i = n / 2; i < n; ++i) {
+        const XWaveSpectralSample& s = wave_data_spectral_[i];
+        if(s.c_xx_ || s.c_xy_ || s.c_yy_ || s.c_zz_ || s.q_zx_ || s.q_zy_) return false;
+      }
+      for(unsigned int i = 1; i < n / 2; ++i) {
+        const int32_t c = wave_data_spectral_[i].c_zz_;
+        if(c != 0 && c != INT32_MIN) return true;
+      }
+      return false;
     }
 
 private:

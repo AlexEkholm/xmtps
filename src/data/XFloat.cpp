@@ -1997,6 +1997,48 @@ int XFloatDiveData::DecodeMailMessageData(shared_ptr<XFloatMailMessage>& msg) {
   return 0;
 }
 
+/** Set whether this dive's wave spectra hold only every other bin.
+ *
+ *  Some float firmware versions send only every other spectral bin (see
+ *  x::XWave::set_every_other_bin()). The firmware version comes from this dive's mission
+ *  configuration message or, for dives without one, the float's last one. The float's firmware
+ *  version is not kept across restarts, so when neither gives it, the encoding is recognized from
+ *  the spectra themselves (see x::XWave::LooksLikeEveryOtherBin()). This is called after each
+ *  wave and mission configuration message, so the result does not depend on their order.
+ */
+void XFloatDiveData::ResolveWaveBinSpacing() {
+
+  if(!HasWaveData())
+    return;
+
+  uint32_t fw_version = xmsg_mission_cfg_.fw_version();
+  shared_ptr<XFloat> xfloat;
+  if(fw_version == XMSG_BAD_U32 && (xfloat = parent_instrument()))
+    fw_version = xfloat->fw_version();
+
+  bool every_other_bin;
+  switch(fw_version) {
+    case 0x0A060231: // ALAMO Software version 10.6.2.31 (WIMS)
+    case 0x0A080031: // ALAMO Software version 10.8.0.31 (WIMS)
+    case 0x0A090131:
+    case 0x0A0A0031: // ALAMO Software version 10.10.0.31 (WIMS)
+      every_other_bin = true;
+      break;
+
+    case XMSG_BAD_U32:
+      every_other_bin = xmsg_wave_field_->LooksLikeEveryOtherBin();
+      dbg1() << "Firmware version unknown; wave spectra "
+             << (every_other_bin ? "look" : "do not look") << " like every other bin.";
+      break;
+
+    default:
+      every_other_bin = false;
+      break;
+  }
+
+  xmsg_wave_field_->set_every_other_bin(every_other_bin);
+}
+
 /** Decode an X-Message from the binary message data.
  *
  *  @exception  None. Never throws.
@@ -2468,19 +2510,8 @@ void XFloatDiveData::DecodeXMsgData(
                 else
                   xmsg_wave_field_->DecodeXMsgData(xdata);
 
-                // TODO Apply correction for dumb stupid encoded data
-                switch(parent_instrument()->fw_version()) {
-                  case 0x0A060231: // ALAMO Software version 10.6.2.31 (WIMS)
-                  case 0x0A080031: // ALAMO Software version 10.8.0.31 (WIMS)
-                  case 0x0A090131:
-                  case 0x0A0A0031: // ALAMO Software version 10.10.0.31 (WIMS)
-                    xmsg_wave_field_->FixFuckup9000();
-                    break;
-
-                  default:
-                    /* Do nothing. */
-                    break;
-                }
+                // Correct the bin spacing of firmware that sends every other bin.
+                ResolveWaveBinSpacing();
 
                 set_listing_file_updated(false);
 
@@ -2527,6 +2558,9 @@ void XFloatDiveData::DecodeXMsgData(
                   // Update firmware version.
                   parent_instrument()->set_fw_version(xmsg_mission_cfg_.fw_version());
                 }
+
+                // The firmware version sets the bin spacing of wave spectra decoded before it.
+                ResolveWaveBinSpacing();
 
                 // Remember the sensor type for dives without a mission configuration message.
                 if(xmsg_mission_cfg_.sensor_type_is_known())

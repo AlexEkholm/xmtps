@@ -572,8 +572,12 @@ class Dive:
                 return g
         return fixes[0] if fixes else None
 
-    def PostProcess(self):
+    def PostProcess(self, fallback_fix: 'Gps' = None):
         """Post-process every part of the dive and set the drift sample times, before pickling.
+
+        The wave spectra are post-processed with the position of SurfaceFix(), for the magnetic
+        declination; if the dive has no valid fix, fallback_fix (the most recent valid fix of
+        the float, from an earlier dive) is used instead, if given.
 
         Drift sample times are the measured ones if every sample has one (see
         Drift.HasMeasuredDatetimes); otherwise, if there are ascent and descent samples, they are
@@ -588,6 +592,8 @@ class Dive:
         self.surface.PostProcess()
         if self.wave is not None:
             fix = self.SurfaceFix()
+            if fix is None and fallback_fix is not None and fallback_fix.is_valid():
+                fix = fallback_fix
             if fix is None:
                 self.wave.PostProcess()
             else:
@@ -1322,8 +1328,8 @@ class Wave:
         2. If interpolate, interpolate the acceleration spectra linearly onto 0.030 to 1.250 Hz
            in 0.005 Hz steps (this becomes freq); values outside the received band are 0.
         3. For the vertical spectrum only, zero values below 0.0005 g^2/Hz and multiply by
-           1 + y(f), a nonlinear response correction with coefficients a, b, c, d: y is -1
-           below f = b, rises as (a+1) sin^2 to a at b+c, then falls as a cos^2 to 0 at b+c+d.
+           the low-frequency response correction, a cosine taper with coefficients f0, w:
+           0 below f0, (1 - cos(pi (f - f0) / w)) / 2 from f0 to f0 + w, and 1 above.
         4. Convert to displacement spectra in m^2/Hz by multiplying by g^2 / (2 pi f)^4 and
            compute the deep-water wavenumber (2 pi f)^2 / g in rad/m.
         5. Smooth the displacement spectra with a rolling_average-point RollingAverage.
@@ -1340,7 +1346,8 @@ class Wave:
            give the direction the waves propagate toward (not from).
         8. If m0 > 0: swh = 4 sqrt(m0) (m), period_peak = 1 / f_peak, period_avg = m0 / m1 and
            period_zero = sqrt(m0 / m2) (s), and mwd is the mean of the theta1 directions
-           weighted by sqrt(Szz) over freq_min to 0.6 Hz. If the magnetic declination at
+           weighted by sqrt(Szz) over freq_min to 0.6 Hz (bins without a direction, where r1 is
+           NaN, get no weight). If the magnetic declination at
            lat, lon and dt_epoch is available (IGRF, ppigrf), it is added to the directions,
            which are then referenced to true north (direction_ref 'true'); otherwise they stay
            referenced to magnetic north. Angles are converted to whole degrees in [0, 360). If m0 is not positive, the spectra, coefficients, moments and
@@ -1373,11 +1380,10 @@ class Wave:
         F_INTER_STEP = 0.005 # Hz
         F_INTER_MAX  = 1.250 # Hz
         
-        # low-frequency response correction coefficients
-
-        # Fit against NDBC 41047 (Hurricane Erin, WIMS floats 9302, 9303, 9308 and 9309) with
-        # bin 0 as the DC bin; see the WIMS user manual.
-        ccoef = [0.09681, 0.05256, 0.01988, 0.03908]
+        # Low-frequency response correction (WIMS user manual rev. 3.15), a cosine taper
+        # [f0, w] in Hz: fitted to the Hurricane Erin (NDBC 41047, A-DWSD) and Hurricane Lowell
+        # (A-DWSD) colocations.
+        ccoef = [0.03189, 0.07842]
     
         # spectra peak
         peak_zz  = 0
@@ -1461,21 +1467,15 @@ class Wave:
 
             Szz_g = np.where(Szz_g < 0.0005, 0, self.Szz_g)                
             
-            # apply nonlinear correction
-            
-            if (ccoef[0] != 0) and (ccoef[2] != 0) and (ccoef[3] != 0):
-                
-                x = self.freq
-                a, b, c, d = ccoef[0], ccoef[1], ccoef[2], ccoef[3]
-                
-                y = np.zeros([len(x)])
-                y = np.where((x - b < 0), -1, y)
-                y = np.where((x - b >= 0) & (x - b <= c), (a+1) * (np.sin(math.pi * (x - b)/(2*c)) ** 2) - 1, y)
-                y = np.where((x - b >= c) & (x - b <= c + d), a * (np.cos(math.pi * (x - b - c)/(2*d)) ** 2), y)
-                
-                correction = y
-                
-                Szz_g = Szz_g * (1 + correction)
+            # apply the low-frequency response correction (cosine taper)
+
+            if ccoef[1] > 0:
+
+                f0, w = ccoef[0], ccoef[1]
+
+                taper = 0.5 * (1 - np.cos(math.pi * np.clip((self.freq - f0) / w, 0, 1)))
+
+                Szz_g = Szz_g * taper
                 
             # convert acceleration spectra to displacement spectra
 
@@ -1650,7 +1650,8 @@ class Wave:
                         break
                         
                     
-                    weight = math.sqrt(self.Szz[idx])
+                    # Bins without a direction (theta1 NaN, set to 0 above) get no weight.
+                    weight = 0 if np.isnan(self.r1[idx]) else math.sqrt(self.Szz[idx])
                     
                     sum_x = sum_x + (math.cos(self.theta1[idx]) * weight)
                     sum_y = sum_y + (math.sin(self.theta1[idx]) * weight)

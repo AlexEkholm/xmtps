@@ -114,13 +114,13 @@ const string XWave::GenerateListingString() const {
 
           case XWAVE_MODE_SPECTRAL: {
 
-            unsigned int essf = effective_ssf();
+            double essf = effective_ssf();
 
             { /* Print header lines: */
 
-              static const format fmt( "WVS %5d %4d 0x%02X %4d %8.4f %4d %5d %8d %6.3f %8d" );
-              os << "#      SN dive vers slen     fsam fbase fdiv     assf  again     essf" << endl;
-              os << "#                            (Hz)  (Hz)      (LSB/g^2)       (LSB/g^2)" << endl;
+              static const format fmt( "WVS %5d %4d 0x%02X %4d %8.4f %4d %5d %8d %6.3f %10.1f" );
+              os << "#      SN dive vers slen     fsam fbase fdiv     assf  again       essf" << endl;
+              os << "#                            (Hz)  (Hz)      (LSB/g^2)   (LSB/(g^2/Hz))" << endl;
               os << format(fmt) % id_instrument() % id_dive() % (int)version_ % segment_len()
                   % sample_rate_effective_ % sample_rate_base_ % (sample_rate_div_+1) % assf_
                   % gain_accel() % essf << endl;
@@ -241,7 +241,7 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
         set_segment_len_pow(u08(d,8));
         sample_rate_base_ = (u16(d, 9));
         sample_rate_div_  = (u16(d,11));
-        sample_rate_effective_ = (float)sample_rate_base_ / (sample_rate_div_ + 1);
+        sample_rate_effective_ = (every_other_bin_ ? 2.0 : 1.0) * sample_rate_true();
 
         // Get accelerometer sensitivity.
         switch (d[13]) {
@@ -433,7 +433,7 @@ void XWave::DecodeXMsgData(const vector<uint8_t>& data) {
              set_segment_len_pow(u08(d,8));
              sample_rate_base_ = (u16(d, 9));
              sample_rate_div_  = (u16(d,11));
-             sample_rate_effective_ = (float)sample_rate_base_ / (sample_rate_div_ + 1);
+             sample_rate_effective_ = (every_other_bin_ ? 2.0 : 1.0) * sample_rate_true();
 
              // Get accelerometer sensitivity.
              switch (d[13]) {
