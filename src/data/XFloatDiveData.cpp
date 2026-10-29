@@ -1555,6 +1555,7 @@ void XFloatDiveData::ResetData() {
     xmsg_gps_positions_.clear();
     xmsg_mission_cmd_echoback_.clear();
     xmsg_extended_records_.clear();
+    xmsg_wims_parameters_.clear();
     xmsg_pump_time_series_.clear();
     xmsg_rise_time_series_.clear();
     xmsg_surface_time_series_.Reset();

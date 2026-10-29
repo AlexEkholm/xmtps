@@ -544,6 +544,9 @@ class XFloatDiveData:
     /** The extended record (0xFF) X-Message objects. */
     vector<shared_ptr<x::XExtendedRecord> > xmsg_extended_records_;
 
+    /** The WIMS configuration parameter (0xC5) X-Message objects. */
+    vector<shared_ptr<x::XWimsParameters> > xmsg_wims_parameters_;
+
     /** The MFA mission configruation object.
      *
      */
@@ -1505,6 +1508,21 @@ class XFloatDiveData:
       lock_guard<recursive_mutex> guard(mutex_);
 
       xmsg_extended_records_.push_back(x);
+
+      // Update file status.
+      set_listing_file_updated(false);
+    }
+
+    /** Assign a WIMS configuration parameter (0xC5) message to this dive data object.
+     *
+     *  @param[in]      x       A pointer to the WIMS parameter message to assign.
+     */
+    void AssignWimsParameters(const shared_ptr<x::XWimsParameters>& x) {
+
+      // Get an exclusive lock.
+      lock_guard<recursive_mutex> guard(mutex_);
+
+      xmsg_wims_parameters_.push_back(x);
 
       // Update file status.
       set_listing_file_updated(false);

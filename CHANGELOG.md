@@ -13,6 +13,17 @@ Python tools:
   instead of 0.110 Hz and is larger below about 0.09 Hz: 0.05 instead of 0 at 0.030 Hz, 0.26 instead of
   0.13 at 0.050 Hz.
 
+## 2026-10-29
+
+Decoder daemon:
+
+- WIMS configuration parameter messages (0xC5) are decoded (`XWimsParameters`) and listed as one
+  `WIP` line per parameter in a new "WIMS Configuration Parameters (0xC5)" section. A WIMS float
+  sends one in dive 0 and after a `WCG -1` upload: a version (1: 42 parameters, 2: 43), a part
+  index, and one 16-bit value per parameter in the float's `WCG`/`WCS` index order. The format and
+  most names are inferred from the 54 messages in production (spec C.7); before, 0xC5 was logged
+  as an unknown X message.
+
 ## 2026-10-28
 
 Decoder daemon:

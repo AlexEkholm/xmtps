@@ -404,6 +404,7 @@ so far. The Python tools (`xmtps-list2json.py`) parse these files.
 | `mis` | Mission configuration (older firmware) | The same parameters in fixed-column groups. |
 | `CMD` | Command echo-back | One line per command the float echoed back after a command upload (X-message 0xDE): SN, dive, echo index, command index and the command text, with the parameter name in uppercase, e.g. `DFT 0 100`. |
 | `XFF` | Extended records | One line per X-message 0xFF record (format inferred; spec C.6): SN, dive, record index, record type and version, and the decoded record: event code, time and value (0xCA), reset counter and times (0xD1), serial number and configuration bytes (0xAE), CTD command and reply (0xDB), processor fault dump text (0xFA), or the bytes in hex. |
+| `WIP` | WIMS configuration parameters | One line per WIMS parameter in an X-message 0xC5, which a WIMS float sends in dive 0 and after a `WCG -1` upload (format and most names inferred; spec C.7): SN, dive, message index, version, part, parameter index, name (`?` when inferred, `-` when unknown), value and hex. |
 | `SHX` / `shx` | SBD message hex data | Each SBD message as a hex dump, 16 bytes per line. |
 
 ### Examples

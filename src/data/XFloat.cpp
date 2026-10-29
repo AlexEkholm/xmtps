@@ -2586,6 +2586,19 @@ void XFloatDiveData::DecodeXMsgData(
 
               break;
 
+            case XMSG_TYPE_ID_WIMS_PARAMS:    // 0xC5
+
+              try {
+
+                // Decode WIMS configuration parameter message.
+                linf() << "Decoding WIMS parameter message...";
+                AssignWimsParameters(
+                    std::make_shared<XWimsParameters>(id_dive(), id_instrument(), xdata));
+
+              } CATCH_BLOCK("Failed to decode WIMS parameter message!")
+
+              break;
+
             case XMSG_TYPE_ID_UNKNOWN:    // 0xFF
 
               try {
@@ -3310,6 +3323,26 @@ string XFloatDiveData::GenerateListingString() const {
         os << endl;
 
       }CATCH_NOTHROW("Failed to generate listing entry for extended record message!")
+
+    // Print WIMS configuration parameter message(s).
+    if(!xmsg_wims_parameters_.empty())
+
+      try {
+
+        XMSG_HEADER2("WIMS Configuration Parameters (0xC5)");
+        os << "#      SN dive midx  ver part pidx  name         value     hex" << endl;
+        int midx = 0;
+        for_each(
+            xmsg_wims_parameters_.begin(),
+            xmsg_wims_parameters_.end(),
+            [&](const shared_ptr<XWimsParameters>& msg) {
+
+              if(msg) os << msg->GenerateListingString(midx++);
+
+            });
+        os << endl;
+
+      }CATCH_NOTHROW("Failed to generate listing entry for WIMS parameter message!")
 
     // Print mission configuration message(s).
     try {

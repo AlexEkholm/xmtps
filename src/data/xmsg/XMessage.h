@@ -227,7 +227,7 @@ namespace util {
       // = 0xC2
       XMSG_TYPE_ID_ALAMO_WAVE_C3 = 0xC3,    //!< ALAMO_WAVE
       // = 0xC4
-      // = 0xC5
+      XMSG_TYPE_ID_WIMS_PARAMS = 0xC5,    //!< WIMS configuration parameters
       // = 0xC6
       // = 0xC7
       // = 0xC8

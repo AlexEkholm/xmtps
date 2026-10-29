@@ -82,6 +82,7 @@ The MRV documents and the SOLO-II PDF are in the Float Group's `mrv/doc` folder.
 | 0xC1 | Ocean surface waves: auto-spectra | C.3 | yes (spectral v0–2) | `WVS`, `wvs`, `wvm` |
 | 0xC2 | Auxiliary sensor data | A.4.4 | no | — |
 | 0xC3 | Ocean surface waves: cross-spectra | C.3 | yes (spectral v0–2) | `WVS`, `wvs`, `wvm` |
+| 0xC5 | WIMS configuration parameters | C.7 | yes (v1, v2; inferred) | `WIP` |
 | 0xCA | Marginal-ice-zone acoustics (0xC0 before build 3249) | C.4 | subtypes 3 and 5 | `APS` |
 | 0xD0–0xD1 | Mission configuration (binary, two parts) | C.1 | yes (117 firmware versions) | `MIS`, `m`, `mis` |
 | 0xD2–0xD7 | Mission configuration, further parts / SOLO-II ASCII dump | C.1 | no | — |
@@ -2435,6 +2436,7 @@ This part covers these blob types:
 | 0xC1, 0xC3 | Ocean surface waves | `XWave`, `XWaveSpectralSample`, `XWaveRawSample` | Spectral versions 0-2 are decoded. The raw IMU format is not. |
 | 0xCA | Marginal-ice-zone (MIZ) acoustics | `XAcousticPosition` | Subtypes 3 and 5 are decoded. Subtypes 1 and 2 are seen in production but ignored. |
 | 0xFF | Extended records | `XExtendedRecord` | Decoded since build 3321; one `XFF` listing line per record. The format is inferred from production messages (C.6). |
+| 0xC5 | WIMS configuration parameters | `XWimsParameters` | Decoded since build 3336; one `WIP` listing line per parameter. The format and most parameter names are inferred from production messages (C.7). |
 
 ### C.0 Conventions
 
@@ -3435,6 +3437,100 @@ XFF  9304    0   35 0xFA 0x0A  text "\nr7    20016E60\r\nsp    20016E30\r\nexcrt
 
 Open questions: the meaning of the 0xCA event codes and value, the 0xD1 `count` and last field,
 the 0xAE configuration bytes, the 0xEC records, and the `|` digit of the CTD commands.
+
+### C.7 WIMS configuration parameters (0xC5)
+
+[inferred from production] No format document describes this message. A WIMS float sends the
+configuration of its WIMS wave sensor in it:
+
+- once in its diagnostic dive (dive 0), and
+- in the next dive after a `WCG -1` upload (WIMS Command Get, all parameters).
+
+The production RAW files (2014–2026) hold 54, from 21 floats:
+- dive 0 of 9246, 9248, 9249, 9265–9271, 9273, 9291–9293, 9296, 9297, 9299, 9303 and 9304;
+- after `WCG -1` uploads to 9239 and 9245 (2020), and 9292, 9296 and 9297 (2024).
+
+9310 echoed a `WCG -1` upload in dive 201 (2026-09-24) but sent no 0xC5. Before build 3336 the
+decoder logged 0xC5 as an unknown X message.
+
+| Offset | Size | Type | Field | Notes |
+|---:|---:|---|---|---|
+| 0 | 1 | U1 | ID | 0xC5. |
+| 1 | 2 | U2 | `jj` | 12-bit size. |
+| 3 | 1 | U1 | Version | 1: 42 parameters (2020 floats, 90 bytes). 2: 43 parameters (2024 floats, 92 bytes). |
+| 4 | 1 | U1 | Part index | 0. One dive of 9239 had three copies with parts 0, 1 and 2, otherwise identical except parameters 36 and 37. |
+| 5 + 2i | 2 | U2 / I2 | Parameter i | One value per WIMS parameter, by the float's parameter index (the index of the `WCG` and `WCS` commands). |
+| jj − 1 | 1 | char | `;` | |
+
+The parameter index is the float's, not the WIMS user manual's: `WCS` uploads to 9296 and 9297
+(`WCS 24 45; 28 10; 35 5; 39 17; 42 32`) appear at exactly those positions in the next 0xC5.
+
+**Uploads.** `WCG <index>` (WIMS Command Get; 0-41, or -1 for all) and `WCV` (WIMS Command saVe)
+appear to relay the WIMS firmware's `get` and `save` commands; `WCS <index> <value>` relays `set`,
+which changes a parameter in RAM until `save` writes it to the sensor's EEPROM. The Deployment and
+Piloting Guide v1.0 lists all three as Reserved (Auxiliary Sensor Systems). Every upload in
+`/data1/alamo/data/sbd/outgoing` that uses them, but the first one to 9239, is zero or more `WCS`
+commands followed by `WCG -1; WCV;`:
+
+- 2020-07 to 09, 9239 and 9245 (about 20 uploads): `wcs 22` 2 or 4, `wcs 30` 7 or 14,
+  `wcs 34 180`, `wcs 36` 0, 65, 98, 131 or 164, `wcs 39` 9, 19 or 39, `wcs 40` 64, 128 or 256.
+- 2020-09-16, 9105, 9246-9249 and 9265-9273: `wcs 22 2; 30 14; 34 180; 36 131; 40 256`
+  (9105 also `wcs 20 0`, then `wcs 31 6`).
+- 2024-09-26, 9292, 9296 and 9297: `WCS 24 45; 28 10; 35 5; 39 17; 42 32`, then `WCS 31 2`.
+- 2026-09-24, 9310: `WCS 39 17; 42 32`.
+
+| Index | Name | Confirmed by |
+|---:|---|---|
+| 0 | `brd.leds`? | always 0 |
+| 1 | unknown | always 0 |
+| 2–4 | `cal.acofx`, `cal.acofy`, `cal.acofz` | accelerometer offsets, e.g. -213, -352, -1193 (signed) |
+| 5–7 | `cal.acscx` … `cal.acscz` | accelerometer scales, 0 in every message (signed) |
+| 8–10 | `cal.gcofx` … `cal.gcofz` | gyroscope offsets (signed) |
+| 11–13 | `cal.gcscx` … `cal.gcscz` | gyroscope scales, 0 in every message (signed) |
+| 14–16 | `cal.mcofx` … `cal.mcofz` | magnetometer offsets (signed) |
+| 17–19 | `cal.mcscx`? … `cal.mcscz`? | per-float values such as 1300, 0, 181 (signed) |
+| 20 | unknown | 1 (v1), 0 (v2); `wcs 20 0` |
+| 21 | `imu.dlpf`? | 20 or 24 |
+| 22 | `imu.fsra` | 2 or 4 g; matches the `WVS` ASSF (8192 at 2 g, 2048 at 4 g); `wcs 22` 2 and 4 |
+| 23 | `imu.fsrg` | 500 °/s |
+| 24 | `imu.srate` | 40, 45 or 125 Hz; matches the `WVS` `fbase`, and `WCS 24 45` |
+| 25–26 | unknown | 0x0A62, 0xEE57 in every message |
+| 27 | unknown | per float and dive, e.g. 5, 8, 25, 57, 66 |
+| 28 | `wav.afilt`? | 2 or 10; `WCS 28 10` |
+| 29 | `wav.mxsam`? | 32768 |
+| 30 | `wav.mxseg`? | 7, 12 or 14; `wcs 30` 7 and 14 |
+| 31 | unknown | 0, 2 or 6; `wcs 31` 2 and 6 |
+| 32 | `wav.nfwax`? | 0 |
+| 33 | `wav.obeta`? | 1343, the manual's default |
+| 34 | `wav.ostsc`? | 90 or 180 s; `wcs 34 180` |
+| 35 | `wav.omode`? | 5; `WCS 35 5` |
+| 36 | `wav.ozeta`? | 65, 98, 131 or 164; changes between messages of the same float because it was tuned with `wcs 36` 0, 65, 98, 131 and 164 |
+| 37 | unknown | changes between messages of the same float, 1–16 |
+| 38 | `wav.smode`? | 2 |
+| 39 | `wav.srdiv` | 4, 9 or 17; `WVS` `fdiv` = value + 1 (doubled for every-other-bin firmware, C.3.8), and `wcs 39` 9, 17, 19 and 39 |
+| 40 | `wav.slen` | 64 or 256; matches the `WVS` `slen`; `wcs 40` 64, 128 and 256 |
+| 41 | `wav.twalp`? | 64, the value the ESSF (C.3.6) assumes |
+| 42 | `wav.gaina` | v2 only; 32 = 4.0, matching the `WVS` `again`, and `WCS 42 32` |
+
+Names ending in "?" are inferred from their values (defaults in the WIMS user manual, rev. 3.15)
+and position; the order is close to, but not the same as, the manual's alphabetical order. Values
+are listed signed for the calibration coefficients and unsigned otherwise.
+
+**Listing.** Under the section banner "WIMS Configuration Parameters (0xC5)", one line per
+parameter: `WIP SN dive midx ver part pidx name value hex`, with `midx` the message's index in the
+dive and `-` for an unknown name:
+
+```
+#      SN dive midx  ver part pidx  name         value     hex
+WIP  9297   15    0    2    0    2  cal.acofx     -213  0xFF2B
+WIP  9297   15    0    2    0   24  imu.srate       45  0x002D
+WIP  9297   15    0    2    0   25  -             2658  0x0A62
+WIP  9297   15    0    2    0   39  wav.srdiv       17  0x0011
+WIP  9297   15    0    2    0   42  wav.gaina       32  0x0020
+```
+
+Open questions: parameters 1, 20, 25–27, 31 and 37, the inferred names, and why 9310 sent no
+reply to `WCG -1`.
 
 ---
 
