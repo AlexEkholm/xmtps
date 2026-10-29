@@ -3,6 +3,16 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-10-29
+
+Python tools:
+
+- WIMS wave spectra (`Wave.PostProcess`): the low-frequency response correction coefficients are
+  [f0, w] = [0.01445, 0.10457] Hz, the fit of WIMS user manual rev. 3.15, made without floats 9298
+  and 9310 (was [0.03189, 0.07842] Hz, fitted with them). The taper now reaches 1 at 0.119 Hz
+  instead of 0.110 Hz and is larger below about 0.09 Hz: 0.05 instead of 0 at 0.030 Hz, 0.26 instead of
+  0.13 at 0.050 Hz.
+
 ## 2026-10-28
 
 Decoder daemon:

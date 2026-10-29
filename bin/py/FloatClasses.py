@@ -1384,8 +1384,8 @@ class Wave:
         
         # Low-frequency response correction (WIMS user manual rev. 3.15), a cosine taper
         # [f0, w] in Hz: fitted to the Hurricane Erin (NDBC 41047, A-DWSD) and Hurricane Lowell
-        # (A-DWSD) colocations.
-        ccoef = [0.03189, 0.07842]
+        # (A-DWSD) colocations, without floats 9298 and 9310.
+        ccoef = [0.01445, 0.10457]
     
         # spectra peak
         peak_zz  = 0
