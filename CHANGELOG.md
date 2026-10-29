@@ -3,6 +3,18 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-10-28
+
+Python tools:
+
+- WIMS wave spectra (`Wave.PostProcess`): the noise-floor mask (bins where Szz is below
+  0.0005 g^2/Hz) and the low-frequency cosine taper are applied to all six spectra, not to Szz
+  only. Applied to Szz alone, they inflated r1 (bin values up to about 18 in simulated seas) and
+  the (Sxx + Syy) / Szz ratio wherever the taper is below 1 or Szz was zeroed. Bin r1 is now at
+  most 0.99 and the ratio averages 1.00 in simulated deep-water seas. `swh` and the periods are
+  unchanged; `mwd` changes by up to 2°. Sxx, Syy, and Cxy (displacement) are now tapered and
+  masked too; the acceleration spectra (`*_g`) are unchanged.
+
 ## 2026-10-27
 
 Decoder daemon:

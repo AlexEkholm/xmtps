@@ -1327,9 +1327,11 @@ class Wave:
         1. Keep the received acceleration spectra in the raw_ attributes.
         2. If interpolate, interpolate the acceleration spectra linearly onto 0.030 to 1.250 Hz
            in 0.005 Hz steps (this becomes freq); values outside the received band are 0.
-        3. For the vertical spectrum only, zero values below 0.0005 g^2/Hz and multiply by
-           the low-frequency response correction, a cosine taper with coefficients f0, w:
-           0 below f0, (1 - cos(pi (f - f0) / w)) / 2 from f0 to f0 + w, and 1 above.
+        3. For all six spectra alike, zero the bins where the vertical acceleration spectrum is
+           below 0.0005 g^2/Hz (noise-floor mask) and multiply by the low-frequency response
+           correction, a cosine taper with coefficients f0, w: 0 below f0,
+           (1 - cos(pi (f - f0) / w)) / 2 from f0 to f0 + w, and 1 above. The acceleration
+           spectra (the _g attributes) are kept as received (interpolated).
         4. Convert to displacement spectra in m^2/Hz by multiplying by g^2 / (2 pi f)^4 and
            compute the deep-water wavenumber (2 pi f)^2 / g in rad/m.
         5. Smooth the displacement spectra with a rolling_average-point RollingAverage.
@@ -1461,32 +1463,30 @@ class Wave:
                 self.Qzx_g = np.where(np.isnan(self.Qzx_g), 0, self.Qzx_g)
                 self.Qzy_g = np.where(np.isnan(self.Qzy_g), 0, self.Qzy_g)
             
-            Szz_g = self.Szz_g 
-            
-            # Zero acceleration spectra below minimum sensitivity
+            # Noise-floor mask and low-frequency response correction, applied alike to all six
+            # spectra: bins where the vertical acceleration spectrum is below the minimum
+            # sensitivity are zeroed, and every spectrum is multiplied by the cosine taper. Applied
+            # to Szz only, they inflated r1 (above 1) and the (Sxx + Syy) / Szz ratio wherever the
+            # taper is below 1 or Szz was zeroed.
 
-            Szz_g = np.where(Szz_g < 0.0005, 0, self.Szz_g)                
-            
-            # apply the low-frequency response correction (cosine taper)
+            weight = np.where(self.Szz_g < 0.0005, 0.0, 1.0)
 
             if ccoef[1] > 0:
 
                 f0, w = ccoef[0], ccoef[1]
 
-                taper = 0.5 * (1 - np.cos(math.pi * np.clip((self.freq - f0) / w, 0, 1)))
+                weight = weight * 0.5 * (1 - np.cos(math.pi * np.clip((self.freq - f0) / w, 0, 1)))
 
-                Szz_g = Szz_g * taper
-                
             # convert acceleration spectra to displacement spectra
 
-            factor = g**2 / ((2*pi*self.freq)**4)
+            factor = g**2 / ((2*pi*self.freq)**4) * weight
 
-            self.Szz = factor * Szz_g
-            self.Sxx = factor * self.Sxx_g 
-            self.Syy = factor * self.Syy_g 
-            self.Cxy = factor * self.Cxy_g 
-            self.Qzx = factor * self.Qzx_g 
-            self.Qzy = factor * self.Qzy_g 
+            self.Szz = factor * self.Szz_g
+            self.Sxx = factor * self.Sxx_g
+            self.Syy = factor * self.Syy_g
+            self.Cxy = factor * self.Cxy_g
+            self.Qzx = factor * self.Qzx_g
+            self.Qzy = factor * self.Qzy_g
             
             # estimate wavenumber
             
