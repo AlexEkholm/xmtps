@@ -5,6 +5,15 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 ## 2026-10-28
 
+Decoder daemon:
+
+- WIMS wave spectra (`XWave`): the effective spectral sensitivity scale factor uses the Tukey
+  window mean square and the true effective sample rate (WIMS user manual rev. 3.15), and is
+  listed with one decimal on the `WVS` line. Bins that were not received hold the fill value
+  -999.99999.
+- Whether a float sends every other spectral bin is resolved from the dive's or float's firmware
+  version, or from the spectra when the version is unknown, independent of message order.
+
 Python tools:
 
 - WIMS wave spectra (`Wave.PostProcess`): the noise-floor mask (bins where Szz is below
@@ -14,6 +23,10 @@ Python tools:
   most 0.99 and the ratio averages 1.00 in simulated deep-water seas. `swh` and the periods are
   unchanged; `mwd` changes by up to 2°. Sxx, Syy, and Cxy (displacement) are now tapered and
   masked too; the acceleration spectra (`*_g`) are unchanged.
+- WIMS wave spectra: the low-frequency response correction is a cosine taper with
+  [f0, w] = [0.03189, 0.07842] Hz, fitted to the Hurricane Erin and Lowell intercomparisons.
+  `xmtps-list2json.py` reads the fill value of bins not received as NaN. A dive without a valid
+  position uses the magnetic declination at the float's most recent valid fix after deployment.
 
 ## 2026-10-27
 

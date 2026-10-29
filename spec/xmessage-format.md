@@ -3128,7 +3128,12 @@ Mode (v2 byte 5): 0 = raw, 1 = spectral.
 | `FSAM` | 0 | 1 | Hz | raw format (not decoded |
 
 - An invalid full-scale-range byte logs an error and falls back to ASSF = 2048 (the 4 g entry).
-- Effective spectral scale: ESSF = ⌊ASSF · Q² / 64⌋, where Q is the raw Q3 gain, so ESSF = ASSF · G². For v0/v1, Q defaults to 8 (G = 1), so ESSF = ASSF. Example: v2 at ±4 g with G = 4 gives ESSF = 2048 · 32² / 64 = 32768.
+- Effective spectral scale (WIMS user manual rev. 3.15, "Scale Sensitivity"): ESSF = 32768 · ASSF · G² · U · f_e² / (2 N²), in counts per g²/Hz, where:
+  - G = Q / 8 is the acceleration gain (Q the raw Q3 gain; G = 1 when Q is 0, and for v0/v1);
+  - U = 1 - (5L/4 + 1) / N is the mean square of the firmware's Tukey window, with taper length L = round((N - 1) · 64 / 256) (`wav.twalp` = 64, which the header does not carry; U = 0.68359 for N = 256);
+  - f_e = f_base / (d + 1) is the true effective sample rate, not the doubled rate of C.3.8.
+
+  Example: v2 at ±4 g, G = 4, N = 256, f_e = 2.5 Hz gives ESSF = 35000; at f_e = 5 Hz, 140000. Before 2026-10-28 (build 3332) the decoder used ESSF = ⌊ASSF · Q² / 64⌋ = ASSF · G², the formula of manual revisions up to 3.14, which ignores f_e, N and the window (32768 in the example).
 - Acceleration spectrum: S_aa [g²/Hz] = counts / ESSF.
 - Displacement spectrum [decoder]: S_ηη [m²/Hz] = g² · S_aa / (2πf)⁴, with g = 9.80665 m/s² and π = 3.14159265359. It is clamped to at most +999.9999. The cross terms `Cxy`, `Qzx` and `Qzy` are also clamped to at least -999.9999.
 - [decoder] ASSF, gain, f_base, d and N are kept per dive and overwritten by each blob, so the last blob decoded sets the scale for all components.
@@ -3150,12 +3155,14 @@ For bin k (0 … N/2 - 1), f_k = f_s · k / N, with f_s = f_base / (d + 1). Bin 
 
 #### C.3.8 Every-other-value correction (WIMS firmware)
 
-[inferred from production; README 0.6.3235] Firmware 0x0A060231, 0x0A080031, 0x0A090131 and 0x0A0A0031 send only every other spectral value: the first half of the N/2 bins holds the spectrum at twice the bin spacing, and the second half is zeros. After each 0xC1/0xC3 blob from a float whose stored firmware word (from the latest D0) is one of these, `XWave::FixFuckup9000()` runs. It:
+[inferred from production; README 0.6.3235] Firmware 0x0A060231, 0x0A080031, 0x0A090131 and 0x0A0A0031 send only every other spectral value: the first half of the N/2 bins holds the spectrum at twice the bin spacing, and the second half is zeros. [decoder] `XFloatDiveData::ResolveWaveBinSpacing()` runs after each 0xC1/0xC3 blob and after each mission configuration message, so the result does not depend on message order. It takes the firmware word from the dive's own D0 or, without one, the float's latest; if that word is one of these, `XWave::set_every_other_bin(true)`:
 
-- sets f_s' = 2 · f_base / (d + 1), which also becomes the `WVS` `fsam`;
-- sets every bin's frequency, i = 0 … N/2 - 1, to f_i = f_s' · i / N (f_s' · (i + 1) / N before 2026-10-26). [inferred from the NDBC 41047 intercomparison, whose offset matches one decoded bin] The floats send the even WIMS bins (0, 2, 4, …), so bin i holds WIMS FFT bin 2i.
+- sets f_s' = 2 · f_base / (d + 1), which also becomes the `WVS` `fsam`; the ESSF (C.3.6) still uses the true f_e;
+- sets the frequency of every received bin, i = 0 … N/2 - 1, to f_i = f_s' · i / N (f_s' · (i + 1) / N before 2026-10-26); bins not received keep -99. [inferred from the NDBC 41047 intercomparison, whose offset matches one decoded bin] The floats send the even WIMS bins (0, 2, 4, …), so bin i holds WIMS FFT bin 2i.
 
-The spectral values are left as they are, so the zero second half is still listed, at frequencies above f_s/2. The correction is keyed on the float's latest known firmware word, so wave blobs decoded before the dive's first D0 has ever been received are not corrected [inferred from the code path]. 10.12.1.31 (0x0A0C0131) and 10.7.1.31 (0x0A070131) are WIMS firmware too, but they are not in the correction list (C.5).
+When the firmware word is unknown (it is not kept across decoder restarts), `XWave::LooksLikeEveryOtherBin()` decides from the data: every bin of the upper half was received and is zero in all six components, and some bin of the lower half has a nonzero Szz. Truncated spectra leave the upper bins unreceived, not zero, so they do not match. Before 2026-10-28 (build 3332) the correction was keyed only on the float's latest known firmware word, so blobs decoded before any D0 had been received were not corrected.
+
+The spectral values are left as they are, so the zero second half is still listed, at frequencies above f_s/2. 10.12.1.31 (0x0A0C0131) and 10.7.1.31 (0x0A070131) are WIMS firmware too, but they are not in the correction list (C.5).
 
 #### C.3.9 Raw IMU format (XF2.4 "Raw Wave Field"; not decoded)
 
@@ -3192,12 +3199,12 @@ This layout has no version byte. Byte 3 is the packet index and byte 5 the ASSF 
 
 #### C.3.11 Listing output (`WVS`, `wvs`, `wvm`)
 
-The section "Ocean Surface Wave-Field Data" is printed when the dive has wave data with N > 0. Only versions 1 and 2 print anything: a dive whose wave blobs are all version 0 gets an empty section.
+The section "Ocean Surface Wave-Field Data" is printed when the dive has wave data with N > 0. Only versions 1 and 2 print anything: a dive whose wave blobs are all version 0 gets an empty section. In the example, the `wvs` and `wvm` values were listed before build 3332 with ESSF 32768; the current decoder lists them about 7% lower (ESSF 35100).
 
 ```
-#      SN dive vers slen     fsam fbase fdiv     assf  again     essf
-#                            (Hz)  (Hz)      (LSB/g^2)       (LSB/g^2)
-WVS  9287  325 0x02  512   5.0000   45     9     2048  4.000    32768
+#      SN dive vers slen     fsam fbase fdiv     assf  again       essf
+#                            (Hz)  (Hz)      (LSB/g^2)   (LSB/(g^2/Hz))
+WVS  9287  325 0x02  512   5.0000   45     9     2048  4.000    35100.0
 #      SN dive  idx     freq         Szz         Syy         Sxx         Cxy         Qzx         Qzy
 #                       (Hz)    (g^2/Hz)    (g^2/Hz)    (g^2/Hz)    (g^2/Hz)    (g^2/Hz)    (g^2/Hz)
 wvs  9287  325    0   0.0098    +0.00018    +0.00098    +0.00156    +0.00046    +0.00000    +0.00000
@@ -3208,7 +3215,7 @@ wvm  9287  325   50   0.4980     +0.0056     +0.0159     +0.0109     +0.0003    
 wvm  9287  325   51 -99.0000  -1000.0000  -1000.0000  -1000.0000  -1000.0000  -1000.0000  -1000.0000
 ```
 
-- `WVS` (`WVS %5d %4d 0x%02X %4d %8.4f %4d %5d %8d %6.3f %8d`) has these columns:
+- `WVS` (`WVS %5d %4d 0x%02X %4d %8.4f %4d %5d %8d %6.3f %10.1f`; `essf` was `%8d` before build 3332) has these columns:
   - `vers`: the version;
   - `slen`: N;
   - `fsam`: f_s, doubled by the C.3.8 correction;
