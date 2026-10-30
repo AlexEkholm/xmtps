@@ -196,8 +196,8 @@ def ProcessJsonSummaryFile(fpath):
         logger.debug('Processsing file: ' + fpath + ' ...')
 
         try:
-            with open(fpath, 'r') as file:
-                summary = jsonpickle.decode(file.read())
+            with open(fpath, 'r', encoding='utf-8') as file:
+                summary = jsonpickle.decode(file.read(), keys=True)
         except:
             raise Exception('Failed to read or decode file: ' + fpath)
 
@@ -230,7 +230,7 @@ def ProcessJsonSummaryFile(fpath):
             logger.info('Ignoring float without mission file: {}'.format(float_id))
             return
 
-        with open(fpath_mission, 'r') as file:
+        with open(fpath_mission, 'r', encoding='utf-8') as file:
             mission = json.load(file)
 
         latest = None

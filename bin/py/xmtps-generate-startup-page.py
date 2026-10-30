@@ -245,8 +245,8 @@ def ProcessJsonSummaryFile(fpath):
         logger.debug('Processsing file: ' + fpath + ' ...')
 
         try:
-            with open(fpath, 'r') as file:
-                summary = jsonpickle.decode(file.read())
+            with open(fpath, 'r', encoding='utf-8') as file:
+                summary = jsonpickle.decode(file.read(), keys=True)
         except:
             raise Exception('Failed to read or decode file: ' + fpath)
 
@@ -264,7 +264,7 @@ def ProcessJsonSummaryFile(fpath):
         bits = []
         fpath_eng = re.sub('\\\\', '/', os.path.join(os.path.dirname(fpath), '{}_engineering_data.json'.format(float_id)))
         if os.path.isfile(fpath_eng):
-            with open(fpath_eng, 'r') as file:
+            with open(fpath_eng, 'r', encoding='utf-8') as file:
                 eng = json.load(file)
             for row in eng['data']:
                 values = dict(zip(eng['columns'], row))

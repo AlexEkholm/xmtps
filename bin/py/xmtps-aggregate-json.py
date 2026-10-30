@@ -71,7 +71,8 @@ from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, Po
 
 # Set library options
 
-pd.options.mode.chained_assignment = None  # default='warn'
+if int(pd.__version__.split('.')[0]) < 3:
+    pd.options.mode.chained_assignment = None  # default='warn'; the option is deprecated since pandas 3 (copy-on-write)
 
 pio.renderers.default = "browser"
 
@@ -283,6 +284,19 @@ def RemoveFillValues(float_id, float_aggregate_data):
                 if not pd.api.types.is_float_dtype(df[col]):
                     df[col] = df[col].astype(float)
                 df.loc[mask, col] = np.nan
+
+def AppendRows(df, df_new):
+    """Return df with the rows of df_new appended (index ignored).
+
+    The aggregate DataFrames start empty, with untyped (object) columns. pandas 3 no longer ignores
+    empty frames when it chooses the dtypes of a concatenation, so appending to an empty frame would
+    leave every column object (and RemoveFillValues would skip them). While df is empty, the result
+    takes df_new's dtypes instead.
+    """
+
+    if len(df) == 0:
+        return df_new.reindex(columns=df.columns.union(df_new.columns, sort=False)).reset_index(drop=True)
+    return pd.concat([df, df_new], ignore_index=True)
 
 def AggregateDiveData():
     """Aggregate the dives of each float in float_map into float_aggregate_map.
@@ -570,7 +584,7 @@ def AggregateDiveData():
                                 'rate':             np.array(ascent_data.rate, dtype='float')*100,
                             }
                         )
-                        float_aggregate_data['ascent'] = pd.concat([float_aggregate_data['ascent'], df_profile], ignore_index=True)
+                        float_aggregate_data['ascent'] = AppendRows(float_aggregate_data['ascent'], df_profile)
                         
                         # Append NaNs to separate dives
                         
@@ -585,7 +599,7 @@ def AggregateDiveData():
                                 'rate':             np.array([np.nan], dtype='float'),
                             }
                         )
-                        float_aggregate_data['ascent'] = pd.concat([float_aggregate_data['ascent'], df_profile], ignore_index=True)
+                        float_aggregate_data['ascent'] = AppendRows(float_aggregate_data['ascent'], df_profile)
                         
                         # Get Summary data
                         
@@ -630,7 +644,7 @@ def AggregateDiveData():
                                 'rate':             np.array(descent_data.rate, dtype='float')*100,
                             }
                         )
-                        float_aggregate_data['descent'] = pd.concat([float_aggregate_data['descent'], df_profile], ignore_index=True)
+                        float_aggregate_data['descent'] = AppendRows(float_aggregate_data['descent'], df_profile)
     
                         # Append NaNs to separate dives
     
@@ -645,7 +659,7 @@ def AggregateDiveData():
                                 'rate':             np.array([np.nan], dtype='float'),
                             }
                         )
-                        float_aggregate_data['descent'] = pd.concat([float_aggregate_data['descent'], df_profile], ignore_index=True)
+                        float_aggregate_data['descent'] = AppendRows(float_aggregate_data['descent'], df_profile)
                         
                         # Get Summary data
                         
@@ -691,7 +705,7 @@ def AggregateDiveData():
                                 'dt_str':   np.array(drift_data.dt_str, dtype='str'),
                             }
                         )
-                        float_aggregate_data['drift'] = pd.concat([float_aggregate_data['drift'], df_drift], ignore_index=True)    
+                        float_aggregate_data['drift'] = AppendRows(float_aggregate_data['drift'], df_drift)    
                     
                         df_drift = pd.DataFrame(
                             {
@@ -706,7 +720,7 @@ def AggregateDiveData():
                                 'dt_str':   np.array(np.nan, dtype='str'),
                             }
                         )
-                        float_aggregate_data['drift'] = pd.concat([float_aggregate_data['drift'], df_drift], ignore_index=True)    
+                        float_aggregate_data['drift'] = AppendRows(float_aggregate_data['drift'], df_drift)    
 
                         
                         # Get Summary data
@@ -846,7 +860,7 @@ def AggregateDiveData():
                                     'hdop':     np.array([gps_fix.hdop], dtype='float'),
                                 }
                             )
-                            float_aggregate_data['gps'] = pd.concat([float_aggregate_data['gps'], df_gps], ignore_index=True)
+                            float_aggregate_data['gps'] = AppendRows(float_aggregate_data['gps'], df_gps)
                             
                             
                             # TODO Get summary data
@@ -872,7 +886,7 @@ def AggregateDiveData():
                             raise Exception(errstr)
                         logger.error(errstr)
                 
-                float_aggregate_data['gps'].sort_values('dt_epoch', inplace=True, ignore_index=True)
+                float_aggregate_data['gps'] = float_aggregate_data['gps'].sort_values('dt_epoch', ignore_index=True)
                 
                 # Aggregate Mission Parameters:
                 
@@ -928,7 +942,7 @@ def AggregateDiveData():
                                 'sigma0': np.array(profile_data.sigma0, dtype='float'),
                             }
                         )
-                        float_aggregate_data['profile'] = pd.concat([float_aggregate_data['profile'], df_profile], ignore_index=True)
+                        float_aggregate_data['profile'] = AppendRows(float_aggregate_data['profile'], df_profile)
                     
                         # Get Summary data
                         
@@ -979,7 +993,7 @@ def AggregateDiveData():
                                 'energy': np.array(pump_data.energy, dtype='float'),
                             }
                         )
-                        float_aggregate_data['pump'] = pd.concat([float_aggregate_data['pump'], df_pump], ignore_index=True)
+                        float_aggregate_data['pump'] = AppendRows(float_aggregate_data['pump'], df_pump)
                     
                     except:
                         
@@ -1018,7 +1032,7 @@ def AggregateDiveData():
                                 
                             }
                         )
-                        float_aggregate_data['sbd'] = pd.concat([float_aggregate_data['sbd'], df_sbd], ignore_index=True)
+                        float_aggregate_data['sbd'] = AppendRows(float_aggregate_data['sbd'], df_sbd)
                         
                         
                         # TODO Get summary data
@@ -1102,7 +1116,7 @@ def AggregateDiveData():
                                 'pres_corr':        np.array([pres_corr] * surface_data.n, dtype='float'),
                             }
                         )
-                        float_aggregate_data['surface'] = pd.concat([float_aggregate_data['surface'], df_profile], ignore_index=True)
+                        float_aggregate_data['surface'] = AppendRows(float_aggregate_data['surface'], df_profile)
                         
                         # Append NaNs to separate dives
                         
@@ -1117,7 +1131,7 @@ def AggregateDiveData():
                                 'pres_corr':        np.array([np.nan], dtype='float'),
                             }
                         )
-                        float_aggregate_data['surface'] = pd.concat([float_aggregate_data['surface'], df_profile], ignore_index=True)
+                        float_aggregate_data['surface'] = AppendRows(float_aggregate_data['surface'], df_profile)
                         
                     except:
                         
@@ -1162,7 +1176,7 @@ def AggregateDiveData():
                                 'swh':          np.array([wave_data.swh], dtype='float'),
                             }
                         )
-                        float_aggregate_data['wave'] = pd.concat([float_aggregate_data['wave'], df_wave], ignore_index=True)
+                        float_aggregate_data['wave'] = AppendRows(float_aggregate_data['wave'], df_wave)
                         
                         df_wave_spectra = pd.DataFrame(
                             {
@@ -1191,7 +1205,7 @@ def AggregateDiveData():
                                 'theta2':   np.array(wave_data.theta2, dtype='int'),
                             }
                         )
-                        float_aggregate_data['wave_spectra'] = pd.concat([float_aggregate_data['wave_spectra'], df_wave_spectra], ignore_index=True)
+                        float_aggregate_data['wave_spectra'] = AppendRows(float_aggregate_data['wave_spectra'], df_wave_spectra)
                         
                     
                     except:
@@ -1202,7 +1216,7 @@ def AggregateDiveData():
                             raise Exception(errstr)
                         logger.error(errstr)
                 
-                float_aggregate_data['wave_spectra'].sort_values(['dive', 'freq'], inplace=True, ignore_index=True)
+                float_aggregate_data['wave_spectra'] = float_aggregate_data['wave_spectra'].sort_values(['dive', 'freq'], ignore_index=True)
 
                    
                 if (len(float_aggregate_data['wave']) < 1) or (len(float_aggregate_data['wave_spectra']) < 1):
@@ -1243,7 +1257,7 @@ def AggregateDiveData():
                                     }
                                 )
                                 
-                                float_aggregate_data['profile_position'] = pd.concat([float_aggregate_data['profile_position'], df_dive_pos], ignore_index=True)
+                                float_aggregate_data['profile_position'] = AppendRows(float_aggregate_data['profile_position'], df_dive_pos)
                                 
                                 continue
                             
@@ -1264,7 +1278,7 @@ def AggregateDiveData():
                                     }
                                 )
                                 
-                                float_aggregate_data['profile_position'] = pd.concat([float_aggregate_data['profile_position'], df_dive_pos], ignore_index=True)
+                                float_aggregate_data['profile_position'] = AppendRows(float_aggregate_data['profile_position'], df_dive_pos)
                         
                         except:
                             
@@ -1303,10 +1317,10 @@ def AggregateDiveData():
                                 }
                             )
                             
-                            float_aggregate_data['profile_position'] = pd.concat([float_aggregate_data['profile_position'], df_dive_pos], ignore_index=True)
+                            float_aggregate_data['profile_position'] = AppendRows(float_aggregate_data['profile_position'], df_dive_pos)
                             continue
                 
-                float_aggregate_data['profile_position'].sort_values('dt_epoch', inplace=True, ignore_index=True)
+                float_aggregate_data['profile_position'] = float_aggregate_data['profile_position'].sort_values('dt_epoch', ignore_index=True)
                 
                 # Post Process - Generate composite Iridium Positions
                 try: 
@@ -1389,9 +1403,9 @@ def AggregateDiveData():
                             'num_pos':      np.array([cpos.num_pos for cpos in composite_positions], dtype='int'),
                         }
                     )
-                    float_aggregate_data['iridium_position'] = pd.concat([float_aggregate_data['iridium_position'], df_iridium_pos], ignore_index=True)
+                    float_aggregate_data['iridium_position'] = AppendRows(float_aggregate_data['iridium_position'], df_iridium_pos)
                 
-                    float_aggregate_data['iridium_position'].sort_values('dt_epoch', inplace=True, ignore_index=True)
+                    float_aggregate_data['iridium_position'] = float_aggregate_data['iridium_position'].sort_values('dt_epoch', ignore_index=True)
                
                 except: 
                 
@@ -1524,8 +1538,8 @@ def AggregateDiveData():
                                 'pos2_lon':         np.array([np.nan], dtype='float'),
                                 })                       
 
-                        float_aggregate_data['displacement_submerged'] = pd.concat([float_aggregate_data['displacement_submerged'], df_displacement_submerged], ignore_index=True)
-                        float_aggregate_data['displacement_surface'] = pd.concat([float_aggregate_data['displacement_surface'], df_displacement_surface], ignore_index=True)
+                        float_aggregate_data['displacement_submerged'] = AppendRows(float_aggregate_data['displacement_submerged'], df_displacement_submerged)
+                        float_aggregate_data['displacement_surface'] = AppendRows(float_aggregate_data['displacement_surface'], df_displacement_surface)
 
                 except: 
                 
@@ -1662,7 +1676,7 @@ def AggregateDiveData():
                             
                             })    
                             
-                        float_aggregate_data['cycle_timing'] = pd.concat([float_aggregate_data['cycle_timing'], df_ct], ignore_index=True)
+                        float_aggregate_data['cycle_timing'] = AppendRows(float_aggregate_data['cycle_timing'], df_ct)
                 
                         # Summary data
                         
@@ -1819,7 +1833,7 @@ def ProcessDirectory(dpath):
             
                 # Read file lastprocessed file
                 try: 
-                    with open(fpath_lproc, 'r') as file:
+                    with open(fpath_lproc, 'r', encoding='utf-8') as file:
                         lproc = float(file.read())
                 except:
                     raise Exception('Failed to read file: ' + fpath_lproc)
@@ -1891,7 +1905,7 @@ def WriteLastProcessedFiles():
     for fpath_lproc, lproc in lastprocessed_pending:
 
         try:
-            with open(fpath_lproc, 'w') as file:
+            with open(fpath_lproc, 'w', encoding='utf-8') as file:
                 file.write(str(lproc))
         except:
 
@@ -1954,7 +1968,7 @@ def ProcessJsonListingFile(fpath):
         # Read file:
             
         try:
-            file = open(fpath, 'r')
+            file = open(fpath, 'r', encoding='utf-8')
             dive_json = file.read()
             file.close()
         except:
@@ -1963,7 +1977,7 @@ def ProcessJsonListingFile(fpath):
         # Decode file: 
         
         try:     
-            dive_data = jsonpickle.decode(dive_json) 
+            dive_data = jsonpickle.decode(dive_json, keys=True) 
         except:
             raise Exception('Failed do decode file:' + fpath)
             
@@ -2257,8 +2271,8 @@ def WriteAggregateJsonFiles():
                     fpath = os.path.join(dpath_float, '{}_summary.json'.format(float_id))
                     fpath = re.sub('\\\\', '/', fpath)
                     
-                    with open(fpath, 'w') as file:
-                        dive_json = jsonpickle.encode(float_aggregate_data['summary'], unpicklable=True, indent=2,  separators=(',', ':'))
+                    with open(fpath, 'w', encoding='utf-8') as file:
+                        dive_json = jsonpickle.encode(float_aggregate_data['summary'], unpicklable=True, keys=True, indent=2,  separators=(',', ':'))
                         # dive_json = jsonpickle.encode(dive_data, unpicklable=True, separators=(',', ':'))
                         file.write(dive_json)
                         
@@ -8338,7 +8352,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 
                 try:
                     df_dive = df_dives[df_dives['dive'] == dive]
-                    df_dive.reset_index(inplace=True)
+                    df_dive = df_dive.reset_index()
                     
                     if len(df_dive) < 1: 
                         logger.debug('No pump data for float {}, dive {}'.format(float_id, dive))

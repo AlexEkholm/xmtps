@@ -476,7 +476,7 @@ def PreviousValidFix(fpath_list, dive_num):
     for _, fname in sorted(dives, reverse = True):
         fixes = []
         try:
-            with open(os.path.join(dpath, fname), 'r', errors = 'replace') as f:
+            with open(os.path.join(dpath, fname), 'r', encoding='utf-8', errors = 'replace') as f:
                 for line in f:
                     if not re.match('^GPS ', line):
                         continue
@@ -587,7 +587,7 @@ def ProcessListingFile(fpath_list):
         lines = [];
         try: 
             
-            file = open(fpath_list, 'r')
+            file = open(fpath_list, 'r', encoding='utf-8')
             lines = file.readlines()
             file.close()
             
@@ -1279,11 +1279,11 @@ def WriteJsonDiveDataFile(dive_data):
         # Write dive files:
         logger.info('Writing JSON file: ' + fpath_json + ' ...')
         try:
-            file = open(fpath_json, 'w')
+            file = open(fpath_json, 'w', encoding='utf-8')
             # json.dump(dive_data.toJson(), file)
             # file.write(dive_data.toJson(), file)
             # dive_json = jsonpickle.encode(dive_data, unpicklable=True, indent=2, separators=(',', ':'))
-            dive_json = jsonpickle.encode(dive_data, unpicklable=True, separators=(',', ':'))
+            dive_json = jsonpickle.encode(dive_data, unpicklable=True, keys=True, separators=(',', ':'))
             file.write(dive_json)
             file.close()
         except:

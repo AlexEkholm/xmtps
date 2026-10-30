@@ -161,7 +161,7 @@ def ProcessJsonSummaryFile(fpath):
         # Read file:
             
         try:
-            with open(fpath, 'r') as file:
+            with open(fpath, 'r', encoding='utf-8') as file:
                 summary_json = file.read()
 
         except:
@@ -171,7 +171,7 @@ def ProcessJsonSummaryFile(fpath):
         # Decode file: 
         
         try:     
-            summary = jsonpickle.decode(summary_json) 
+            summary = jsonpickle.decode(summary_json, keys=True) 
         except:
             raise Exception('Failed do decode file:' + fpath)
             

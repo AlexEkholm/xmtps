@@ -555,7 +555,7 @@ The installed copies live in `/etc/systemd/system/`. After installing or changin
 These tools turn the listing files into JSON and generate the plot pages published at
 [argo.whoi.edu/alamo](https://argo.whoi.edu/alamo/).
 
-Requires Python 3 with `numpy`, `scipy`, `pandas`, `plotly` (plus `kaleido` for PNG export),
+Requires Python 3.12 or later (tested with 3.12 and 3.14; pandas 2.3 and 3.x) with `numpy`, `scipy`, `pandas`, `plotly` (plus `kaleido` for PNG export),
 `jsonpickle`, `geographiclib`, `pytz`, `python-dateutil`, `Pillow` and `yattag`; see
 [Versions](#versions) for the versions production uses.
 

@@ -12,6 +12,18 @@ Python tools:
   and 9310 (was [0.03189, 0.07842] Hz, fitted with them). The taper now reaches 1 at 0.119 Hz
   instead of 0.110 Hz and is larger below about 0.09 Hz: 0.05 instead of 0 at 0.030 Hz, 0.26 instead of
   0.13 at 0.050 Hz.
+- `xmtps-aggregate-json.py`: listing fill values (e.g. pressure -9.999, rate -9.99, `cep_km`
+  999999) are removed again under pandas 3. pandas 3 no longer ignores empty frames when it
+  chooses the dtypes of a concatenation, so every aggregate column appended to its empty initial
+  frame became `object` and `RemoveFillValues` skipped it; rows are now appended with
+  `AppendRows`, which keeps the dive data's dtypes. Production (pandas 3.0.3) has been writing the
+  fill values into the aggregate JSON files and plots.
+- Python 3.14 and current packages (pandas 3.1, plotly 7.1, kaleido 1.5, jsonpickle 4.1.4): the
+  tools run without warnings. Files are opened with an explicit UTF-8 encoding; jsonpickle is
+  called with `keys=True` (the jsonpickle 5 default; output is unchanged because all keys are
+  strings); `inplace=True` sort and reset calls are replaced by assignments; the
+  `mode.chained_assignment` option is set only under pandas 2. With the same inputs, 3.12 (pandas
+  2.3) and 3.14 (pandas 3.1) write identical JSON and the same plots.
 
 ## 2026-10-29
 
