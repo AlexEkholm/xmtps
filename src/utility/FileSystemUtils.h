@@ -205,7 +205,7 @@ public:
      *
      *  @warning    Despite its name, this function copies the file and does not remove the source.
      *              If a file with the same name already exists in the destination directory, it is
-     *              left unchanged. It is not currently called.
+     *              left unchanged. The caller removes the source file.
      *
      *  @param[in]  file        The file to copy.
      *  @param[in]  dir_dst     The destination directory.

@@ -39,7 +39,9 @@
  *  the signal handlers, and finally loads requisite data from both files on the local filesystem
  *  and the database. Then, the runtime lock will be checked and the thread will sleep for
  *  @ref XFLT_THREAD_SLEEP_MS milliseconds. If the application is configured to run as a daemon,
- *  then the last step will be repeated indefinitely until a termination signal is received.
+ *  then the last step will be repeated indefinitely until a termination signal is received. A
+ *  one-shot run that reads RAW mail files (mail.fetchMode = 1) repeats it until every file in the
+ *  input directory has been read (@ref XFloatMailRetrievalService::one_shot_input_done()).
  *  Finally, the exit handler, @ref util::sig::SignalHandler::ExitHandler(), is invoked to
  *  terminate the worker threads, save the locally cached data to the database, release the
  *  run-time lock, and flush the global logger.
@@ -59,6 +61,8 @@
  */
 int main(int argc, char** argv) {
 
+  using argo::iridium::xfloat::XFloatMailRetrievalService;
+  using argo::iridium::xfloat::XFloatPostProcessingService;
   using boost::posix_time::millisec;
   using boost::posix_time::seconds;
   using boost::this_thread::sleep;
@@ -75,6 +79,8 @@ int main(int argc, char** argv) {
     /* Application Initialization: */
 
     LocalConfiguration cfg(Initialize(argc, argv));   // Initialize application.
+    if(!cfg.is_daemon())                              // Write the KML and status files once more
+      XFloatPostProcessingService::set_final_pass_on_termination();  // before a one-shot exits.
     StartWorkerThreads();                             // Start worker threads.
     for(int delay_msec = XFLT_DAEMON_THREAD_SPINUP_DELAY_SEC * 1000;
         delay_msec >= 0 && !SignalHandler::caught_signal();
@@ -95,6 +101,8 @@ int main(int argc, char** argv) {
      *  - Checks run-time lock.
      *  - Flushes global log periodically.
      *  - If daemon, loops until termination signal is encountered.
+     *  - Otherwise, when reading RAW mail files (mail.fetchMode = 1), loops until every file in
+     *    the input directory has been read; the exit handler then drains the pipeline.
      */
 
     while(!SignalHandler::caught_signal()) {
@@ -108,7 +116,8 @@ int main(int argc, char** argv) {
         ms_since_log_last_flushed = 0;
       }
 
-      if(!cfg.is_daemon())                            // If daemon, loop until termination.
+      if(!cfg.is_daemon()                             // If daemon, loop until termination.
+          && XFloatMailRetrievalService::one_shot_input_done())
         break;
     }
 
@@ -142,6 +151,7 @@ int main(int argc, char** argv) {
 const util::config::LocalConfiguration& Initialize(int argc, char** argv) ATTR_NO_EXCEPTIONS {
 
   using argo::iridium::xfloat::XFloat;
+  using argo::iridium::xfloat::XFloatMailRetrievalService;
   using util::config::LocalConfiguration;
   using util::log::Log;
   using util::sig::SignalHandler;
@@ -167,6 +177,18 @@ const util::config::LocalConfiguration& Initialize(int argc, char** argv) ATTR_N
     try {
       SignalHandler::RegisterSignalHandlers();
     }CATCH_BLOCK("Failed to register signal handlers!")
+
+    /* Check Options That Depend on the SQL Database: */
+
+    try {
+      try {
+        XFloatMailRetrievalService::CheckSqlDependentOptions();
+      } catch(...) {
+        // Release the run-time lock, so that a corrected run is not locked out.
+        try { LocalConfiguration::ReleaseRuntimeLock(); } catch(...) { /* Do nothing. */ }
+        throw;
+      }
+    }CATCH_BLOCK("Invalid configuration!")
 
     /* Load Cached Instrument Data: */
 
@@ -672,6 +694,14 @@ options_description LocalConfiguration::GenerateConfigurationFileOptionsDescript
     /* Define SQL server options: */
 
     desc_sql.add_options()
+
+        ("sql.enable",
+            value<bool>(&LocalMysqlConfiguration::enabled_) //
+              ->default_value(true) //
+              ->value_name("0|1"),
+            "Use the SQL database. If FALSE, no connection is made and nothing is saved or "
+            "loaded: the floats are built in memory from the mail messages read in this run, and "
+            "reprocessing (-r, -R, -A) is not available.\n")
 
         ("sql.host",
             value<string>(&LocalMysqlConfiguration::address_) //

@@ -21,6 +21,7 @@ at [argo.whoi.edu/alamo](https://argo.whoi.edu/alamo/) (one page per float at
   - [Float metadata](#float-metadata)
   - [Surface pressure offset correction](#surface-pressure-offset-correction)
 - [Running](#running)
+  - [Without the mail or SQL server](#without-the-mail-or-sql-server)
   - [Output files](#output-files)
 - [Listing files](#listing-files)
   - [Layout rules](#layout-rules)
@@ -148,7 +149,7 @@ libraries are the Ubuntu packages; other versions may work but are not tested.
 | Option | Default | Description |
 |---|---|---|
 | `-c`, `--config PATH` | `../cfg/options.cfg` | Path to the configuration file. |
-| `-D`, `--daemon` | off | Run as a daemon: keep running until a termination signal or until the run-time lock is lost. Without it, the program starts the pipeline, waits briefly, and exits. |
+| `-D`, `--daemon` | off | Run as a daemon: keep running until a termination signal or until the run-time lock is lost. Without it, the program starts the pipeline, waits briefly, and exits; when reading RAW mail files (`mail.fetchMode = 1`) it first reads every file in `dir.mail`, then finishes processing them and exits (see [Without the mail or SQL server](#without-the-mail-or-sql-server)). |
 | `-h`, `--help` | | Print all options with their defaults, then exit. |
 | `-V`, `--version` | | Print the version banner, then exit. |
 | `-d`, `--debug` | | Log at debug level. |
@@ -184,8 +185,8 @@ General:
 | `dir.meta` | `meta` | Float metadata (`.meta`) files. |
 | `dir.phy` | `phy` | PHY listing files. |
 | `dir.raw` | `raw` | RAW mail message output files. |
-| `dir.mail` | `raw/incoming` | RAW mail input files (file-system fetch mode). |
-| `dir.mail.processed` | `raw/processed` | Processed RAW mail input files. Accepted but not currently used. |
+| `dir.mail` | `raw/incoming` | RAW mail input files (file-system fetch mode): `*.raw` or `*.txt` files, each holding one email as received (headers and MIME body). |
+| `dir.mail.processed` | `raw/processed` | RAW mail input files are moved here once queued for processing (a file of the same name already here is kept). If set empty, they are deleted instead. |
 | `dir.sbd` | `sbd` | Binary SBD message files. |
 | `dir.stat` | `stat` | Status files. |
 
@@ -218,7 +219,7 @@ General:
 | `mail.user` | `alamo` | Mail account user name. |
 | `mail.password` | none | Mail account password. |
 | `mail.folder` | empty (server default) | Folder to read messages from, e.g. `INBOX`. |
-| `mail.fetchMode` | `0` | `0` fetch from the mail server; `1` read RAW mail files from `dir.mail` (renamed to `.err` if they can't be parsed). |
+| `mail.fetchMode` | `0` | `0` fetch from the mail server; `1` read RAW mail files from `dir.mail` (renamed to `.err` if they can't be parsed), with no mail server settings needed and no connection made. |
 | `mail.moveMessages` | `0` | Move server messages to the folder `INBOX.<YYYYMM>` for their header date once they are processed (saved to the SQL database or rejected); a message whose processing is interrupted stays in the inbox. |
 | `mail.timeout` | `120` | Seconds without data from the mail server after which an operation (connect, login, fetch, copy, delete, expunge) is canceled; the connection is closed and reopened at the next check, and messages not yet moved are moved then. |
 | `mail.xDlyS` | `60` | Seconds to wait before checking again when no new messages are found. |
@@ -233,6 +234,7 @@ URL is built.
 
 | Option | Default | Description |
 |---|---|---|
+| `sql.enable` | `1` | Use the database. `0` runs without it: no connection is made, nothing is loaded or saved, and the other `sql.*` options are ignored (see [Without the mail or SQL server](#without-the-mail-or-sql-server)). |
 | `sql.host` | `127.0.0.1` | Server host name or IP address. |
 | `sql.port` | `3306` | Server port. |
 | `sql.protocol` | `tcp` | Connection protocol. |
@@ -331,6 +333,65 @@ removed on shutdown only by the process that owns it.
 Logs are written to `<dir.log>/YYYY-MM-DD.log`, with warnings and errors also in
 `<dir.log>/YYYY-MM-DD.error.log`.
 
+### Without the mail or SQL server
+
+XMTPS can decode a directory of saved emails with neither a mail server nor a database, for
+example to test a change or to decode messages away from the production host:
+
+- `mail.fetchMode = 1` reads the emails from files in `dir.mail` instead of the mail server. Each
+  `*.txt` or `*.raw` file holds one email as received from the Iridium gateway, headers and MIME
+  body with the base64 SBD attachment (like [`example/mail/`](example/mail/)). Leading `#` and
+  blank lines are skipped, so standard-format RAW files (`gen.raw.format = 0`) can be read back;
+  the extended-format ones (the default) don't contain the email. Files are read in name order,
+  so name them in the order the messages were sent (for example by MOMSN): the decoder carries
+  state such as the sensor type from one dive to the next. No `mail.*` server option is needed.
+  A file is moved to `dir.mail.processed` once queued, or renamed to `.err` if it can't be
+  parsed, so it is not read again.
+- `sql.enable = 0` turns the database off: nothing is loaded from or saved to it, and no
+  connection is made. Each float is built in memory from the messages read in this run, so give
+  it every message of the dives to decode, plus the three dives before each (their surface
+  pressure goes into the [pressure offset](#surface-pressure-offset-correction)) and the next
+  dive (its start-of-dive GPS fix is the profile position when the dive has no good end-of-dive
+  fix). A float whose dives don't all send a mission configuration message also needs the
+  last dive that did, for its sensor type. KML files show only the positions read in this run,
+  and RAW files give `Message UID: -1`, as the UID comes from the database. Reprocessing needs
+  the stored messages, so `-r` and `-R` are rejected, and `-A` and the reprocessing implied by
+  `--phy-enable` are skipped. `mail.moveMessages = 1` with the mail server is rejected, since
+  messages would leave the inbox without being saved. A message whose subject gives no serial
+  number is matched to a float read in this run by its IMEI, or dropped.
+- Without `-D`, a run with `mail.fetchMode = 1` reads every file in `dir.mail`, finishes
+  processing them (listing, RAW, SBD, PHY, KML and status files), and exits.
+
+Example: decode the emails in `./mail-in` into `./out`:
+
+```ini
+# nosql.cfg
+[dir]
+meta                    = /data1/alamo/meta/dac
+mail                    = mail-in
+mail.processed          = out/mail-done
+lis                     = out/list
+raw                     = out/raw
+sbd                     = out/sbd
+kml                     = out/kml
+stat                    = out/stat
+phy                     = out/phy
+log                     = out/log
+
+[mail]
+fetchMode               = 1
+
+[sql]
+enable                  = 0
+```
+
+```
+mkdir -p out/log
+xmtps -v --config nosql.cfg --pid-file out/xmtps.pid
+```
+
+The log directory must exist; the others are created as needed.
+
 ### Output files
 
 | Output | Location |
@@ -345,8 +406,8 @@ The [`example/`](example/) folder has a real example of each file, all from floa
 [JSON](example/json/) and [plot](example/plots/) files the Python tools make from it (see
 [example/README.md](example/README.md)).
 
-Decoded data, messages, floats and dives are also stored in the MySQL database (see
-[SQL backend](#sql-backend)).
+Decoded data, messages, floats and dives are also stored in the MySQL database, unless
+`sql.enable = 0` (see [SQL backend](#sql-backend)).
 
 ## Listing files
 

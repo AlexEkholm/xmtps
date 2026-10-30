@@ -100,6 +100,12 @@ private:
      */
     static std::atomic<bool> termination_signaled_;
 
+    /** Whether the KML and status files are written once more on termination.
+     *
+     *  Set for a one-shot (non-daemon) run, so that the files reflect all the messages it read.
+     */
+    static bool final_pass_on_termination_;
+
 private:
 
     /* Private Member Functions: */
@@ -115,6 +121,73 @@ private:
 
     static void set_termination_signaled(bool termination_signaled = true) {
         termination_signaled_ = termination_signaled;
+    }
+
+    /** Write the KML and status files of the cached floats that need it.
+     *
+     *  @param[in]  stop_on_termination     If TRUE, stop once termination is signaled.
+     */
+    static void UpdateFloatFiles(bool stop_on_termination) {
+
+        namespace attr = blg::attributes;
+
+        bool update_master = false;
+        vector<shared_ptr<XFloat> > insts(XFloat::GetAllCachedFloats());
+        shared_ptr<XFloat> inst;
+
+        for(auto float_it = insts.begin();
+                float_it < insts.end() && !(stop_on_termination && termination_signaled_);
+                ++float_it) {
+
+            if(!(inst = *float_it))
+                continue;
+
+            // Set scoped thread log attributes.
+            BOOST_LOG_SCOPED_THREAD_ATTR("WhoiID", attr::constant<int>(inst->id_instrument()));
+            BOOST_LOG_SCOPED_THREAD_ATTR("DacID", attr::constant<int>(inst->id_dac()));
+            BOOST_LOG_SCOPED_THREAD_ATTR("WmoID", attr::constant<int>(inst->id_wmo()));
+
+#           if defined(XMTPS_DEBUG_POST_PROC_THREAD) \
+                && XMTPS_DEBUG_NC_FILE_WRITER_THREAD
+
+            ldbg() << "Performing post-processing tasks for instrument #"
+                    << inst->id_instrument() << "...";
+
+#           endif // defined(XMTPS_DEBUG_POST_PROC_THREAD) ...
+
+            /* Catch per-float failures so one bad float does not skip the remaining
+             * floats, the master KML update, or closing the SQL connection. */
+            try {
+
+                // Write KML file.
+                if(inst->WriteKmlFile())
+                    update_master = true;
+
+            }CATCH_NOTHROW("Failed to write KML file for instrument!")
+
+            try {
+
+                // Write the status file.
+                inst->WriteStatusFile();
+
+            }CATCH_NOTHROW("Failed to write status file for instrument!")
+
+            inst.reset();
+        }
+
+        if(update_master) {
+
+            try {
+
+                // Update the master KML file.
+                XFloat::WriteKmlMasterFile();
+
+            }CATCH_NOTHROW("Failed to write KML master file!")
+
+        }
+
+        // Close SQL connection when not in use.
+        util::mysql::MysqlUtils::CloseSqlConnection();
     }
 
 public:
@@ -165,9 +238,9 @@ public:
 
         namespace attr = blg::attributes;
 
-        bool update_master;
-        vector<shared_ptr<XFloat> > insts;
+#       if defined(XMTPS_POST_PROC_USES_QUEUE) && XMTPS_POST_PROC_USES_QUEUE
         shared_ptr<XFloat> inst;
+#       endif // defined(XMTPS_POST_PROC_USES_QUEUE) && XMTPS_POST_PROC_USES_QUEUE
         unsigned int sleep_ms;
 
         BOOST_LOG_SCOPED_THREAD_ATTR("ThreadName", attr::constant<string>("post-process"));
@@ -216,64 +289,9 @@ public:
 
                     sleep(millisec(XFLT_THREAD_SLEEP_MS));
 
-                // Iterate over instrument objects.
-                update_master = false;
-                insts = XFloat::GetAllCachedFloats();
-                for(auto float_it = insts.begin();
-                        float_it < insts.end() && !termination_signaled_; ++float_it) {
+                // Iterate over instrument objects and update their files.
+                UpdateFloatFiles(true);
 
-                    if(!(inst = *float_it))
-                        continue;
-
-                    // Set scoped thread log attributes.
-                    BOOST_LOG_SCOPED_THREAD_ATTR("WhoiID", attr::constant<int>(inst->id_instrument()));
-                    BOOST_LOG_SCOPED_THREAD_ATTR("DacID", attr::constant<int>(inst->id_dac()));
-                    BOOST_LOG_SCOPED_THREAD_ATTR("WmoID", attr::constant<int>(inst->id_wmo()));
-
-#                   if defined(XMTPS_DEBUG_POST_PROC_THREAD) \
-                        && XMTPS_DEBUG_NC_FILE_WRITER_THREAD
-
-                    ldbg() << "Performing post-processing tasks for instrument #"
-                            << inst->id_instrument() << "...";
-
-#                   endif // defined(XMTPS_DEBUG_POST_PROC_THREAD) ...
-
-                    /* Catch per-float failures so one bad float does not skip the remaining
-                     * floats, the master KML update, or closing the SQL connection. */
-                    try {
-
-                        // Write KML file.
-                        if(inst->WriteKmlFile())
-                            update_master = true;
-
-                    }CATCH_NOTHROW("Failed to write KML file for instrument!")
-
-                    try {
-
-                        // Write the status file.
-                        inst->WriteStatusFile();
-
-                    }CATCH_NOTHROW("Failed to write status file for instrument!")
-
-                    inst.reset();
-                }
-                insts.clear();
-
-                if(update_master) {
-
-                    try {
-
-                        // Update the master KML file.
-                        XFloat::WriteKmlMasterFile();
-
-                    }CATCH_NOTHROW("Failed to write KML master file!")
-
-                }
-                
-
-                // Close SQL connection when not in use.
-                util::mysql::MysqlUtils::CloseSqlConnection();
-                
 #           endif // defined(XMTPS_POST_PROC_USES_QUEUE) && XMTPS_POST_PROC_USES_QUEUE
 
             }CATCH_NOTHROW("Exception caught in post-processing analysis thread!")
@@ -283,7 +301,21 @@ public:
         // Terminate.
         ldbg() << "Termination signal received! Shutting down...";
 
+        /* A one-shot run writes the files for everything it read: the earlier stages have
+         * finished before this thread is told to terminate. */
+        if(final_pass_on_termination_)
+            try {
+
+                UpdateFloatFiles(false);
+
+            }CATCH_NOTHROW("Exception caught while writing the final KML and status files!")
+
         return;
+    }
+
+    /** Write the KML and status files once more on termination (for a one-shot run). */
+    static void set_final_pass_on_termination(bool final_pass = true) {
+        final_pass_on_termination_ = final_pass;
     }
 
     /** Instantiate the post-processing analysis worker thread.

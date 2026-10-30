@@ -267,7 +267,16 @@ class XFloatMailRetrievalService:
 
     static path mail_file_input_directory_;
 
+    /** The directory that RAW mail input files are moved to once queued for processing.
+     *
+     *  If empty, the files are removed instead.
+     */
     static path mail_file_processed_directory_;
+
+    /** Set once the RAW mail input directory has been found empty (mail.fetchMode = 1), i.e.
+     *  every input file has been queued for processing. A one-shot run then exits.
+     */
+    static std::atomic<bool> input_exhausted_;
 
     /** The mail server host qualified name or IP address string.
      *
@@ -446,6 +455,10 @@ class XFloatMailRetrievalService:
     static void StartWorkerThread() ATTR_NO_EXCEPTIONS;
 
     static void TerminateWorkerThread() ATTR_NO_EXCEPTIONS;
+
+    static void CheckSqlDependentOptions();
+
+    static bool one_shot_input_done();
 
   private:
 

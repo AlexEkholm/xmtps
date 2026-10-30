@@ -306,6 +306,10 @@ public:
 
     void DeleteObjectsFromDatabase(const string& where = "") const  {
 
+        // Without the SQL database (sql.enable = 0), there is nothing to delete.
+        if(!is_sql_enabled())
+            return;
+
         try {
 
             // Execute query.
@@ -317,6 +321,8 @@ public:
 
     /** Save a persistent entity to the SQL table.
      *
+     *  Without the SQL database (sql.enable = 0), nothing is saved.
+     *
      *  @throws         util::log::MessageException if an error occurs.
      *
      *  @param[in]      obj             The instance of the persistent entity to save to the
@@ -325,6 +331,9 @@ public:
     void SaveObjectToDatabase(const T& obj) const {
         shared_ptr<SqlTableColumnDescriptionBase> col;
         shared_ptr<PreparedStatement> stmt;
+
+        if(!is_sql_enabled())
+            return;
 
         try {
             // Generate the SQL prepared statement.
@@ -502,6 +511,8 @@ public:
 
     /** Select objects from this SQL database table.
      *
+     *  Without the SQL database (sql.enable = 0), no objects are selected.
+     *
      *  @param[in]      where       The SQL select statement where-condition clause.
      *  @param[in]      groupBy     The SQL select statement group-by clause.
      *  @param[in]      orderBy     The SQL select statement order-by clause.
@@ -520,6 +531,9 @@ public:
             const unsigned int& offset = 0) const {
 
         vector<shared_ptr<T> > resultVector;
+
+        if(!is_sql_enabled())
+            return resultVector;
 
         try {
             // Execute query.

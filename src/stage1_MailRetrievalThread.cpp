@@ -55,6 +55,8 @@ path XFloatMailRetrievalService::mail_file_input_directory_;
 
 path XFloatMailRetrievalService::mail_file_processed_directory_;
 
+std::atomic<bool> XFloatMailRetrievalService::input_exhausted_(false);
+
 string XFloatMailRetrievalService::mail_server_host_;
 
 string XFloatMailRetrievalService::mail_server_inbox_folder_path_;
@@ -135,6 +137,48 @@ void XFloatMailRetrievalService::TerminateWorkerThread() ATTR_NO_EXCEPTIONS {
         }
 
     }CATCH_BLOCK("Failed to terminate NetCDF file writer thread!")
+}
+
+/** Check the options that need the SQL database.
+ *
+ *  Called by the daemon thread during initialization. Without the SQL database (sql.enable = 0)
+ *  there are no stored messages to reprocess and nowhere to save fetched mail before it is moved
+ *  out of the inbox, so reprocessing given on the command line (-r, -R) and mail.moveMessages are
+ *  rejected. Reprocessing active floats (-A, on by default) and the reprocessing implied by
+ *  --phy-enable are skipped.
+ *
+ *  @throw          util::log::MessageException if an option needs the SQL database but it is
+ *                  disabled.
+ */
+void XFloatMailRetrievalService::CheckSqlDependentOptions() {
+
+    if(is_sql_enabled())
+        return;
+
+    if(is_reprocess_all_ || !reprocess_by_inst_ids_.empty())
+        EXC_THROW("Reprocessing (-r, -R) needs the SQL database, but it is disabled "
+                  "(sql.enable = 0)!");
+
+    if(move_mail_messages_ && mail_fetch_mode_ == MAIL_FETCH_SERVER)
+        EXC_THROW("mail.moveMessages = 1 needs the SQL database, but it is disabled "
+                  "(sql.enable = 0): messages would leave the inbox without being saved!");
+
+    is_reprocess_active_ = false;
+
+    lout() << "SQL database disabled (sql.enable = 0): nothing is loaded from or saved to the "
+              "database, and floats are built from the mail messages read in this run.";
+}
+
+/** Has a one-shot (non-daemon) run read all of its input?
+ *
+ *  When reading RAW mail files (mail.fetchMode = 1), this is TRUE once every file in the input
+ *  directory has been queued for processing. In the other fetch modes it is always TRUE, so a
+ *  one-shot run exits after the start-up delay, as before.
+ *
+ *  @return         TRUE if a one-shot run may exit.
+ */
+bool XFloatMailRetrievalService::one_shot_input_done() {
+    return mail_fetch_mode_ != MAIL_FETCH_FILESYSTEM || input_exhausted_;
 }
 
 /** Set the termination signaled flag.
@@ -374,12 +418,26 @@ size_t XFloatMailRetrievalService::FetchMailMessagesFromFileSystem() {
                   break;
               }
 
-              // Remove mail files
-              remove(mail_file_path);
               is_processed = true;
               ++num_processed;
 
-              // TODO Move raw files to "processed" folder ??
+              // Move the file to the processed directory, or remove it if none is set.
+              if(mail_file_processed_directory_.empty())
+                  remove(mail_file_path);
+              else
+                  try {
+
+                      MoveFileToDirectory(mail_file_path, mail_file_processed_directory_, true);
+                      remove(mail_file_path);
+
+                  } catch(...) {
+
+                      // Keep the file, under a name that is not fetched again.
+                      lwrn() << "Failed to move raw mail input file to "
+                             << mail_file_processed_directory_.string() << "; renaming it: "
+                             << mail_file_path.string() << ".processed";
+                      rename(mail_file_path, path(mail_file_path.string() + ".processed"));
+                  }
 
 
           } CATCH_NOTHROW("Failed to parse raw mail input file!")
@@ -723,6 +781,10 @@ vector<path> XFloatMailRetrievalService::ListRawMailFiles() {
             return regex_match(p.string(), regex(".*/.*\\.(raw|txt)", regex::extended));
         });
 
+        // Read the files in name order, so that files named in transmission order (e.g. by
+        // MOMSN) are processed in the order the messages were sent, as from the mail server.
+        sort(paths.begin(), paths.end());
+
         // Apply the fetch limit after filtering, so lock and error files do not use it up.
         if(max_num_msgs_to_fetch_ > 0 && paths.size() > max_num_msgs_to_fetch_)
             paths.resize(max_num_msgs_to_fetch_);
@@ -858,8 +920,12 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
     XFloatMailProcessingService::set_track_processed_msg_uids(
             move_mail_messages_ && mail_fetch_mode_ == MAIL_FETCH_SERVER);
 
-    // Check if any data needs to be reprocessed.
-    if(is_reprocess_all_) {
+    // Check if any data needs to be reprocessed. Without the SQL database, there is none.
+    if(!is_sql_enabled()) {
+
+        // Nothing to reprocess.
+
+    } else if(is_reprocess_all_) {
 
         // Reprocess all instrument data.
         for(auto it = (floats = XFloat::GetAllCachedFloats()).begin(); it != floats.end(); ++it)
@@ -1019,6 +1085,24 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
 
                   // Fetch more messages.
                   continue;
+
+              // Every input file has been queued once none is left (or the directory cannot be
+              // listed), so a one-shot run can exit.
+              if(!input_exhausted_) {
+
+                  bool none_left = true;
+                  try {
+                      none_left = ListRawMailFiles().empty();
+                  } catch(...) {
+                      /* Do nothing. */
+                  }
+
+                  if(none_left) {
+                      lout() << "All raw mail input files read from: "
+                             << mail_file_input_directory_.string();
+                      input_exhausted_ = true;
+                  }
+              }
 
               try {
 

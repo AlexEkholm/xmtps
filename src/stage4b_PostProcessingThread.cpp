@@ -52,6 +52,8 @@ shared_ptr<XFloatPostProcessingService>  XFloatPostProcessingService::thread_obj
 
 std::atomic<bool> XFloatPostProcessingService::termination_signaled_(false);
 
+bool XFloatPostProcessingService::final_pass_on_termination_(false);
+
 } /* namespace xfloat */
 } /* namespace iridium */
 } /* namespace argo */

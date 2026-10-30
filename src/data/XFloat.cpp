@@ -612,6 +612,10 @@ void XFloat::LoadLocalCacheFromDatabase() {
 
   namespace attr = blg::attributes;
 
+  // Without the SQL database (sql.enable = 0), there is nothing to load.
+  if(!sql_table_description_.is_sql_enabled())
+    return;
+
   try {
 
     lout() << "Loading persistent instrument data from the SQL database...";
@@ -698,6 +702,11 @@ void XFloat::LoadMetadataFromFiles() {
  *  @throw          util::log::MessageException if an error occurs.
  */
 void XFloat::SaveLocalCacheToDatabase() {
+
+  // Without the SQL database (sql.enable = 0), there is nowhere to save it.
+  if(!sql_table_description_.is_sql_enabled())
+    return;
+
   try {
     // Get an exclusive lock.
     lock_guard<recursive_mutex> guard(id2float_map_mutex_);
@@ -1376,9 +1385,71 @@ shared_ptr<XFloatDiveData> XFloat::GetDiveData(int dive, bool local_only) {
   return x;
 }
 
+/** Get the dive data object for a dive, if it is in the local cache.
+ *
+ *  Unlike @ref GetDiveData(), no dive data object is loaded or created.
+ *
+ *  @param[in]  dive        The cycle or dive number of interest.
+ *
+ *  @return     The cached dive data object for the dive, or NULL if there is none.
+ */
+shared_ptr<XFloatDiveData> XFloat::GetCachedDiveData(int dive) const {
+
+  lock_guard<recursive_mutex> guard(mutex_);
+
+  auto it = dive2data_map_.find(dive);
+  return it != dive2data_map_.end() ? it->second : shared_ptr<XFloatDiveData>();
+}
+
+/** Get the valid GPS positions of this float, oldest first.
+ *
+ *  Positions before the start of mission or the deployment are left out. Without the SQL
+ *  database (sql.enable = 0), the positions come from the dives read in this run.
+ *
+ *  @return     The valid GPS positions of this float.
+ */
 vector<shared_ptr<x::XGPS> > XFloat::GetGpsPositions() const {
 
   using x::XGPS;
+
+  if(!util::mysql::LocalMysqlConfiguration::is_sql_enabled())
+    try {
+
+      ptime after = start_of_mission_datetime();
+      shared_ptr<XFloatMetadata> meta(metadata());
+      if(meta && !meta->deployment_datetime().is_not_a_date_time()
+          && (after.is_not_a_date_time() || meta->deployment_datetime() > after))
+        after = meta->deployment_datetime();
+
+      // Copy the dive list first, so no dive is locked while this float is locked.
+      vector<shared_ptr<XFloatDiveData> > dives;
+      {
+        lock_guard<recursive_mutex> guard(mutex_);
+        for(auto it = dive2data_map_.begin(); it < dive2data_map_.end(); ++it)
+          if(it->second)
+            dives.push_back(it->second);
+      }
+
+      vector<shared_ptr<XGPS> > gps_positions;
+      for(const shared_ptr<XFloatDiveData>& dive : dives) {
+
+        lock_guard<recursive_mutex> guard(dive->mutex_);
+        for(const shared_ptr<XGPS>& gps : dive->xmsg_gps_positions_)
+          if(gps && gps->position_is_valid() && gps->id_type() <= 3
+              && (after.is_not_a_date_time() || gps->position_datetime() > after))
+            gps_positions.push_back(gps);
+      }
+
+      stable_sort(
+          gps_positions.begin(),
+          gps_positions.end(),
+          [](const shared_ptr<XGPS>& a, const shared_ptr<XGPS>& b) {
+            return a->position_datetime() < b->position_datetime();
+          });
+
+      return gps_positions;
+
+    } CATCH_BLOCK("Failed to get GPS position objects for instrument!")
 
   try {
 

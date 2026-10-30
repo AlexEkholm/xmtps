@@ -635,6 +635,8 @@ class XFloat:
 
     shared_ptr<XFloatDiveData> GetDiveData(int dive, bool load_from_local_cache_only = false);
 
+    shared_ptr<XFloatDiveData> GetCachedDiveData(int dive) const;
+
     vector<shared_ptr<x::XGPS> > GetGpsPositions() const;
 
     path GetListingDirectoryPath() const;

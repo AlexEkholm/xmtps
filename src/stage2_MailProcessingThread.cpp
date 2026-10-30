@@ -100,7 +100,8 @@ bool block) {
  *   - WmoID.
  *
  *  If the values of the WhoiID, DacID, or WmoID attributes are unknown, the thread will
- *  attempt to query these identifiers from the SQL database. These attributes are used by the
+ *  attempt to query these identifiers from the SQL database (without the SQL database, the WhoiID
+ *  is taken from a float with the same IMEI read in this run). These attributes are used by the
  *  global logger object for filtering, etc.
  *
  *  Next, the message processing begins. If the message header is invalid, then the message is
@@ -144,8 +145,17 @@ void XFloatMailProcessingService::ProcessMailMsg(const shared_ptr<XFloatMailMess
     BOOST_LOG_SCOPED_THREAD_ATTR("PcktID", attr::constant<int>(msg->id_sbd_packet()));
     BOOST_LOG_SCOPED_THREAD_ATTR("MomsnID", attr::constant<int>(msg->id_sbd_momsn()));
 
-    // Check the WHOI ID.
-    if(msg->id_instrument() == XFLT_ID_UNKNOWN)
+    // Check the WHOI ID. Without the SQL database, look for a float read in this run with the
+    // same IMEI.
+    if(msg->id_instrument() == XFLT_ID_UNKNOWN && !is_sql_enabled()) {
+
+      for(const shared_ptr<XFloat>& x : XFloat::GetAllCachedFloats())
+        if(x && x->id_imei() == msg->id_imei()) {
+          msg->set_id_instrument(x->id_instrument());
+          break;
+        }
+
+    } else if(msg->id_instrument() == XFLT_ID_UNKNOWN)
 
       try {
 

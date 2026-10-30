@@ -42,6 +42,8 @@ unsigned int LocalMysqlConfiguration::port_(CFG_MYSQL_DFLT_PORT);
 
 std::string LocalMysqlConfiguration::schema_(CFG_MYSQL_DFLT_SCHEMA);
 
+bool LocalMysqlConfiguration::enabled_(true);
+
 /* Function Definitions */
 
 /** Default constructor.
@@ -64,7 +66,7 @@ LocalMysqlConfiguration::~LocalMysqlConfiguration() {
  *  A new connection will be created, if necessary.
  *
  *  @throw          log::MessageException if an error occurs while generating the SQL connection
- *                  object.
+ *                  object, or if the SQL database is disabled (sql.enable = 0).
  *
  *  @return         A thread-specific instance of a MySQL connection object.
  */
@@ -75,6 +77,10 @@ sql::Connection* LocalMysqlConfiguration::getSqlConnection() {
     using util::mysql::MysqlUtils;
 
     try {
+
+        if(!enabled_)
+            EXC_THROW("The SQL database is disabled (sql.enable = 0)!");
+
         // Get configuration.
 
         // Get SQL host URL.
@@ -188,9 +194,15 @@ shared_ptr<sql::ResultSet> LocalMysqlConfiguration::executeQuery(const std::stri
  *  the query is tried once more on a new connection, because a connection that was open while
  *  the server went down stays unusable.
  *
+ *  If the SQL database is disabled (sql.enable = 0), there is nothing to wait for and TRUE is
+ *  returned without connecting.
+ *
  *  @return         TRUE if the SQL server answered the query, otherwise FALSE.
  */
 bool LocalMysqlConfiguration::isSqlServerAvailable() {
+
+    if(!enabled_)
+        return true;
 
     for(int attempt = 0; attempt < 2; ++attempt)
         try {

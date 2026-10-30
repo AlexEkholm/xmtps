@@ -5,6 +5,27 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 ## 2026-10-30
 
+Decoder:
+
+- XMTPS can run without the database and without the mail server, decoding a directory of
+  saved Iridium emails (see README, "Without the mail or SQL server"):
+  - New option `sql.enable` (default `1`). With `sql.enable = 0` no connection is made and
+    nothing is loaded or saved; floats are built in memory from the messages read in the run.
+    `-r`/`-R`, and `mail.moveMessages = 1` with the mail server, are rejected at startup (the
+    run-time lock is released); `-A` and the reprocessing implied by `--phy-enable` are skipped.
+    The next dive's start-of-dive GPS fix and the KML positions come from the dives read in the
+    run, and a message without a serial number is matched by IMEI to a float read in the run.
+  - File-system fetch mode (`mail.fetchMode = 1`) reads the files in name order and moves each
+    to `dir.mail.processed` once queued (previously it was deleted; set the option empty to
+    delete). It needs no mail server settings.
+  - Without `-D`, a file-system run reads every file in `dir.mail`, finishes processing them,
+    writes the KML and status files once more, and exits, instead of exiting after a few
+    seconds.
+  - Tested on argus with 161 emails rebuilt from float 9303's production RAW files (dives 157
+    and 430–441): the listings of dives 432–441 match production except dive 439, which lacks a
+    duplicate gateway email that has no RAW file; dives 430 and 431 lack their earlier dives for
+    the pressure offset.
+
 Documentation:
 
 - The X-message specification is also given as plain text, JSON, YAML and PDF

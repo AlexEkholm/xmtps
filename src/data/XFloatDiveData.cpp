@@ -43,6 +43,7 @@
 /* Includes: */
 
 #include "XFloatDiveData.h"   // header
+#include "XFloat.h"           // parent float (GetGpsProfilePosition())
 
 namespace argo {
 namespace iridium {
@@ -487,12 +488,22 @@ shared_ptr<x::XGPS> XFloatDiveData::GetGpsProfilePosition() const {
       return x;
 
     // Query the database for the start-of-dive position for the next dive cycle.
-    vector<shared_ptr<XGPS> > gps_positions(
-        XGPS::SelectObjectsFromDatabase(
+    vector<shared_ptr<XGPS> > gps_positions;
+    if(util::mysql::LocalMysqlConfiguration::is_sql_enabled())
+      gps_positions = XGPS::SelectObjectsFromDatabase(
             "id_instrument = " + lexical_cast<string>(id_instrument()) + " AND id_dive = "
                 + lexical_cast<string>(id_dive() + 1) + " AND id_type = "
                 + lexical_cast<string>((int) XMSG_TYPE_ID_GPS_STARTOFDIVE)
-                + " AND valid = 1"));
+                + " AND valid = 1");
+
+    // Without the SQL database, take it from the next dive read in this run, if any.
+    else if(shared_ptr<XFloatDiveData> next_dive = parent_instrument()->GetCachedDiveData(id_dive() + 1)) {
+
+      lock_guard<recursive_mutex> guard(next_dive->mutex_);
+      for(const shared_ptr<XGPS>& gps : next_dive->xmsg_gps_positions_)
+        if(gps && gps->id_xmsg_type() == XMSG_TYPE_ID_GPS_STARTOFDIVE && gps->position_is_valid())
+          gps_positions.push_back(gps);
+    }
 
     vector<shared_ptr<XGPS> >::iterator gps_postion_itr;
     for(gps_postion_itr = gps_positions.begin(); gps_postion_itr < gps_positions.end();

@@ -80,6 +80,13 @@ private:
     /** The SQL server schema name. */
     static string schema_;
 
+    /** Whether the SQL database is used (configuration option sql.enable).
+     *
+     *  If FALSE, no connection is made: objects are not saved, deletes do nothing and selects
+     *  return no rows, so the floats are built in memory from the mail messages read in this run.
+     */
+    static bool enabled_;
+
 protected:
 
     /* Member Functions */
@@ -97,6 +104,14 @@ public:
     static shared_ptr<sql::ResultSet> executeQuery(const string& query);
 
     static bool isSqlServerAvailable();
+
+    /** Is the SQL database used (configuration option sql.enable)?
+     *
+     *  @return         TRUE if the SQL database is used, or FALSE if it is disabled.
+     */
+    static bool is_sql_enabled() {
+        return enabled_;
+    }
 
     static int executeUpdate(const string& update);
 
