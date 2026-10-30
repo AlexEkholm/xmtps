@@ -107,20 +107,20 @@ libraries are the Ubuntu packages; other versions may work but are not tested.
 | MySQL Connector/C++ | 1.1.12 (`libmysqlcppconn-dev` 1.1.12-4.1ubuntu4, `libmysqlcppconn.so.7`) | legacy JDBC-style API (`sql::Connection`); uses `libmysqlclient.so.24` and OpenSSL 3 |
 | libkml | 1.3.0 (`libkml-dev` 1.3.0-13) | |
 | MySQL server | 8.4.11 | `sql_mode` must allow zero dates (see [SQL backend](#sql-backend)) |
-| Python | 3.12.13, in the venv `/data1/alamo/bin/py/.venv` | |
-| numpy | 2.5.0 | |
-| ppigrf | not yet installed | IGRF geomagnetic model for the wave direction declination correction; without it, wave directions stay referenced to magnetic north |
-| scipy | 1.18.0 | `scipy.interpolate` (`RhoLUT.py`), `scipy.io.netcdf_file` (ETOPO2) |
-| pandas | 3.0.3 | |
-| plotly | 6.8.0 | |
-| kaleido | 1.3.0 (with `choreographer` 1.3.0, `logistro` 2.0.1) | PNG export; drives Google Chrome for Testing 142.0.7444.175, which choreographer downloaded to `~/.local/share/choreographer` |
-| jsonpickle | 4.1.2 | |
+| Python | 3.14.4 (`/usr/bin/python3.14`), in the venv `/data1/alamo/bin/py/.venv` | the update-plots service activates it for every tool |
+| numpy | 2.5.4 | |
+| ppigrf | 2.1.0 | IGRF geomagnetic model for the wave direction declination correction; without it, wave directions stay referenced to magnetic north |
+| scipy | 1.18.1 | `scipy.interpolate` (`RhoLUT.py`), `scipy.io.netcdf_file` (ETOPO2) |
+| pandas | 3.1.0 | |
+| plotly | 7.1.0 | embeds plotly.js 4.1.1 |
+| kaleido | 1.5.0 (with `choreographer` 1.4.0, `logistro` 2.0.1) | PNG export; drives Google Chrome for Testing 142.0.7444.175, which choreographer downloaded to `~/.local/share/choreographer` |
+| jsonpickle | 4.1.4 | |
 | geographiclib | 2.1 | |
-| Pillow | 12.2.0 | |
+| Pillow | 13.0.0 | |
 | yattag | 1.16.1 | |
-| python-dateutil | 2.9.0.post0 | |
-| pytz | 2026.2 | |
-| orjson, simplejson | 3.11.9, 4.1.1 | used by plotly's JSON encoder (orjson) and by choreographer (simplejson) |
+| python-dateutil | 3.0.0 | |
+| pytz | 2026.6 | |
+| orjson, simplejson | 3.13.0, 4.2.0 | used by plotly's JSON encoder (orjson) and by choreographer (simplejson) |
 | ETOPO2 | ETOPO2v2c (NOAA NCEI, 2006), `/data1/etopo2/ETOPO2v2c_f4.nc` | bathymetry in the trajectory plots |
 
 ## Configuration
