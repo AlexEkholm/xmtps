@@ -42,7 +42,10 @@ at [argo.whoi.edu/alamo](https://argo.whoi.edu/alamo/) (one page per float at
 
 Iridium delivers each SBD message as an email with a binary `.sbd` attachment. The binary
 X-message format the floats send is specified in
-[spec/xmessage-format.md](spec/xmessage-format.md). XMTPS processes them in a four-stage
+[spec/xmessage-format.md](spec/xmessage-format.md), which is also given as plain text, JSON,
+YAML and a PDF built from LaTeX (`spec/xmessage-format.{txt,json,yaml,tex,pdf}`). The markdown
+is the source of truth: after changing it, regenerate the other formats with
+`python spec/build-formats.py` (standard library only; the PDF needs XeLaTeX). XMTPS processes them in a four-stage
 pipeline of worker threads, connected by bounded queues:
 
 | Stage | Source | Role |

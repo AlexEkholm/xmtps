@@ -913,7 +913,7 @@ SOLO-II (0) and Deep Argo (1) are `@todo` in the decoder.
 | 28 | 4 | u32 | surface start time | s since 2000-01-01 | `start-of-surface`. |
 | 32 | 1 | u8 | float type | — | 0 = SOLO-II, 1 = Deep Argo, 3 = ALAMO. Must be 3 for decoding. |
 | 33 | 1 | u8 | target ascent rate | cm/s | `tarAscRate`. |
-| 34 | 2 | u16 | max number of seeks | — | **The decoder reads only byte 34 (u8)**, so the listed `nSeek` is the high byte, 0 on all observed floats, where the true value is 1 [O]. | *(Fixed in build 3309.)*
+| 34 | 2 | u16 | max number of seeks | — | **The decoder reads only byte 34 (u8)**, so the listed `nSeek` is the high byte, 0 on all observed floats, where the true value is 1 [O]. *(Fixed in build 3309.)* |
 | 36 | 2 | u16 | max surface duration | s | `maxSurfT`. Observed raw value 1 [O]. |
 | 38 | 2 | u16 | seek interval | min | `seekIntervalT`. |
 | 40 | 2 | u16 | pressure gain | LSB/dBar | `pGain`. |
@@ -2469,7 +2469,7 @@ The float sends its mission parameters: the dive-cycle, CTD, descent, park, asce
 |---:|---:|---|---|---|
 | 0 | 1 | U1 | ID | 0xD0, 0xD1, 0xD2, 0xD3 (SOLO2: "possible values 0:d" |
 | 1 | 2 | U2 | `jj` | Variable. |
-| 3 | `jj` - 4 | ASCII | Parameter list | `NAMExx=vvvvv|` records, 6-character name, `=`, 5-character value and `|`, with no gaps between records. Example: `PchSec=   -1|MaxHrs= 1440|dBarGo=   -1|...| XP2=    0| XPdly=    0|`. |
+| 3 | `jj` - 4 | ASCII | Parameter list | `NAMExx=vvvvv\|` records, 6-character name, `=`, 5-character value and `\|`, with no gaps between records. Example: `PchSec=   -1\|MaxHrs= 1440\|dBarGo=   -1\|...\| XP2=    0\| XPdly=    0\|`. |
 | `jj` - 1 | 1 | char | `;` | Terminator. |
 
 SOLO2 says the dump takes 4 SBD messages: D0, D1 and D2 of 328 bytes each, and D3 of 7 bytes. It also says each parameter takes 15 bytes, but the record template it gives has 13 characters (see C.5).
