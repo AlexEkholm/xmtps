@@ -87,15 +87,17 @@ CPOS_MAX_CEP_KM = 2.0
 
 JSON_VERSION = "0.11"
 
-BATHYMETRY_FILE = '/data1/etopo2/ETOPO2v2c_f4.nc'   # NOAA ETOPO2v2c, 2' cell-centred grid
+# NOAA ETOPO 2022 60" surface elevation, converted to classic netCDF for scipy (see README)
+BATHYMETRY_FILE = '/data1/etopo2022/ETOPO_2022_v1_60s_N90W180_surface_classic.nc'
 
 bathymetry = None
 
 def BathymetryPressure(lat, lon):
-    """Return the seafloor pressure (dBar) from ETOPO2 at each position, NaN on land.
+    """Return the seafloor pressure (dBar) from ETOPO at each position, NaN on land.
 
-    Reads the ETOPO2 netCDF file named by the global args.bathymetry (-b) on the first call and
-    caches the open dataset in the global bathymetry; a failure to read it is logged once and
+    Reads the classic netCDF ETOPO file named by the global args.bathymetry (-b; ETOPO 2022, with
+    lon/lat/z, or ETOPO2v2c, with x/y/z) on the first call and caches the open dataset, with the
+    grid's name for plot labels, in the global bathymetry; a failure to read it is logged once and
     cached too, so this and all later calls return None. Interpolates the elevation bilinearly
     between the four surrounding grid cell centres (longitude wraps at the dateline; latitude is
     clamped to the grid) and converts depth to pressure with Saunders (1981).
@@ -113,8 +115,11 @@ def BathymetryPressure(lat, lon):
         try:
             from scipy.io import netcdf_file
             nc = netcdf_file(args.bathymetry, mmap = True)
-            bathymetry = dict(nc = nc, x = np.array(nc.variables['x'][:], dtype = np.double),
-                              y = np.array(nc.variables['y'][:], dtype = np.double), z = nc.variables['z'])
+            xname, yname = ('lon', 'lat') if 'lon' in nc.variables else ('x', 'y')
+            fname = os.path.basename(args.bathymetry)
+            bathymetry = dict(nc = nc, x = np.array(nc.variables[xname][:], dtype = np.double),
+                              y = np.array(nc.variables[yname][:], dtype = np.double), z = nc.variables['z'],
+                              name = 'ETOPO 2022' if '2022' in fname else 'ETOPO2' if 'ETOPO2' in fname else fname)
         except Exception as e:
             logger.warning('Failed to read bathymetry file {}: {}'.format(args.bathymetry, e))
             bathymetry = False
@@ -4626,8 +4631,8 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
     start of each dive's descent and ending at the start of the last dive's ascent (or its last
     drift sample); dives without mission parameters keep the previous target.
 
-    The bathymetry line, labelled "Bathymetry (ETOPO2)", is the seafloor pressure at the GPS fixes
-    of dives 1 and later, interpolated bilinearly from ETOPO2 (--bathymetry, -b) by
+    The bathymetry line, labelled "Bathymetry (ETOPO 2022)", is the seafloor pressure at the GPS
+    fixes of dives 1 and later, interpolated bilinearly from ETOPO (--bathymetry, -b) by
     BathymetryPressure; it is left out if the bathymetry file can't be read.
 
     Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
@@ -4740,7 +4745,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                     ),
                 )
 
-            # Add seafloor trace (background): ETOPO2 depth at the GPS fixes, as pressure
+            # Add seafloor trace (background): ETOPO depth at the GPS fixes, as pressure
 
             if bathy_pres is not None and np.any(~np.isnan(bathy_pres)):
                 figs['trajectory'].add_trace(go.Scatter(
@@ -4753,7 +4758,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                             ),
                         -1),
                     hovertemplate='<br>'.join([
-                        'Dive <b>%{customdata[0]}</b>: Bathymetry (ETOPO2)',
+                        'Dive <b>%{customdata[0]}</b>: Bathymetry (' + bathymetry['name'] + ')',
                         '%{x|%Y-%m-%d %H:%M}Z',
                         '%{customdata[1]:.4f}°N %{customdata[2]:.4f}°E',
                         '%{y:.0f} dBar',
@@ -4764,7 +4769,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                         width=1.5,
                         ),
                     mode='lines',
-                    name='Bathymetry (ETOPO2)',
+                    name='Bathymetry (' + bathymetry['name'] + ')',
                     opacity=1.0,
                     ))
 
@@ -13417,10 +13422,10 @@ Generate arguments - directories:
 """
 
 parser.add_argument(
-    '-b', '--bathymetry', '--etopo2',
+    '-b', '--bathymetry', '--etopo', '--etopo2',
     default=BATHYMETRY_FILE,
     dest='bathymetry',
-    help='read bathymetry for trajectory plots from ETOPO2 netCDF file FILE (default=\'{}\')'.format(BATHYMETRY_FILE),
+    help='read bathymetry for trajectory plots from classic netCDF ETOPO file FILE (default=\'{}\')'.format(BATHYMETRY_FILE),
     metavar='FILE')
 
 parser.add_argument(

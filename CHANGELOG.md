@@ -3,6 +3,15 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-10-30
+
+Python tools:
+
+- Trajectory plots: the bathymetry line comes from ETOPO 2022 (60 arc-second surface elevation,
+  `/data1/etopo2022/`) instead of ETOPO2v2c (2 arc-minute), labelled "Bathymetry (ETOPO 2022)".
+  The reader takes either grid's coordinate names (`lon`/`lat` or `x`/`y`); `--etopo` is a new
+  alias of `-b/--bathymetry`.
+
 ## 2026-10-29
 
 Python tools:

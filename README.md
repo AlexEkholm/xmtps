@@ -110,7 +110,7 @@ libraries are the Ubuntu packages; other versions may work but are not tested.
 | Python | 3.14.4 (`/usr/bin/python3.14`), in the venv `/data1/alamo/bin/py/.venv` | the update-plots service activates it for every tool |
 | numpy | 2.5.4 | |
 | ppigrf | 2.1.0 | IGRF geomagnetic model for the wave direction declination correction; without it, wave directions stay referenced to magnetic north |
-| scipy | 1.18.1 | `scipy.interpolate` (`RhoLUT.py`), `scipy.io.netcdf_file` (ETOPO2) |
+| scipy | 1.18.1 | `scipy.interpolate` (`RhoLUT.py`), `scipy.io.netcdf_file` (ETOPO 2022) |
 | pandas | 3.1.0 | |
 | plotly | 7.1.0 | embeds plotly.js 4.1.1 |
 | kaleido | 1.5.0 (with `choreographer` 1.4.0, `logistro` 2.0.1) | PNG export; drives Google Chrome for Testing 142.0.7444.175, which choreographer downloaded to `~/.local/share/choreographer` |
@@ -121,7 +121,7 @@ libraries are the Ubuntu packages; other versions may work but are not tested.
 | python-dateutil | 3.0.0 | |
 | pytz | 2026.6 | |
 | orjson, simplejson | 3.13.0, 4.2.0 | used by plotly's JSON encoder (orjson) and by choreographer (simplejson) |
-| ETOPO2 | ETOPO2v2c (NOAA NCEI, 2006), `/data1/etopo2/ETOPO2v2c_f4.nc` | bathymetry in the trajectory plots |
+| ETOPO 2022 | ETOPO 2022 v1, 60 arc-second surface elevation (NOAA NCEI), `/data1/etopo2022/` | bathymetry in the trajectory plots. `ETOPO_2022_v1_60s_N90W180_surface.nc` is NOAA's netCDF-4 file; the plots read `ETOPO_2022_v1_60s_N90W180_surface_classic.nc`, made from it with `nccopy -k 64-bit-offset`, because `scipy.io.netcdf_file` reads only classic netCDF. ETOPO2v2c (`/data1/etopo2/ETOPO2v2c_f4.nc`) still works with `-b`. |
 
 ## Configuration
 
