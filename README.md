@@ -46,7 +46,8 @@ X-message format the floats send is specified in
 [spec/xmessage-format.md](spec/xmessage-format.md), which is also given as plain text, JSON,
 YAML and a PDF built from LaTeX (`spec/xmessage-format.{txt,json,yaml,tex,pdf}`). The markdown
 is the source of truth: after changing it, regenerate the other formats with
-`python spec/build-formats.py` (standard library only; the PDF needs XeLaTeX). XMTPS processes them in a four-stage
+`python spec/build-formats.py` (standard library only; the PDF needs XeLaTeX). Every other file
+XMTPS and its Python tools read or write is specified in [spec/](spec/README.md). XMTPS processes them in a four-stage
 pipeline of worker threads, connected by bounded queues:
 
 | Stage | Source | Role |

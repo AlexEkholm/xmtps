@@ -5,6 +5,20 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 ## 2026-10-30
 
+Documentation:
+
+- `spec/` now specifies every file XMTPS and its Python tools read or write, indexed in
+  [spec/README.md](spec/README.md): Iridium mail, configuration, float metadata, database, RAW,
+  SBD, listing, PHY, KML, status, log and lock files, JSON, and plots and pages. Each ends with the
+  discrepancies found between code, README and production.
+- The X-message specification is also given as plain text, JSON, YAML and PDF
+  (`spec/xmessage-format.{txt,json,yaml,tex,pdf}`). They are generated from
+  `spec/xmessage-format.md` by `spec/build-formats.py`, which needs only the Python standard
+  library, plus XeLaTeX for the PDF. The JSON and YAML hold the document tree: nested sections
+  with number, title and id, and paragraph, list, table, code and block-quote blocks; text keeps
+  its inline markdown. Two malformed table rows in the markdown were fixed: 0xF0 offset 34 had an
+  extra cell, and the 0xC5 parameter-list row had unescaped `|` inside code.
+
 Decoder:
 
 - XMTPS can run without the database and without the mail server, decoding a directory of
@@ -25,16 +39,6 @@ Decoder:
     and 430–441): the listings of dives 432–441 match production except dive 439, which lacks a
     duplicate gateway email that has no RAW file; dives 430 and 431 lack their earlier dives for
     the pressure offset.
-
-Documentation:
-
-- The X-message specification is also given as plain text, JSON, YAML and PDF
-  (`spec/xmessage-format.{txt,json,yaml,tex,pdf}`). They are generated from
-  `spec/xmessage-format.md` by `spec/build-formats.py`, which needs only the Python standard
-  library, plus XeLaTeX for the PDF. The JSON and YAML hold the document tree: nested sections
-  with number, title and id, and paragraph, list, table, code and block-quote blocks; text keeps
-  its inline markdown. Two malformed table rows in the markdown were fixed: 0xF0 offset 34 had an
-  extra cell, and the 0xC5 parameter-list row had unescaped `|` inside code.
 
 Python tools:
 
