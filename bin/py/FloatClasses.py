@@ -1385,8 +1385,8 @@ class Wave:
         # Low-frequency response correction, a cosine taper [f0, w] in Hz: fitted to the
         # Hurricane Erin (NDBC 41047, A-DWSD) and Hurricane Lowell (A-DWSD) colocations, without
         # floats 9298 and 9310, using only pairs in the same storm quadrant within 600 km of the
-        # center or both beyond 600 km (2026-10-31 refit).
-        ccoef = [0.01778, 0.09946]
+        # center or both beyond 600 km, and without A-DWSD reference outliers (2026-10-31 refit).
+        ccoef = [0.02595, 0.08834]
     
         # spectra peak
         peak_zz  = 0

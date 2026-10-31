@@ -8,12 +8,15 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 Python tools:
 
 - WIMS wave spectra (`Wave.PostProcess`): the low-frequency response correction coefficients are
-  [f0, w] = [0.01778, 0.09946] Hz (was [0.01445, 0.10457] Hz). Same fit (Erin and Lowell
+  [f0, w] = [0.02595, 0.08834] Hz (was [0.01445, 0.10457] Hz). Same fit (Erin and Lowell
   colocations up to 0.15 Hz, without floats 9298 and 9310), but using only pairs whose WIMS and
   reference positions are in the same storm quadrant within 600 km of the center, or both more
-  than 600 km from it (11373 of 12028 pairs). The taper now reaches 1 at 0.117 Hz instead of
-  0.119 Hz and is at most 0.023 smaller below 0.06 Hz (0.037 instead of 0.054 at 0.030 Hz, 0.237
-  instead of 0.259 at 0.050 Hz); above 0.08 Hz it changes by less than 0.01.
+  than 600 km from it, and excluding A-DWSD reference outliers (spectra with zero energy, or Hs
+  more than a factor exp(0.5) from the median of the same drifter within ±3 h); 11335 of 12028
+  pairs. The taper now reaches 1 at 0.114 Hz instead of 0.119 Hz. It is up to 0.087 smaller below
+  0.089 Hz (0.005 instead of 0.054 at 0.030 Hz, 0.172 instead of 0.259 at 0.050 Hz) and up to
+  0.017 larger above. Commit 6e5fc69 briefly used an intermediate fit without the outlier
+  exclusion, [0.01778, 0.09946] Hz.
 
 ## 2026-10-30
 

@@ -682,7 +682,7 @@ Processing (`Wave.PostProcess`, defaults `freq_min` 0.0625 Hz, interpolation on,
 
 1. Copy the received spectra to the `raw_` attributes.
 2. Interpolate the six acceleration spectra onto `freq` (values outside the received band become 0).
-3. Weight every spectrum by 0 where `Szz_g` < 0.0005 g²/Hz (noise-floor mask) and by the low-frequency taper: 0 below f0, (1 − cos(π (f − f0) / w)) / 2 from f0 to f0 + w, 1 above, with f0 = 0.01778 Hz and w = 0.09946 Hz. The `_g` attributes keep the unweighted values.
+3. Weight every spectrum by 0 where `Szz_g` < 0.0005 g²/Hz (noise-floor mask) and by the low-frequency taper: 0 below f0, (1 − cos(π (f − f0) / w)) / 2 from f0 to f0 + w, 1 above, with f0 = 0.02595 Hz and w = 0.08834 Hz. The `_g` attributes keep the unweighted values.
 4. Displacement spectrum = weight × g² / (2πf)⁴ × acceleration spectrum, with g = 9.80665 m/s².
 5. Smooth the six displacement spectra with a centered 3-point moving average.
 6. Reject the spectra (set all six displacement spectra to `NaN`) if any acceleration auto-spectrum exceeds 0.09 g²/Hz at or below 0.05 Hz, or 0.3 g²/Hz anywhere, or any displacement auto-spectrum at or above `freq_min` exceeds 300 m²/Hz, or `Szz` is `NaN` there.
