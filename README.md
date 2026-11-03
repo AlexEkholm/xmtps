@@ -649,7 +649,8 @@ tool with `-h` for a short usage summary.
 ### JSON files
 
 The Python tools write three kinds of JSON file under the output directory (production:
-`/data1/alamo/data/json/<serial>/`); [example/json/](example/json/) has one of each, and
+`/data1/alamo/data/json/<serial>/`), and the summary page's table as
+[`summary.json`](#fleet-summary-table-summaryjson) next to the page; [example/json/](example/json/) has one of each, and
 [example/plots/](example/plots/) some of the plots made from them. Times are given twice throughout: `dt_epoch` (Unix seconds,
 UTC) and `dt_str` (ISO 8601, e.g. `2026-10-25T11:05:32Z`). Pressure is in dBar, temperature in
 °C, salinity in PSU; `dens` and `sigma0` are in-situ density and potential density referenced to

@@ -30,7 +30,7 @@ The plot tools form a chain. Each run of the plot service (section 11) runs it o
 |---|---|---|---|
 | 1 | `bin/py/xmtps-list2json.py` | listing files | per-dive JSON |
 | 2 | `bin/py/xmtps-aggregate-json.py -p <plots>` | per-dive JSON, bathymetry netCDF | aggregate JSON, `<plots>/<serial>/` plot files and `index.html` |
-| 3 | `bin/py/xmtps-generate-summary-page.py` | `<serial>_summary.json`, systemd, `xmtps --version` | `<plots>/index.html` |
+| 3 | `bin/py/xmtps-generate-summary-page.py` | `<serial>_summary.json`, systemd, `xmtps --version` | `<plots>/index.html`, `<plots>/summary.json` |
 | 4 | `bin/py/xmtps-generate-mission-page.py` | `<serial>_summary.json`, `<serial>_mission.json`, systemd, `xmtps --version` | `<plots>/engineering/params.html` |
 | 5 | `bin/py/xmtps-generate-startup-page.py` | `<serial>_summary.json`, `<serial>_engineering_data.json`, systemd, `xmtps --version` | `<plots>/engineering/startup.html` |
 
@@ -50,6 +50,7 @@ Top level of `<plots>` in production (2026-10-30):
 |---|---|---|
 | `<serial>/` (459 directories) | `xmtps-aggregate-json.py` | one float's plot files and page (sections 2–4) |
 | `index.html` | `xmtps-generate-summary-page.py` | fleet summary page (section 5) |
+| `summary.json` | `xmtps-generate-summary-page.py` | the summary page's table as JSON (since 2026-11-03; [json-file-format.md](json-file-format.md) section 5.3) |
 | `engineering/` | `update-plots-service.sh` (`mkdir -p`) | `params.html`, `startup.html` (sections 6, 7) |
 | `img/` | installed by hand (2022-10-03) | status icons `s0.png`, `s1.png`, `s2.png` (section 9) |
 | `js/` | installed by hand (2025-11-18) | `datatables.min.js`, `datatables.min.css`; no page uses them (section 9) |
@@ -408,7 +409,7 @@ The Hydraulic System section is shown only if the float has `pump` data, so a fl
 
 ## 5. Fleet summary page: `<plots>/index.html`
 
-Written by `bin/py/xmtps-generate-summary-page.py` from all `<serial>_summary.json` files under the input paths (searched recursively, filtered by `-i`; files with a `json_vers` other than `0.11` are ignored). The page is rebuilt from scratch on every run. The fields read are described in [json-file-format.md](json-file-format.md).
+Written by `bin/py/xmtps-generate-summary-page.py` from all `<serial>_summary.json` files under the input paths (searched recursively, filtered by `-i`; files with a `json_vers` other than `0.11` are ignored). The page is rebuilt from scratch on every run. The fields read are described in [json-file-format.md](json-file-format.md). The same run writes the table, one record per row, to `<plots>/summary.json` (json-file-format.md section 5.3).
 
 ### 5.1 Head
 

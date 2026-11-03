@@ -1,6 +1,6 @@
 # XMTPS JSON File Format Specification
 
-This document specifies the JSON files that the XMTPS Python tools (`bin/py/`) write and read: the per-dive files, the per-float aggregate tables, the per-float summary and the `.lastprocessed` marker. `xmtps-list2json.py` writes the per-dive files from the decoder's listing files. `xmtps-aggregate-json.py` reads them and writes the other three kinds. The aggregate script's plots and the three page generators read the aggregate and summary files.
+This document specifies the JSON files that the XMTPS Python tools (`bin/py/`) write and read: the per-dive files, the per-float aggregate tables, the per-float summary, the `.lastprocessed` marker and the fleet summary table. `xmtps-list2json.py` writes the per-dive files from the decoder's listing files. `xmtps-aggregate-json.py` reads them and writes the next three kinds. The aggregate script's plots and the three page generators read the aggregate and summary files; `xmtps-generate-summary-page.py` also writes the fleet summary table, `<plots>/summary.json` (section 5.3).
 
 Status: compiled on 2026-10-30 from the Python sources at commit `8643acf`, the README section "JSON files", the files in `example/json/`, and the production files on argus (`/data1/alamo/data/json/`, 460 float directories and 55,003 per-dive files on that date). Floats 9303 (ALAMO with WIMS wave sensor, firmware 10.10) and 11186 (ALTO, firmware 10.12) were inspected in detail.
 
@@ -10,7 +10,7 @@ Status: compiled on 2026-10-30 from the Python sources at commit `8643acf`, the 
 2. [Common conventions](#2-common-conventions)
 3. [Per-dive files: `dives/<serial>_<dive>.json`](#3-per-dive-files-divesserial_divejson)
 4. [Aggregate files: `<serial>_<name>.json`](#4-aggregate-files-serial_namejson)
-5. [Float summary: `<serial>_summary.json`](#5-float-summary-serial_summaryjson)
+5. [Float summary: `<serial>_summary.json`](#5-float-summary-serial_summaryjson) (and the fleet summary table, [5.3](#53-fleet-summary-table-plotssummaryjson))
 6. [`dives/.lastprocessed`](#6-diveslastprocessed)
 7. [Reading the files](#7-reading-the-files)
 8. [Open questions / discrepancies](#8-open-questions--discrepancies)
@@ -42,6 +42,7 @@ All files of one float live in one directory under the output directory given wi
 | `<serial>_<name>.json` | `bin/py/xmtps-aggregate-json.py` (`WriteAggregateJsonFiles`) | the plot functions of `xmtps-aggregate-json.py` (in memory, not from disk); `bin/py/xmtps-generate-mission-page.py` (`_mission`); `bin/py/xmtps-generate-startup-page.py` (`_engineering_data`) |
 | `<serial>_summary.json` | `bin/py/xmtps-aggregate-json.py` | `bin/py/xmtps-generate-summary-page.py`, `bin/py/xmtps-generate-mission-page.py`, `bin/py/xmtps-generate-startup-page.py` |
 | `dives/.lastprocessed` | `bin/py/xmtps-aggregate-json.py` (`WriteLastProcessedFiles`) | `bin/py/xmtps-aggregate-json.py` (`ProcessDirectory`) |
+| `<plots>/summary.json` | `bin/py/xmtps-generate-summary-page.py` (`WriteSummaryJsonFile`) | none in this repository; for other programs |
 
 `bin/py/update-plots-service.sh` runs the two converters for each float with a recent listing, then the three page generators (README, "Python tools").
 
@@ -102,7 +103,7 @@ Because the dive part is at least four characters wide, `sorted()` on the file n
 ### 2.4 Versioning: `json_vers`
 
 - The format version is the string `"0.11"` (`JSON_VERSION` in `xmtps-list2json.py`, `xmtps-aggregate-json.py` and the three page generators).
-- It is stored as `json_vers` in every per-dive file and in every summary file. Aggregate files carry no version.
+- It is stored as `json_vers` in every per-dive file, in every summary file and in the fleet summary table. Aggregate files carry no version.
 - Every reader compares `json_vers` with its own `JSON_VERSION` and ignores a file that differs, with a warning ("Ignoring file with mismatched JSON version").
 - The version was not changed when attributes were added (October 2026). Files written by older code and files written by current code both say `0.11` (section 3.17). Readers must therefore treat attributes added after the first 0.11 files as optional. `xmtps-aggregate-json.py` does so with `getattr(..., default)`.
 
@@ -113,6 +114,7 @@ Because the dive part is at least four characters wide, `sorted()` on the file n
 | Per-dive (jsonpickle) | The bare token `NaN` for a missing float. Integer sentinels (-1, -9, -999, -9.99) and empty strings for some attributes; see section 3.16. |
 | Aggregate (pandas) | `null`. Unset times keep -1 and `""`. Separator rows have the string `"nan"` in `dt_str` (section 4.2). |
 | Summary (jsonpickle) | Sentinels -999 and -1; `NaN` in an unset `Gps`/`Sbd` position. |
+| Fleet summary table | `null`; never `NaN` (strict JSON). |
 
 ## 3. Per-dive files: `dives/<serial>_<dive>.json`
 
@@ -1085,6 +1087,62 @@ Example (float 9303, trimmed):
   "latest":{"gps":{...},"sbd":{...},"cycle":483,"duration":108051,"nsbd":12,"depth":291.9}
 }
 ```
+
+### 5.3 Fleet summary table: `<plots>/summary.json`
+
+Written by `bin/py/xmtps-generate-summary-page.py` (`WriteSummaryJsonFile`) next to the summary page, `<output>/index.html`; in production `/data1/alamo/data/plots2/summary.json` (first written 2026-11-03). It holds the summary page's table ([plot-and-page-files.md](plot-and-page-files.md) section 5.3), one record per row, and is rewritten on every run.
+
+- Encoding: `json.dump(..., indent=1, allow_nan=False)`, UTF-8, with a final newline. Plain JSON: no jsonpickle tags, no `NaN`.
+- Top level: `json_vers` (`"0.11"`), `generated` (the time the file was written, `YYYY-MM-DDThh:mm:ssZ`, UTC) and `floats`, the list of records.
+- Records are built in the same loop as the table rows, so they match the table row for row: the same floats (a float is left out if `latest.cycle` < 1 or `profdepthsum` is not positive), in the same order (latest SBD message first). A row that fails is left out of both.
+- Numbers are rounded as on the page. Values the page shows as `-` are `null`.
+
+| Key | Type | Page column | Contents |
+|---|---|---|---|
+| `serial` | integer | ID | `id.whoi` |
+| `wmo` | integer or null | WMO | `id.wmo`; null if not above 1 |
+| `type` | string | Type | `ALAMO` or `ALTO` |
+| `ctd_type` | string or null | Type (small text) | `ctdtype`; null if empty |
+| `firmware` | string or null | Firmware | `v<MM>.<m>.<p>`, as on the page (including its patch-number quirk, plot-and-page-files.md section 13 item 7); null if `fwver` has fewer than 10 characters |
+| `fwver` | string or null | Firmware (small text) | the raw `fwver`; null with `firmware` |
+| `deployed` | string or null | Deployed | `deployment.gps.dt_str`, the full time (the page shows the date); null if the fix is not valid |
+| `age_days` | integer or null | Age | `age` / 86400, rounded; null if not positive |
+| `distance_profiled_km` | number | Distance Profiled | `profdepthsum` / 1000, one decimal |
+| `status` | string | Status | `ACTIVE` (< 30 days since the latest SBD message), `OVERDUE` (< 180) or `ARCHIVED` |
+| `cycle` | integer or null | No. | `latest.cycle`; null if 9999 or more |
+| `last_report` | string or null | Last Report | `latest.sbd.dt_str`, the full time (the page shows it to the minute); null if unset (the page cell is then empty; 3 floats in production on 2026-11-03) |
+| `depth_dbar` | number or null | Depth | `latest.depth`: one decimal under 100, an integer otherwise; null if not in (0, 3000) |
+| `duration_hours` | number or null | Duration | `latest.duration` / 3600, one decimal; null if not positive |
+
+Example (production, 2026-11-03; 251 records):
+
+```
+{
+ "json_vers": "0.11",
+ "generated": "2026-11-03T18:02:54Z",
+ "floats": [
+  {
+   "serial": 9303,
+   "wmo": null,
+   "type": "ALAMO",
+   "ctd_type": "RBR",
+   "firmware": "v10.10.0",
+   "fwver": "0x0A0A0031",
+   "deployed": "2025-08-18T21:39:00Z",
+   "age_days": 427,
+   "distance_profiled_km": 139.2,
+   "status": "ACTIVE",
+   "cycle": 483,
+   "last_report": "2026-10-19T14:50:51Z",
+   "depth_dbar": 292,
+   "duration_hours": 30.0
+  },
+  ...
+ ]
+}
+```
+
+Read it with any JSON parser, e.g. `json.load(open(path))["floats"]` or `pandas.DataFrame(json.load(open(path))["floats"])`.
 
 ## 6. `dives/.lastprocessed`
 
