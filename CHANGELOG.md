@@ -3,6 +3,16 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-02
+
+Documentation:
+
+- New [bin/README.md](bin/README.md), describing the two systemd units and the production layout
+  under `/data1/alamo/bin`, and [bin/py/README.md](bin/py/README.md), describing every script and
+  module in `bin/py`: the data flow from listings to JSON, plots and pages, what each tool reads and
+  writes, the plot service loop (`update-plots-service.sh`), the shared modules (`FloatClasses.py`,
+  `RhoLUT.py`, `PageStatus.py`) and the old `cp-files.sh` helper. The main README links to both.
+
 ## 2026-10-31
 
 Python tools:

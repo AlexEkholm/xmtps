@@ -71,8 +71,8 @@ src/
   data/xmsg/                  X-message decoders (GPS, profiles, drift, engineering, ice, wave, ...);
                               the format is specified in spec/xmessage-format.md
   utility/                    logging, MySQL/SQL table helpers, KML, queues, file-system helpers
-bin/
-  py/                         JSON conversion, plotting and summary-page tools
+bin/                          service units and tools (see bin/README.md)
+  py/                         JSON conversion, plotting and summary-page tools (see bin/py/README.md)
   xmtps-alamo.service         systemd unit for the decoder daemon
   xmtps-alamo-plot.service    systemd unit for the plot-generation loop
 build/                        build-number script and counter
@@ -618,7 +618,9 @@ The installed copies live in `/etc/systemd/system/`. After installing or changin
 ## Python tools (`bin/py`)
 
 These tools turn the listing files into JSON and generate the plot pages published at
-[argo.whoi.edu/alamo](https://argo.whoi.edu/alamo/).
+[argo.whoi.edu/alamo](https://argo.whoi.edu/alamo/). [bin/py/README.md](bin/py/README.md) describes
+each script and module and how they fit together; [bin/README.md](bin/README.md) describes the
+systemd units.
 
 Requires Python 3.12 or later (tested with 3.12 and 3.14; pandas 2.3 and 3.x) with `numpy`, `scipy`, `pandas`, `plotly` (plus `kaleido` for PNG export),
 `jsonpickle`, `geographiclib`, `pytz`, `python-dateutil`, `Pillow` and `yattag`; see
