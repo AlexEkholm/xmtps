@@ -15,7 +15,6 @@ directory, what each tool reads and writes, and all of their command-line option
 | [`FloatClasses.py`](#floatclassespy) | module | Data classes for one dive, shared by the converters; wave spectra post-processing |
 | [`RhoLUT.py`](#rholutpy) | module | Seawater density and σ₀ lookup table |
 | [`PageStatus.py`](#pagestatuspy) | module | Page footer: update time, run time, decoder status and version |
-| [`cp-files.sh`](#cp-filessh) | shell | Old helper that copied edited scripts from the home directory |
 
 ## Contents
 
@@ -28,7 +27,7 @@ directory, what each tool reads and writes, and all of their command-line option
 - [`xmtps-generate-summary-page.py`](#xmtps-generate-summary-pagepy)
 - [`xmtps-generate-mission-page.py`](#xmtps-generate-mission-pagepy)
 - [`xmtps-generate-startup-page.py`](#xmtps-generate-startup-pagepy)
-- [`FloatClasses.py`](#floatclassespy), [`RhoLUT.py`](#rholutpy), [`PageStatus.py`](#pagestatuspy), [`cp-files.sh`](#cp-filessh)
+- [`FloatClasses.py`](#floatclassespy), [`RhoLUT.py`](#rholutpy) and [`PageStatus.py`](#pagestatuspy)
 
 ## Requirements
 
@@ -436,12 +435,3 @@ Page last updated 2026-10-26T17:40Z (105 minutes ago, runtime: 3 minutes) - pyth
   without touching the running daemon.
 - The "minutes ago" part is filled in by JavaScript when the page is viewed.
 - Anything that cannot be determined is shown as "unknown".
-
-## `cp-files.sh`
-
-An old helper for copying scripts edited elsewhere into this directory; it takes no arguments and
-is not used by the service. For `FloatClasses.py`, `xmtps-aggregate-json.py`, `xmtps-list2json.py`
-and `xmtps-generate-summary-page.py`, it reads the copy in the home directory (`~/<name>`), strips
-carriage returns, prepends `#!/usr/bin/python3` and writes the result to the current directory.
-Running it on a file that already has a shebang adds a second one, which is why those four files
-start with two identical `#!` lines.

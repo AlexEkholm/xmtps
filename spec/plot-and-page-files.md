@@ -673,11 +673,7 @@ WARNING Failed to read bathymetry file ...: ...
 
 ### 11.5 Other scripts
 
-| Script | Status |
-|---|---|
-| `bin/py/cp-files.sh` | copies scripts from the home directory, adding a `#!/usr/bin/python3` line and removing CRs |
-
-`bin/py/update-plots.sh` (a debugging run for float 9300), `update-plots2.sh` (an older one-pass service loop) and `update-plots3.sh` (a one-off full rebuild) were removed from the repository on 2026-11-02; nothing ran them. Production `/data1/alamo/bin/py/` still holds its own copies of them, which are regular files rather than links to the checkout, and scripts never in the repository (`update-all-plots.sh`, `update-plots4.sh`, `monx-update-plots.sh`, which follows the service journal), plus backups of earlier versions.
+`bin/py/update-plots.sh` (a debugging run for float 9300), `update-plots2.sh` (an older one-pass service loop), `update-plots3.sh` (a one-off full rebuild) and `cp-files.sh` (which copied scripts from the home directory, adding a `#!/usr/bin/python3` line and removing CRs; it is why `FloatClasses.py`, `xmtps-aggregate-json.py`, `xmtps-list2json.py` and `xmtps-generate-summary-page.py` start with two identical `#!` lines) were removed from the repository on 2026-11-02; nothing ran them. Production `/data1/alamo/bin/py/` still holds its own copies of them, which are regular files rather than links to the checkout, and scripts never in the repository (`update-all-plots.sh`, `update-plots4.sh`, `monx-update-plots.sh`, which follows the service journal), plus backups of earlier versions.
 
 ## 12. Publishing locations
 

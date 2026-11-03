@@ -11,11 +11,16 @@ Documentation:
   under `/data1/alamo/bin`, and [bin/py/README.md](bin/py/README.md), describing every script and
   module in `bin/py`: the data flow from listings to JSON, plots and pages, what each tool reads and
   writes, the plot service loop (`update-plots-service.sh`), the shared modules (`FloatClasses.py`,
-  `RhoLUT.py`, `PageStatus.py`) and the old `cp-files.sh` helper. The main README links to both.
+  `RhoLUT.py`, `PageStatus.py`). The main README links to both.
 - bin/py/README.md is now the reference for the Python tools' command-line options: the shared
   conventions, a usage line, option table and examples for each tool, and the commands the plot
   service runs. The main README's option tables moved there; they had omitted
   `xmtps-aggregate-json.py -b/--bathymetry`.
+- Removed unused scripts: `bin/migrate-xfloatmail.sh` and `bin/move-mysql-datadir.sh` (one-off
+  database migration and MySQL data directory move, both done), and `bin/py/update-plots.sh`,
+  `update-plots2.sh`, `update-plots3.sh` (old debugging, service and rebuild loops) and
+  `cp-files.sh` (copied edited scripts from the home directory). Nothing ran them; production keeps
+  its own copies of the `update-plots*.sh` scripts.
 
 ## 2026-10-31
 
