@@ -36,6 +36,7 @@ at [argo.whoi.edu/alamo](https://argo.whoi.edu/alamo/) (one page per float at
     - [Aggregate files: `<serial>_<name>.json`](#aggregate-files-serial_namejson)
     - [Float summary: `<serial>_summary.json`](#float-summary-serial_summaryjson)
     - [`dives/.lastprocessed`](#diveslastprocessed)
+    - [Fleet summary table: `summary.json`](#fleet-summary-table-summaryjson)
 - [Changelog](#changelog)
 - [Author and license](#author-and-license)
 
@@ -737,6 +738,17 @@ SBD messages) and `depth` (the deepest pressure of the dive, dBar). Unset number
 The modification time (Unix seconds) of the newest dive JSON file read by the last aggregate
 run; it is written once the run has written its output. `xmtps-aggregate-json.py` skips a float
 when none of its dive files is newer, unless `-f` is given.
+
+#### Fleet summary table: `summary.json`
+
+Written by `xmtps-generate-summary-page.py` next to the summary page (`<output>/summary.json`;
+production `/data1/alamo/data/plots2/summary.json`). It holds the page's table as strict JSON:
+`json_vers`, `generated` (ISO 8601, UTC) and `floats`, one record per table row in table order
+(latest report first), with keys `serial`, `wmo`, `type`, `ctd_type`, `firmware`, `fwver`,
+`deployed`, `age_days`, `distance_profiled_km`, `status` (`ACTIVE`, `OVERDUE` or `ARCHIVED`),
+`cycle`, `last_report`, `depth_dbar` and `duration_hours`. Numbers are rounded as on the page,
+`deployed` and `last_report` are full ISO 8601 times, and values the page shows as `-` are
+`null`.
 
 ## Changelog
 

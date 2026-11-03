@@ -279,14 +279,16 @@ The page has:
 - a footer (`PageStatus`) with when the page was written, the pass's run time, and the decoder's
   status, uptime and version.
 
-The page is rebuilt from scratch on every run.
+The page is rebuilt from scratch on every run. The table is also written to
+`<output>/summary.json`, one record per row (see
+[JSON files](../../README.md#fleet-summary-table-summaryjson)).
 
 Options, besides the [common ones](#conventions-shared-by-the-tools):
 
 | Option | Default | Description |
 |---|---|---|
 | `PATH ...` | | Summary files and/or directories to search (recursively). |
-| `-o`, `--output DIR` | `.` | Write `index.html` to `DIR`. |
+| `-o`, `--output DIR` | `.` | Write `index.html` and `summary.json` (the table as JSON, one record per row) to `DIR`. |
 | `--runtime SECONDS` | none | Show `SECONDS` as the run time in the footer: the duration of the JSON and plot updates before the page was made (the service passes it). Without it, no run time is shown. |
 
 Example:

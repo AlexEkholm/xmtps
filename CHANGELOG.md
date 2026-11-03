@@ -3,6 +3,15 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-03
+
+Python tools:
+
+- `xmtps-generate-summary-page.py` also writes the summary page's table as `summary.json` next to
+  `index.html`: one record per row, with numbers as numbers, ISO 8601 times and `null` for
+  missing values (README, [JSON files](README.md#fleet-summary-table-summaryjson)). The page is
+  unchanged.
+
 ## 2026-11-02
 
 Documentation:

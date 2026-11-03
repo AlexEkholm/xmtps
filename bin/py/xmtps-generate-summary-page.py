@@ -9,7 +9,8 @@ files whose JSON version is not JSON_VERSION. Writes <output>/index.html with an
 map of the latest float positions coloured by status (Plotly) and a sortable table (DataTables)
 with one row per float: ID, WMO, type and CTD, firmware, deployment date, age, distance
 profiled, status (active, overdue, archived) and the most recent cycle. The page is always
-rebuilt from all matching summary files; the output directory must exist.
+rebuilt from all matching summary files; the output directory must exist. The table is also
+written to <output>/summary.json, one record per row (see WriteSummaryJsonFile).
 
 Example:
     xmtps-generate-summary-page.py -i"/data1/alamo/data/json/[0-9]+/[0-9]+_summary.json" -o/data1/alamo/data/plots2 /data1/alamo/data/json
@@ -19,6 +20,7 @@ Author: aekholm
 
 import argparse
 import datetime
+import json
 import logging
 import jsonpickle
 import numpy as np
@@ -53,6 +55,8 @@ Global Variables:
 float_map = {}
 
 summary_plot = ''
+
+summary_rows = []
 
 """
 Function Definitions:
@@ -211,6 +215,7 @@ def WriteSummaryFile(dpath):
         
     global float_map
     global summary_plot     
+    global summary_rows
         
     fpath = re.sub('\\\\', '/', os.path.join(dpath, 'index.html'))
     
@@ -467,7 +472,9 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                         # if len(x['ctdtype']) == 0:
                                         #     continue
                                 
-                                        # Generate Table row
+                                        # Generate Table row and its JSON record
+                                        
+                                        row = {}
                                 
                                         with tag('tr'):
                                             
@@ -477,6 +484,7 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                             with tag('td'): # id
                                                 with tag('a', href='{}'.format(float_id)):
                                                     text('{}'.format(float_id))
+                                                    row['serial'] = int(float_id)
                                                     # if x['id'].wmo > 1:
                                                         # doc.stag('br')
                                                         # with tag('small'):
@@ -486,9 +494,12 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                                     
                                             with tag('td'): # wmo
                                                 text('{}'.format(x['id'].wmo) if x['id'].wmo > 1 else '-')
+                                                row['wmo'] = int(x['id'].wmo) if x['id'].wmo > 1 else None
                                                 
                                             with tag('td'): # type
                                                 text(x['type'])
+                                                row['type'] = x['type']
+                                                row['ctd_type'] = x['ctdtype'] if len(x['ctdtype']) > 0 else None
                                                 
                                                 if len(x['ctdtype']) > 0:
                                                     doc.stag('br')
@@ -497,13 +508,17 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                                     
                                             with tag('td'): # fw ver
                                                 if len(x['fwver']) > 9:
-                                                    text('v{:02d}.{}.{}'.format(int(x['fwver'][2:4], 16),int(x['fwver'][4:6], 16),int(x['fwver'][7:8], 16) ))
+                                                    row['firmware'] = 'v{:02d}.{}.{}'.format(int(x['fwver'][2:4], 16),int(x['fwver'][4:6], 16),int(x['fwver'][7:8], 16) )
+                                                    row['fwver'] = x['fwver']
+                                                    text(row['firmware'])
                                             
                                                     doc.stag('br')
                                                     with tag('small'):
                                                         text(x['fwver'])
                                                 else:
                                                     text('-')
+                                                    row['firmware'] = None
+                                                    row['fwver'] = None
                                                     
                                             # deployed     
                                             dt_epoch = x['deployment']['gps'].dt_epoch    
@@ -512,24 +527,30 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                                 if x['deployment']['gps'].is_valid():
                                             
                                                     dt_str = x['deployment']['gps'].dt_str
+                                                    row['deployed'] = dt_str
                                                     dt_str = dt_str[0:10]
                                                     text(dt_str)
                                                 else: 
                                                     text('-')
+                                                    row['deployed'] = None
                                                     
                                             with tag('td'): # age
                                             
                                                 if (x['age'] <= 0) or np.isnan(x['age']):
                                                     text('-')
+                                                    row['age_days'] = None
                                                 else:
                                                     text('{:.0f}'.format(x['age']/86400))
+                                                    row['age_days'] = int(round(x['age']/86400))
                                                     
                                             with tag('td'): # distance profiled
                                             
                                                 if (x['profdepthsum'] <= 0) or np.isnan(x['profdepthsum']):
                                                     text('-')
+                                                    row['distance_profiled_km'] = None
                                                 else:
                                                     text('{:.1f}'.format(x['profdepthsum']/1000))
+                                                    row['distance_profiled_km'] = round(float(x['profdepthsum'])/1000, 1)
                                                     
                                             with tag('td'): # status
 
@@ -539,28 +560,34 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                                     with tag('div', klass='stimg'):
                                                         doc.stag('img', src='img/s2.png')
                                                         text('ACTIVE')
+                                                        row['status'] = 'ACTIVE'
                                                     
                                                 elif time_since_last < 180:
                                                     with tag('div', klass='stimg'):
                                                         doc.stag('img', src='img/s1.png')
                                                         text('OVERDUE')
+                                                        row['status'] = 'OVERDUE'
                                                     
                                                 else:
                                                     with tag('div', klass='stimg'):
                                                         doc.stag('img', src='img/s0.png')
                                                         text('ARCHIVED')
+                                                        row['status'] = 'ARCHIVED'
                                                 
                                             with tag('td'): # cycle no.
                                             
                                                 if x['latest']['cycle'] < 9999:
                                                     text('{}'.format(x['latest']['cycle']))
+                                                    row['cycle'] = int(x['latest']['cycle'])
                                                 else: 
                                                     text('-')
+                                                    row['cycle'] = None
                                              
                                             # last report
                                             dt_epoch = x['latest']['sbd'].dt_epoch    
                                             with tag('td', id='last-report', epoch=f'{dt_epoch}'): 
                                                 dt_str = x['latest']['sbd'].dt_str
+                                                row['last_report'] = dt_str if len(dt_str) else None
                                                 dt_str = dt_str[0:10] + ' ' +  dt_str[11:16]
                                                 text(dt_str)
                                                 
@@ -569,19 +596,24 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                             
                                                 if (depth <= 0) or (depth >= 3000) or np.isnan(depth):
                                                     text('-')
+                                                    row['depth_dbar'] = None
                                                 elif (depth < 100):
                                                     text('{:.1f}'.format(depth))
+                                                    row['depth_dbar'] = round(float(depth), 1)
                                                 else:
                                                     text('{:.0f}'.format(depth))
+                                                    row['depth_dbar'] = int(round(depth))
                                                 
                                             with tag('td'): # cycle duration
                                             
                                                 if (x['latest']['duration'] <= 0) or (np.isnan(x['latest']['duration'])):
                                                     text('-')
+                                                    row['duration_hours'] = None
                                                 else:
                                                     duration = x['latest']['duration']/3600.
                                                     
                                                     text('{:.1f}'.format(duration))
+                                                    row['duration_hours'] = round(float(duration), 1)
                                                     
                                             
                                                 
@@ -589,6 +621,8 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                                 
                                             # with tag('td'): # no. sbd
                                             #     text('{}'.format(x['latest']['nsbd']))
+                                        
+                                        summary_rows.append(row)
                                             
                                     except:
                                         errstr = 'Failed to create summary row for float {}'.format(float_id)
@@ -630,6 +664,41 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
             raise Exception(errstr)
         logger.error(errstr)
    
+def WriteSummaryJsonFile(dpath):
+    """Write the summary table <dpath>/summary.json from summary_rows (filled by WriteSummaryFile).
+
+    The file is strict JSON: {"json_vers", "generated" (ISO 8601 UTC), "floats": [...]}, with one
+    record per table row in table order (most recent report first). Record keys: serial, wmo, type,
+    ctd_type, firmware, fwver, deployed, age_days, distance_profiled_km, status, cycle,
+    last_report, depth_dbar, duration_hours. Numbers are rounded as on the page, times are full
+    ISO 8601 strings, and values the page shows as '-' are null. Errors are logged, or raised
+    with -H.
+    """
+
+    global summary_rows
+
+    fpath = re.sub('\\\\', '/', os.path.join(dpath, 'summary.json'))
+
+    try:
+
+        summary = {
+            'json_vers': JSON_VERSION,
+            'generated': datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'floats': summary_rows,
+            }
+
+        with open(fpath, 'w', encoding='utf-8') as fout:
+            json.dump(summary, fout, indent=1, allow_nan=False)
+            fout.write('\n')
+
+    except:
+
+        errstr = 'Failed to write summary JSON file: ' + fpath
+
+        if hasattr(args, 'halt') and args.halt:
+            raise Exception(errstr)
+        logger.error(errstr)
+
 def WriteSummaryPlots(dpath):
     """Build the position map for the summary page and store its HTML in summary_plot.
 
@@ -925,7 +994,7 @@ parser.add_argument(
     '-o', '--output',
     default='.',
     dest='output',
-    help='write summary page to specified directory (default=\'.\')',
+    help='write summary page index.html and summary.json to specified directory (default=\'.\')',
     metavar='PATH')
 
 parser.add_argument(
@@ -998,6 +1067,8 @@ try:
     WriteSummaryPlots(args.output)
     
     WriteSummaryFile(args.output)
+    
+    WriteSummaryJsonFile(args.output)
         
         
 except:
