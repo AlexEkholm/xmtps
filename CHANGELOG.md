@@ -12,6 +12,10 @@ Documentation:
   module in `bin/py`: the data flow from listings to JSON, plots and pages, what each tool reads and
   writes, the plot service loop (`update-plots-service.sh`), the shared modules (`FloatClasses.py`,
   `RhoLUT.py`, `PageStatus.py`) and the old `cp-files.sh` helper. The main README links to both.
+- bin/py/README.md is now the reference for the Python tools' command-line options: the shared
+  conventions, a usage line, option table and examples for each tool, and the commands the plot
+  service runs. The main README's option tables moved there; they had omitted
+  `xmtps-aggregate-json.py -b/--bathymetry`.
 
 ## 2026-10-31
 
