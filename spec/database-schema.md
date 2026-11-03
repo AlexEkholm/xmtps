@@ -498,7 +498,7 @@ The upsert matches rows on the table's key `(id_instrument, id_dive, datetime)`.
 | `sbd_session_status_code` | `int` | NULL | -1 | — | Two-digit code of `Session Status: NN - text`. | `sql_coli`, `sbd_session_status_code` |
 | `sbd_session_status_string` | `varchar(64)` | NULL | `''` | — | Text after the code. | `sql_cols`, `sbd_session_status_string` |
 
-The mail body text and the raw header text are parsed but not stored. Both are contained in `msg_raw_text`. Columns `id_dac`, `id_wmo`, `msg_body_text` and `msg_header_raw_text` were dropped on 2026-10-26 (`bin/migrate-xfloatmail.sh`).
+The mail body text and the raw header text are parsed but not stored. Both are contained in `msg_raw_text`. Columns `id_dac`, `id_wmo`, `msg_body_text` and `msg_header_raw_text` were dropped on 2026-10-26 (by `bin/migrate-xfloatmail.sh`, removed from the repository on 2026-11-02).
 
 ### 9.2 `msg_raw_text`
 
@@ -752,8 +752,8 @@ mysql -N -B -e "SELECT HEX(sbd_data) FROM XFloatMail
   ```
 
 - The daemon does not create or alter tables. It needs `SELECT`, `INSERT`, `UPDATE` and `DELETE` on the five tables [inferred].
-- `bin/migrate-xfloatmail.sh` applies the 2026-10-26 `XFloatMail` change to an older database: it drops `id_dac`, `id_wmo`, `msg_body_text` and `msg_header_raw_text`, reorders the primary key to start with `id_imei`, and replaces the old indexes with `inst_dive_idx` and `active_idx`. It checks the current layout first and refuses to run while the deployed binary still writes the dropped columns.
-- `bin/move-mysql-datadir.sh` moves the MySQL data directory on argus to `/data1/mysql`. It does not change the schema.
+- `bin/migrate-xfloatmail.sh`, removed from the repository on 2026-11-02 (it is in the history before commit 5d32370), applied the 2026-10-26 `XFloatMail` change to an older database: it dropped `id_dac`, `id_wmo`, `msg_body_text` and `msg_header_raw_text`, reordered the primary key to start with `id_imei`, and replaced the old indexes with `inst_dive_idx` and `active_idx`. It checked the current layout first and refused to run while the deployed binary still writes the dropped columns.
+- `bin/move-mysql-datadir.sh`, also removed on 2026-11-02, moved the MySQL data directory on argus to `/data1/mysql`. It did not change the schema.
 - `sql/model/*.mwb` are MySQL Workbench models (versions 01–04, with backups). They are historical. Model 04 defines `BEFORE INSERT`/`BEFORE UPDATE` triggers on `XFloatMail` and `XFloatMetadata` that create a matching `XFloat` row. `sql/xmtps-schema.sql`, taken from the production dump, has no triggers, so production has none [inferred]. The `'1400-01-01'` and other column defaults date from that design, in which rows were created with only key columns.
 
 ## 14. Open questions / discrepancies
