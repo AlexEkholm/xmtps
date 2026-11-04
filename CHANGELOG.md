@@ -3,6 +3,17 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-04
+
+Python tools:
+
+- WIMS wave spectra (`Wave.PostProcess`): the low-frequency response correction coefficients are
+  [f0, w] = [0.02622, 0.08951] Hz, from WIMS user manual rev. 3.22 (was [0.02595, 0.08834] Hz).
+  Same fit and pair selection as before (same storm quadrant, A-DWSD outliers excluded), but with
+  the storm center and direction of motion from a cubic spline through the best track (11338
+  pairs). The taper now reaches 1 at 0.116 Hz instead of 0.114 Hz and is at most 0.016 smaller
+  (0.164 instead of 0.172 at 0.050 Hz, 0.656 instead of 0.672 at 0.080 Hz).
+
 ## 2026-11-03
 
 Python tools:

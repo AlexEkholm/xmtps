@@ -1382,11 +1382,12 @@ class Wave:
         F_INTER_STEP = 0.005 # Hz
         F_INTER_MAX  = 1.250 # Hz
         
-        # Low-frequency response correction, a cosine taper [f0, w] in Hz: fitted to the
-        # Hurricane Erin (NDBC 41047, A-DWSD) and Hurricane Lowell (A-DWSD) colocations, without
-        # floats 9298 and 9310, using only pairs in the same storm quadrant within 600 km of the
-        # center or both beyond 600 km, and without A-DWSD reference outliers (2026-10-31 refit).
-        ccoef = [0.02595, 0.08834]
+        # Low-frequency response correction (WIMS user manual rev. 3.22), a cosine taper [f0, w]
+        # in Hz: fitted to the Hurricane Erin (NDBC 41047, A-DWSD) and Hurricane Lowell (A-DWSD)
+        # colocations, without floats 9298 and 9310, using only pairs in the same storm quadrant
+        # within 600 km of the center or both beyond 600 km, and without A-DWSD reference
+        # outliers; storm center and direction of motion from a cubic spline through the best track.
+        ccoef = [0.02622, 0.08951]
     
         # spectra peak
         peak_zz  = 0
