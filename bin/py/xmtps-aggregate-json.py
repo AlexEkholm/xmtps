@@ -57,17 +57,20 @@ import os
 import pandas as pd
 from PIL import Image
 # import plotly.express as px
+import plotly.colors
 import plotly.graph_objects as go
 import plotly.io as pio
 # import pygmt
 # import pprint
 import re
+import time
 # import time
 from scipy import interpolate
 from yattag import Doc 
 
 # local
 from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
+from PageStatus import WriteStatusFooter
 
 # Set library options
 
@@ -92,6 +95,58 @@ BATHYMETRY_FILE = '/data1/etopo2022/ETOPO_2022_v1_60s_N90W180_surface_classic.nc
 
 bathymetry = None
 
+# Browser tabs Kaleido renders PNG images in at once (--image-tabs). The plot service runs up to
+# 8 floats at a time on argus (16 cores); 4 tabs rendered a batch 3.2x faster than 1 there.
+IMAGE_EXPORT_TABS = 4
+
+def OpenBathymetry():
+    """Open the bathymetry file once and return the cached grid dict, or False if it can't be read.
+
+    Reads the classic netCDF ETOPO file named by the global args.bathymetry (-b; ETOPO 2022, with
+    lon/lat/z, or ETOPO2v2c, with x/y/z) and caches the open dataset, its coordinates and the
+    grid's name for plot labels in the global bathymetry. A failure is logged once and cached as
+    False.
+    """
+    global bathymetry
+    if bathymetry is None:
+        try:
+            from scipy.io import netcdf_file
+            nc = netcdf_file(args.bathymetry, mmap = True)
+            xname, yname = ('lon', 'lat') if 'lon' in nc.variables else ('x', 'y')
+            fname = os.path.basename(args.bathymetry)
+            bathymetry = dict(nc = nc, x = np.array(nc.variables[xname][:], dtype = np.double),
+                              y = np.array(nc.variables[yname][:], dtype = np.double), z = nc.variables['z'],
+                              name = 'ETOPO 2022' if '2022' in fname else 'ETOPO2' if 'ETOPO2' in fname else fname)
+        except Exception as e:
+            logger.warning('Failed to read bathymetry file {}: {}'.format(args.bathymetry, e))
+            bathymetry = False
+    return bathymetry
+
+def BathymetryGrid(lon0, lon1, lat0, lat1):
+    """Return (lon, lat, elevation) of the bathymetry grid cells in a region, or None.
+
+    lon0 < lon1 may extend past +-180 (a region across the dateline): the columns wrap, and the
+    returned longitudes increase continuously. lat is clamped to the grid. The arrays are native
+    float64 (the netCDF data are big-endian); elevation is in m, positive up, shape
+    (len(lat), len(lon)). None if the bathymetry file can't be read or the region is empty.
+    """
+    b = OpenBathymetry()
+    if not b:
+        return None
+    x, y = b['x'], b['y']
+    dx = (x[-1] - x[0]) / (len(x) - 1)
+    iy = np.where((y >= lat0) & (y <= lat1))[0]
+    ix = np.arange(int(np.ceil((lon0 - x[0]) / dx)), int(np.floor((lon1 - x[0]) / dx)) + 1)
+    if len(iy) < 2 or len(ix) < 2:
+        return None
+    lon = x[0] + ix * dx
+    ix = np.mod(ix, len(x))
+    # Contiguous column runs (one, or two across the dateline), read as slices
+    breaks = np.where(np.diff(ix) != 1)[0] + 1
+    z = np.hstack([np.array(b['z'][iy[0]:iy[-1] + 1, run[0]:run[-1] + 1], dtype = np.float64)
+                   for run in np.split(ix, breaks)])
+    return lon.astype(np.float64), y[iy].astype(np.float64), z
+
 def BathymetryPressure(lat, lon):
     """Return the seafloor pressure (dBar) from ETOPO at each position, NaN on land.
 
@@ -110,20 +165,7 @@ def BathymetryPressure(lat, lon):
         A NumPy array of seafloor pressures in dBar, NaN where the interpolated elevation is at or
         above sea level, or None if the bathymetry file can't be read.
     """
-    global bathymetry
-    if bathymetry is None:
-        try:
-            from scipy.io import netcdf_file
-            nc = netcdf_file(args.bathymetry, mmap = True)
-            xname, yname = ('lon', 'lat') if 'lon' in nc.variables else ('x', 'y')
-            fname = os.path.basename(args.bathymetry)
-            bathymetry = dict(nc = nc, x = np.array(nc.variables[xname][:], dtype = np.double),
-                              y = np.array(nc.variables[yname][:], dtype = np.double), z = nc.variables['z'],
-                              name = 'ETOPO 2022' if '2022' in fname else 'ETOPO2' if 'ETOPO2' in fname else fname)
-        except Exception as e:
-            logger.warning('Failed to read bathymetry file {}: {}'.format(args.bathymetry, e))
-            bathymetry = False
-    if not bathymetry:
+    if not OpenBathymetry():
         return None
     x, y = bathymetry['x'], bathymetry['y']
     lat, lon = np.asarray(lat, dtype = np.double), np.asarray(lon, dtype = np.double)
@@ -231,6 +273,9 @@ float_aggregate_map = {}
 
 lastprocessed_pending = []
 
+# PNG images waiting to be written: one entry per figure (WritePlotImageFiles, FlushImageQueue)
+image_queue = []
+
 """
 Function Definitions:
 """
@@ -303,11 +348,162 @@ def AppendRows(df, df_new):
         return df_new.reindex(columns=df.columns.union(df_new.columns, sort=False)).reset_index(drop=True)
     return pd.concat([df, df_new], ignore_index=True)
 
+# Energy estimate constants, fitted to the SOLO-II energy plots (WHOI SOLO-II pages on argus, MATLAB)
+# against the SOLO-II listing files, and applied to ALAMO data
+ENERGY_CTD_J_PER_SCAN = 0.25       # continuous profile, 1 scan per second
+ENERGY_CTD_J_PER_SAMPLE = 3.3      # spot sample (drift, surface)
+ENERGY_CTD_RBR_FACTOR = 0.2        # RBR CTDs: CTD estimates reduced by 80%
+ENERGY_IRIDIUM_W = 0.70            # while the Iridium modem is in a session
+ENERGY_IRIDIUM_SESSION_GAP_S = 1800 # SBD messages further apart start a new session
+ENERGY_IRIDIUM_LAST_MSG_S = 10     # added to each session span for its last message
+ENERGY_GPS_W = 0.27                # while acquiring a fix (time to fix)
+ENGINEERING_PAGE_FIGS = ['phase_vac', 'energy_per_cycle']   # the float page's Engineering section
+ENERGY_COMPONENTS = [              # (column, label), stacked bottom up
+    ('pump_descent_j', 'Pump-descent'),
+    ('pump_ascent_j', 'Pump-ascent'),
+    ('air_pump_j', 'Air pump'),
+    ('ctd_profile_j', 'CTD-profile'),
+    ('ctd_drift_j', 'CTD-drift'),
+    ('ctd_surface_j', 'CTD-surface'),
+    ('iridium_j', 'Iridium'),
+    ('gps_j', 'GPS'),
+    ('internal_res_j', 'Internal Res.'),
+    ]
+
+def EnergyEstimates(float_aggregate_data):
+    """Return the float's estimated energy use per dive (the 'energy' aggregate), in J.
+
+    The constants (ENERGY_*) were fitted to the SOLO-II energy plots, which this reproduces from
+    the SOLO-II listing files; the ALAMO quantities used in their place are estimates too:
+      pump_descent_j   the dive's first oil pump operation ('pump' energy, as in the pump plots)
+      pump_ascent_j    the dive's other oil pump operations
+      internal_res_j   battery internal resistance loss of the oil pump: sum (V0 - V) * I * t,
+                       V0 = the dive's highest pump voltage (a lower bound of the no-load voltage)
+      air_pump_j       surface.air_pump_current_a * surface.air_pump_runtime_s * V0
+      ctd_profile_j    ENERGY_CTD_J_PER_SCAN per raw profile sample (surface.prof_num_raw_samples,
+                       else one per second of the ascent, 'cycle_timing' ascent_duration_s)
+      ctd_drift_j      ENERGY_CTD_J_PER_SAMPLE per drift sample ('drift' rows)
+      ctd_surface_j    ENERGY_CTD_J_PER_SAMPLE per surface time series sample ('surface' rows)
+      iridium_j        ENERGY_IRIDIUM_W * the SBD sessions' durations: messages less than
+                       ENERGY_IRIDIUM_SESSION_GAP_S apart form a session, lasting from the first
+                       to the last message plus ENERGY_IRIDIUM_LAST_MSG_S
+      gps_j            ENERGY_GPS_W * the sum of the dive's GPS times to fix (ttf_sec)
+    For an RBR CTD (mission ctdtype, else the BIT sensor type), the CTD estimates are multiplied by
+    ENERGY_CTD_RBR_FACTOR. total_j is the sum of the components. The inputs are kept as columns
+    (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s). Returns an empty
+    DataFrame if the float has no dives.
+    """
+
+    def frame(key):
+        df = float_aggregate_data.get(key)
+        return df if isinstance(df, pd.DataFrame) and len(df) > 0 and 'dive' in df.columns else None
+
+    # CTD type of the float: the latest mission configuration that gives it, else the BIT message
+    ctdtype = ''
+    df_mission = frame('mission')
+    if df_mission is not None and 'ctdtype' in df_mission.columns:
+        types = [t for t in df_mission.sort_values('dive')['ctdtype'] if isinstance(t, str) and t]
+        ctdtype = types[-1] if types else ''
+    df_eng = frame('engineering_data')
+    if not ctdtype and df_eng is not None and 'bit.sensor_type_name' in df_eng.columns:
+        types = [t for t in df_eng.sort_values('dive')['bit.sensor_type_name'] if isinstance(t, str) and t]
+        ctdtype = types[-1] if types else ''
+    ctd_factor = ENERGY_CTD_RBR_FACTOR if ctdtype.upper() == 'RBR' else 1.0
+
+    dives = set()
+    for key in ('pump', 'sbd', 'gps', 'drift', 'surface', 'cycle_timing', 'engineering_data'):
+        df = frame(key)
+        if df is not None:
+            dives |= set(pd.to_numeric(df['dive'], errors='coerce').dropna().astype(int))
+    if not dives:
+        return pd.DataFrame(columns=['dive', 'ctdtype'] + [c for c, _ in ENERGY_COMPONENTS] + ['total_j'])
+    e = pd.DataFrame(index=pd.Index(sorted(dives), name='dive'))
+    for col, _ in ENERGY_COMPONENTS:
+        e[col] = 0.0
+
+    # Oil pump, in listing order within each dive
+    v0 = pd.Series(dtype=float)
+    df = frame('pump')
+    if df is not None:
+        p = df[['dive', 'time', 'volt', 'curr', 'energy']].apply(pd.to_numeric, errors='coerce')
+        p = p[p['dive'].notna()]
+        p['dive'] = p['dive'].astype(int)
+        first = p.groupby('dive').cumcount() == 0
+        e['pump_descent_j'] = p[first].groupby('dive')['energy'].sum(min_count=1).reindex(e.index).fillna(0)
+        e['pump_ascent_j'] = p[~first].groupby('dive')['energy'].sum(min_count=1).reindex(e.index).fillna(0)
+        v0 = p.groupby('dive')['volt'].max()
+        loss = (p['dive'].map(v0) - p['volt']).clip(lower=0) * p['curr'] * p['time']
+        e['internal_res_j'] = loss.groupby(p['dive']).sum(min_count=1).reindex(e.index).fillna(0)
+
+    # Air pump and the profile's raw sample count, from the engineering data
+    scans = pd.Series(np.nan, index=e.index)
+    if df_eng is not None:
+        g = df_eng[pd.to_numeric(df_eng['dive'], errors='coerce').notna()].copy()
+        g['dive'] = pd.to_numeric(g['dive']).astype(int)
+        g = g.groupby('dive').last()
+        if 'surface.air_pump_current_a' in g.columns and 'surface.air_pump_runtime_s' in g.columns:
+            air = (pd.to_numeric(g['surface.air_pump_current_a'], errors='coerce')
+                   * pd.to_numeric(g['surface.air_pump_runtime_s'], errors='coerce') * v0.reindex(g.index))
+            e['air_pump_j'] = air.reindex(e.index).fillna(0)
+        if 'surface.prof_num_raw_samples' in g.columns:
+            scans = pd.to_numeric(g['surface.prof_num_raw_samples'], errors='coerce').reindex(e.index)
+            scans = scans.where(scans > 0)
+
+    # CTD: profile scans (else one per second of ascent), drift and surface samples
+    ascent_s = pd.Series(np.nan, index=e.index)
+    df = frame('cycle_timing')
+    if df is not None and 'ascent_duration_s' in df.columns:
+        a = df[['dive', 'ascent_duration_s']].apply(pd.to_numeric, errors='coerce').dropna()
+        ascent_s = a.groupby(a['dive'].astype(int))['ascent_duration_s'].last().reindex(e.index)
+        ascent_s = ascent_s.where(ascent_s > 0)
+    e['ascent_s'] = ascent_s
+    e['profile_scans'] = scans.fillna(ascent_s).fillna(0)
+    for key, col in (('drift', 'drift_samples'), ('surface', 'surface_samples')):
+        df = frame(key)
+        n = pd.to_numeric(df['dive'], errors='coerce').dropna().astype(int).value_counts() if df is not None else pd.Series(dtype=int)
+        e[col] = n.reindex(e.index).fillna(0).astype(int)
+    e['ctd_profile_j'] = ENERGY_CTD_J_PER_SCAN * e['profile_scans'] * ctd_factor
+    e['ctd_drift_j'] = ENERGY_CTD_J_PER_SAMPLE * e['drift_samples'] * ctd_factor
+    e['ctd_surface_j'] = ENERGY_CTD_J_PER_SAMPLE * e['surface_samples'] * ctd_factor
+
+    # Iridium: SBD sessions
+    iridium_s = pd.Series(0.0, index=e.index)
+    df = frame('sbd')
+    if df is not None:
+        s = df[['dive', 'dt_epoch']].apply(pd.to_numeric, errors='coerce').dropna()
+        for dive, t in s.groupby(s['dive'].astype(int))['dt_epoch']:
+            t = np.sort(t.values)
+            breaks = np.where(np.diff(t) > ENERGY_IRIDIUM_SESSION_GAP_S)[0]
+            starts = np.concatenate(([0], breaks + 1))
+            ends = np.concatenate((breaks, [len(t) - 1]))
+            if dive in iridium_s.index:
+                iridium_s[dive] = float(sum(t[b] - t[a] + ENERGY_IRIDIUM_LAST_MSG_S for a, b in zip(starts, ends)))
+    e['iridium_s'] = iridium_s
+    e['iridium_j'] = ENERGY_IRIDIUM_W * iridium_s
+
+    # GPS: time to fix
+    gps_s = pd.Series(0.0, index=e.index)
+    df = frame('gps')
+    if df is not None and 'ttf_sec' in df.columns:
+        f = df[['dive', 'ttf_sec']].apply(pd.to_numeric, errors='coerce').dropna()
+        f = f[f['ttf_sec'] > 0]
+        gps_s = f.groupby(f['dive'].astype(int))['ttf_sec'].sum().reindex(e.index).fillna(0)
+    e['gps_s'] = gps_s
+    e['gps_j'] = ENERGY_GPS_W * gps_s
+
+    e['total_j'] = e[[c for c, _ in ENERGY_COMPONENTS]].sum(axis=1)
+    e.insert(0, 'ctdtype', ctdtype)
+    e = e.reset_index()
+    cols = [c for c, _ in ENERGY_COMPONENTS] + ['total_j']
+    e[cols] = e[cols].round(1)
+    return e
+
 def AggregateDiveData():
     """Aggregate the dives of each float in float_map into float_aggregate_map.
 
     For each float, concatenates the per-dive data into pandas DataFrames, one per key: 'ascent',
-    'descent', 'drift', 'profile', 'pump', 'surface', 'gps', 'sbd', 'engineering', and 'wave' and
+    'descent', 'drift', 'profile', 'pump', 'surface', 'gps', 'sbd', 'sbd_type' (the SBT lines;
+    empty for dives listed before build 3352), 'engineering', and 'wave' and
     'wave_spectra' (both removed when either is empty). 'mission', 'engineering_data' (all
     engineering values, one row per dive, columns no dive reports dropped) and
     'engineering_errors' are added only when some dive JSON has those fields. It then derives
@@ -315,7 +511,7 @@ def AggregateDiveData():
     idx 1, else the surface start time without a position), 'iridium_position' (composite
     positions of the SBD messages within a CPOS_SPAN_SECONDS window, also used for profiles
     without a GPS fix when their CEP is at most CPOS_MAX_CEP_KM), 'displacement_submerged',
-    'displacement_surface', 'cycle_timing', and the 'summary' dict (startup, deployment and
+    'displacement_surface', 'cycle_timing', 'energy' (EnergyEstimates), and the 'summary' dict (startup, deployment and
     latest GPS fix and SBD message, firmware version, CTD type, age, latest cycle, duration,
     depth, ...). 'id' holds the float's id object.
 
@@ -440,9 +636,18 @@ def AggregateDiveData():
                                                  'size_b',
                                                  'momsn',
                                                  'mtmsn',
-                                                 'pid', 
+                                                 'pid',
                                                  ]) ,
-                    'surface':      
+                    'sbd_type':
+                        pd.DataFrame(columns = [ 'dive',
+                                                 'ids',
+                                                 'name',
+                                                 'nblob',
+                                                 'size_b',
+                                                 'nvalues',
+                                                 'raw_b',
+                                                 ]) ,
+                    'surface':
                         pd.DataFrame(columns = [ 'dive', 
                                                  'dt_epoch', 
                                                  'dt_str', 
@@ -1038,7 +1243,23 @@ def AggregateDiveData():
                             }
                         )
                         float_aggregate_data['sbd'] = AppendRows(float_aggregate_data['sbd'], df_sbd)
-                        
+
+                        # SBD data by message type (SBT lines); absent from older dive JSON files
+                        sbd_types = getattr(dive_data, 'sbd_types', None) or []
+                        if sbd_types:
+                            df_sbd_type = pd.DataFrame(
+                                {
+                                    'dive':    np.array([dive_num]*len(sbd_types), dtype='int'),
+                                    'ids':     np.array([st.ids for st in sbd_types], dtype='str'),
+                                    'name':    np.array([st.name for st in sbd_types], dtype='str'),
+                                    'nblob':   np.array([st.nblob for st in sbd_types], dtype='int'),
+                                    'size_b':  np.array([st.size_b for st in sbd_types], dtype='int'),
+                                    'nvalues': np.array([st.nvalues for st in sbd_types], dtype='int'),
+                                    'raw_b':   np.array([st.raw_b for st in sbd_types], dtype='int'),
+                                }
+                            )
+                            float_aggregate_data['sbd_type'] = AppendRows(float_aggregate_data['sbd_type'], df_sbd_type)
+
                         
                         # TODO Get summary data
                         
@@ -1697,12 +1918,22 @@ def AggregateDiveData():
                 except: 
                 
                     errstr = 'Failed to generate cycle timings for float {}.'.format(float_id)
-                    
+
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
                     logger.error(errstr)
-                
-                
+
+                # Estimated energy use per dive (needs the cycle timings)
+
+                try:
+                    float_aggregate_data['energy'] = EnergyEstimates(float_aggregate_data)
+                except:
+                    errstr = 'Failed to estimate energy use for float {}.'.format(float_id)
+                    if hasattr(args, 'halt') and args.halt:
+                        raise Exception(errstr)
+                    logger.error(errstr)
+
+
                 # TODO Post Process - Get summary data
                 
                
@@ -2125,7 +2356,7 @@ def WriteAggregateJsonFiles():
 
             # Write mission parameter, engineering value and engineering error files:
 
-            for key in ('mission', 'engineering_data', 'engineering_errors'):
+            for key in ('mission', 'engineering_data', 'engineering_errors', 'energy'):
                 if key in float_aggregate_data:
                     fpath = os.path.join(dpath_float, '{}_{}.json'.format(float_id, key))
                     fpath = re.sub('\\\\', '/', fpath)
@@ -2187,8 +2418,17 @@ def WriteAggregateJsonFiles():
                 fpath = re.sub('\\\\', '/', fpath)
                 
                 logger.debug('Writing aggregegate SBD file: ' + fpath)
-                float_aggregate_data['sbd'].to_json(fpath, orient='split', index=False)             
-                
+                float_aggregate_data['sbd'].to_json(fpath, orient='split', index=False)
+
+            # Write aggregate SBD data by message type file
+
+            if 'sbd_type' in float_aggregate_data:
+                fpath = os.path.join(dpath_float, '{}_sbd_type.json'.format(float_id))
+                fpath = re.sub('\\\\', '/', fpath)
+
+                logger.debug('Writing aggregegate SBD data by message type file: ' + fpath)
+                float_aggregate_data['sbd_type'].to_json(fpath, orient='split', index=False)
+
             # Write aggregate surfa file
             
             if not 'surface' in float_aggregate_data:
@@ -2292,7 +2532,7 @@ def WriteAggregateJsonFiles():
     except:
         raise Exception('Failed to write aggregate JSON files.')
  
-def WriteHtmlFile(float_id):
+def WriteHtmlFile(float_id, runtime_s=None):
     """Write the index.html page of one float's plots to <plots>/<id>/index.html.
 
     The page has a fixed navigation pane, sections of small plot images (each linking to its
@@ -2302,8 +2542,13 @@ def WriteHtmlFile(float_id):
     the figure metadata that WritePlotFiles stores in float_aggregate_map[float_id]['figures']. A
     failure is logged and swallowed unless --halt-on-error (-H) is given.
 
+    The footer (PageStatus.WriteStatusFooter, without the decoder status) gives the update time,
+    the time since (filled in by the browser) and runtime_s, the Python utility version and the
+    XMTPS version.
+
     Args:
         float_id: WHOI id of the float (a key of float_aggregate_map).
+        runtime_s: seconds spent writing this float's plots, or None to leave the runtime out.
     """
 
     global float_aggregate_map
@@ -2421,6 +2666,10 @@ def WriteHtmlFile(float_id):
                         with tag('a', href='#air'):
                             text('Air Pump')
                         doc.stag('br')
+                    if any(id in figs_meta_dict for id in ENGINEERING_PAGE_FIGS):
+                        with tag('a', href='#eng'):
+                            text('Engineering')
+                        doc.stag('br')
                     with tag('a', href='#sat'):
                         text('Satcom')
                     doc.stag('br') 
@@ -2451,12 +2700,15 @@ def WriteHtmlFile(float_id):
                                 doc.stag('br')
                                 count = 0
                                 continue
-                       
+
+                            # Without bathymetry there is no 'position' plot; show the map version
+                            if id == 'position' and id not in figs_meta_dict:
+                                id = 'position_geo'
                             if id in figs_meta_dict:
                                 fig_meta = figs_meta_dict[id]
                                 with tag('a', href=fig_meta['fpath_html']):
                                     doc.stag(
-                                        'img', 
+                                        'img',
                                         alt=fig_meta['title'],
                                         klass=fig_meta['size'], 
                                         title=fig_meta['title'],
@@ -2711,7 +2963,6 @@ def WriteHtmlFile(float_id):
                                 'pump_energy_sum', '',
                                 'pump_vac', 'pump_vac_avg', '', 
                                 'pump_vac_v_time', 'pump_vac_v_pres', '',
-                                'phase_vac', '',
                                 ]:
                                 
                                 if (len(id) == 0) and (count > 0) :
@@ -2751,6 +3002,25 @@ def WriteHtmlFile(float_id):
                                             src=fig_meta['fpath_img_small'])
                                     doc.stag('br')
 
+                        # engineering plots: case vacuum through the cycle, estimated energy use
+
+                        if any(id in figs_meta_dict for id in ENGINEERING_PAGE_FIGS):
+
+                            with tag('h2', id='eng'):
+                                text('Engineering')
+
+                            for id in ENGINEERING_PAGE_FIGS:
+                                if id in figs_meta_dict:
+                                    fig_meta = figs_meta_dict[id]
+                                    with tag('a', href=fig_meta['fpath_html']):
+                                        doc.stag(
+                                            'img',
+                                            alt=fig_meta['title'],
+                                            klass=fig_meta['size'],
+                                            title=fig_meta['title'],
+                                            src=fig_meta['fpath_img_small'])
+                                    doc.stag('br')
+
                         # satcom plots
                         
                         with tag('h2', id='sat'):
@@ -2766,6 +3036,7 @@ def WriteHtmlFile(float_id):
                             'satcom_iridium_fix_cep_avg', 'satcom_sbd_data_size_avg', '', 
                             'satcom_sbd_count', '', 
                             'satcom_sbd_data_size', '',
+                            'satcom_sbd_data_type', '',
                             ]:
                             
                             if (len(id) == 0) and (count > 0) :
@@ -2773,12 +3044,15 @@ def WriteHtmlFile(float_id):
                                 doc.stag('br')
                                 count = 0
                                 continue
-                       
+
+                            # Without bathymetry there is no 'position' plot; show the map version
+                            if id == 'position' and id not in figs_meta_dict:
+                                id = 'position_geo'
                             if id in figs_meta_dict:
                                 fig_meta = figs_meta_dict[id]
                                 with tag('a', href=fig_meta['fpath_html']):
                                     doc.stag(
-                                        'img',   
+                                        'img',  
                                         alt=fig_meta['title'],
                                         klass=fig_meta['size'], 
                                         title=fig_meta['title'],
@@ -2872,10 +3146,11 @@ def WriteHtmlFile(float_id):
  
                 # Create footer
                 
-                with tag('div', klass='footer'):        
+                # Update time (with the time since, filled in by the browser) and this float's
+                # plot run time, the Python utility version and the decoder version
+                with tag('div', klass='footer'):
                     with tag('i'):
-                        text('Page last updated ' + datetime.datetime.now(datetime.UTC).isoformat()[:16] + 'Z' + ' - version ' + JSON_VERSION)
-                        # text('Page last updated ' + datetime.datetime.now(datetime.UTC).isoformat()[:16] + 'Z' + ' - v' + JSON_VERSION + ' - Float Group, Department of Physical Oceanography, Woods Hole Oceanographic Institution, Woods Hole, MA, USA')
+                        WriteStatusFooter(doc, tag, text, JSON_VERSION, runtime_s, decoder_status=False)
                         
         
         
@@ -2897,6 +3172,214 @@ def WriteHtmlFile(float_id):
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
         logger.error(errstr)
+
+def ContourLines(x, y, z, level):
+    """Return the lines where z crosses level, as a list of (xs, ys) arrays (marching squares).
+
+    x, y: increasing cell-centre coordinates; z: shape (len(y), len(x)), NaN cells are skipped.
+    The crossing on each cell edge is interpolated linearly. Segments are joined into lines at
+    shared edge points; saddle cells are split so the corner at the high values' diagonal is cut
+    off. Replaces Plotly's contour trace, which would store the whole grid once per contour trace.
+    """
+    from collections import deque
+
+    hi = z > level
+    a, b, c, d = z[:-1, :-1], z[:-1, 1:], z[1:, 1:], z[1:, :-1]   # SW, SE, NE, NW corners
+    case = (hi[:-1, :-1] * 1 + hi[:-1, 1:] * 2 + hi[1:, 1:] * 4 + hi[1:, :-1] * 8)
+    case[np.isnan(a) | np.isnan(b) | np.isnan(c) | np.isnan(d)] = 0
+    X0, Y0 = np.meshgrid(x[:-1], y[:-1])
+    X1, Y1 = np.meshgrid(x[1:], y[1:])
+
+    def edge(name, m):
+        """Crossing points on one edge of the cells selected by mask m."""
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            if name == 'S':
+                t = (level - a[m]) / (b[m] - a[m])
+                return X0[m] + t * (X1[m] - X0[m]), Y0[m]
+            if name == 'N':
+                t = (level - d[m]) / (c[m] - d[m])
+                return X0[m] + t * (X1[m] - X0[m]), Y1[m]
+            if name == 'W':
+                t = (level - a[m]) / (d[m] - a[m])
+                return X0[m], Y0[m] + t * (Y1[m] - Y0[m])
+            t = (level - b[m]) / (c[m] - b[m])
+            return X1[m], Y0[m] + t * (Y1[m] - Y0[m])
+
+    # Edge pairs crossed, per case (a case and its complement cross the same edges)
+    table = {1: [('W', 'S')], 2: [('S', 'E')], 3: [('W', 'E')], 4: [('E', 'N')],
+             5: [('S', 'E'), ('W', 'N')], 6: [('S', 'N')], 7: [('W', 'N')], 8: [('W', 'N')],
+             9: [('S', 'N')], 10: [('W', 'S'), ('E', 'N')], 11: [('E', 'N')], 12: [('W', 'E')],
+             13: [('S', 'E')], 14: [('W', 'S')]}
+    segs = []
+    for k, pairs in table.items():
+        m = case == k
+        if not m.any():
+            continue
+        for e1, e2 in pairs:
+            xa, ya = edge(e1, m)
+            xb, yb = edge(e2, m)
+            segs += list(zip(zip(xa.tolist(), ya.tolist()), zip(xb.tolist(), yb.tolist())))
+
+    # Join segments into lines: shared edge points are computed from the same two grid values,
+    # so they match exactly
+    ends = {}
+    for k, (p, q) in enumerate(segs):
+        ends.setdefault(p, []).append(k)
+        ends.setdefault(q, []).append(k)
+    used = np.zeros(len(segs), dtype = bool)
+    lines = []
+    for k in range(len(segs)):
+        if used[k]:
+            continue
+        used[k] = True
+        line = deque((segs[k][0], segs[k][1]))
+        for forward in (True, False):
+            while True:
+                tip = line[-1] if forward else line[0]
+                nxt = next((j for j in ends.get(tip, []) if not used[j]), None)
+                if nxt is None:
+                    break
+                used[nxt] = True
+                p, q = segs[nxt]
+                other = q if p == tip else p
+                if forward:
+                    line.append(other)
+                else:
+                    line.appendleft(other)
+        pts = np.array(line)
+        lines.append((pts[:, 0], pts[:, 1]))
+    return lines
+
+def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
+    """Return the 'position' figure: profile positions over bathymetry, or None without bathymetry.
+
+    Plain lon/lat axes (Plotly's geo and tile maps can't hover a raster), with the latitude axis
+    scaled by 1/cos(mid-latitude) so shapes are true near the float, over a region square in km:
+    the profiles plus a 0.6 degree margin. Layers, bottom up: the bathymetry grid (BathymetryGrid)
+    as a depth heatmap in whole metres, blue at sea and gray on land (0 m), whose hover gives the
+    depth at any point ("12m"; "0m" on land); a hillshade (sun from the northwest, 3x vertical
+    exaggeration) as a translucent gray heatmap; isobaths every 500 m (1000 m when deeper than
+    6000 m) and the coastline as unlabelled lines (ContourLines);
+    the track; one marker per profile in its dive color (colors, indexed as dives), the last
+    profile a star, whose hover gives dive, time, position, fix source and the grid depth there.
+
+    Args:
+        float_id: WHOI id of the float, for the title.
+        df_profiles: the 'profile_position' DataFrame.
+        dives: the float's dives, the order of colors.
+        colors: one 'rgb(...)' color per dive.
+    """
+    pos = df_profiles[df_profiles['lat'].notna() & df_profiles['lon'].notna()].sort_values('dt_epoch')
+    if len(pos) < 1:
+        return None
+
+    # Region: square in km, centered on the profiles. Longitudes are unwrapped around the first
+    # profile, so a track across the dateline stays together.
+    lon_p = pos['lon'].values.astype(np.double)
+    lon_p = lon_p[0] + np.mod(lon_p - lon_p[0] + 180, 360) - 180
+    lat_p = pos['lat'].values.astype(np.double)
+    clat, clon = (lat_p.min() + lat_p.max()) / 2, (lon_p.min() + lon_p.max()) / 2
+    coslat = max(np.cos(np.radians(clat)), 0.1)
+    half = max(lat_p.max() - lat_p.min(), (lon_p.max() - lon_p.min()) * coslat) / 2 + 0.6
+    region = (clon - half / coslat, clon + half / coslat, max(clat - half, -90), min(clat + half, 90))
+
+    grid = BathymetryGrid(*region)
+    if grid is None:
+        return None
+    lon, lat, z = grid
+    # Coarsen very large regions to at most about 600 cells a side
+    step = max(1, int(np.ceil(max(len(lon), len(lat)) / 600)))
+    lon, lat, z = lon[::step], lat[::step], z[::step, ::step]
+    depth = -z
+
+    # Depth in whole metres (int16, sent as a compact binary array): 0 on land, at least 1 m at
+    # sea, so land is a single value that the color scale paints gray and the hover reads "0m"
+    depth_m = np.where(depth > 0, np.maximum(np.round(depth), 1), 0).astype(np.int16)
+
+    # Depth colors: gray for land (0 m), light to dark blue from 1 m to the deepest point
+    dmax = max(float(depth_m.max()), 2.0)
+    f1 = 1.0 / dmax
+    colorscale = [[0.0, 'rgb(190,190,190)'], [f1 * 0.5, 'rgb(190,190,190)'],
+                  [f1, 'rgb(222,235,247)'], [0.25, 'rgb(158,202,225)'],
+                  [0.55, 'rgb(66,146,198)'], [0.8, 'rgb(8,81,156)'], [1.0, 'rgb(8,38,90)']]
+
+    # Hillshade: cosine of the angle between the surface normal and a sun at azimuth 315 degrees,
+    # altitude 45 degrees (rows are latitudes, increasing north)
+    vexag = 3.0
+    dzdy, dzdx = np.gradient(z * vexag, (lat[1] - lat[0]) * 111320, (lon[1] - lon[0]) * 111320 * coslat)
+    az, alt = np.radians(315), np.radians(45)
+    shade = (-dzdx * np.cos(alt) * np.sin(az) - dzdy * np.cos(alt) * np.cos(az) + np.sin(alt)) \
+        / np.sqrt(dzdx ** 2 + dzdy ** 2 + 1)
+    shade = np.round(np.clip(shade, 0, 1) * 255).astype(np.uint8)
+
+    name = bathymetry['name'] if bathymetry else 'bathymetry'
+    fig = go.Figure()
+    fig.add_trace(go.Heatmap(
+        x=np.round(lon, 5), y=np.round(lat, 5), z=depth_m, zmin=0, zmax=dmax, colorscale=colorscale,
+        hovertemplate='%{z}m<extra></extra>',
+        colorbar=dict(title=dict(text='Depth [m]'), len=0.6, y=0.3,
+                      tickvals=list(range(0, int(dmax) + 1, 1000))),
+        name='depth'))
+    fig.add_trace(go.Heatmap(
+        x=np.round(lon, 5), y=np.round(lat, 5), z=shade, zmin=0, zmax=255, opacity=0.35,
+        hoverinfo='skip', showscale=False,
+        colorscale=[[0, 'rgb(0,0,0)'], [1, 'rgb(255,255,255)']], name='hillshade'))
+
+    # Isobaths every 500 m (1000 m when deeper than 6000 m) and the coastline, computed once as
+    # lines (ContourLines), unlabelled
+    def polyline(lines):
+        xs, ys = [], []
+        for lx, ly in lines:
+            xs += np.round(lx, 4).tolist() + [None]
+            ys += np.round(ly, 4).tolist() + [None]
+        return xs, ys
+
+    if dmax >= 500:
+        iso = 500 if dmax <= 6000 else 1000
+        iso_x, iso_y = [], []
+        for level in np.arange(iso, np.floor(dmax / iso) * iso + 1, iso):
+            lx, ly = polyline([l for l in ContourLines(lon, lat, depth, level) if len(l[0]) > 3])
+            iso_x += lx
+            iso_y += ly
+        fig.add_trace(go.Scatter(x=iso_x, y=iso_y, mode='lines', hoverinfo='skip', name='isobaths',
+                                 line=dict(color='rgba(40,40,40,0.55)', width=0.7)))
+    if (depth_m == 0).any():
+        cx, cy = polyline(ContourLines(lon, lat, depth, 0))
+        fig.add_trace(go.Scatter(x=cx, y=cy, mode='lines', hoverinfo='skip', name='coast',
+                                 line=dict(color='rgb(60,60,60)', width=1)))
+
+    # Profiles
+    color_of = {d: colors[k] for k, d in enumerate(dives) if k < len(colors)}
+    iy = np.abs(lat[:, None] - lat_p[None, :]).argmin(axis=0)
+    ix = np.abs(lon[:, None] - lon_p[None, :]).argmin(axis=0)
+    pos = pos.assign(lon_u=lon_p, depth=depth_m[iy, ix],
+                     color=[color_of.get(d, 'rgb(128,128,128)') for d in pos['dive']])
+    fig.add_trace(go.Scatter(x=pos['lon_u'], y=pos['lat'], mode='lines', hoverinfo='skip',
+                             line=dict(color='black', width=1.3), name='track'))
+    last = pos['dt_epoch'].max()
+    for is_last in (False, True):
+        d = pos[(pos['dt_epoch'] == last) == is_last]
+        fig.add_trace(go.Scatter(
+            x=d['lon_u'], y=d['lat'], mode='markers', name='last profile' if is_last else 'profiles',
+            customdata=np.stack((d['dive'], d['dt_str'], d['src'], d['depth'], d['lon']), -1),
+            hovertemplate=('Dive <b>%{customdata[0]}</b><br>%{customdata[1]}<br>'
+                           '%{y:.4f}°N %{customdata[4]:.4f}°E<br>fix: %{customdata[2]}<br>'
+                           + name + ' depth %{customdata[3]}m<extra></extra>'),
+            marker=dict(color=d['color'], size=16 if is_last else 9,
+                        symbol='star' if is_last else 'circle',
+                        line=dict(color='black', width=0.8 if is_last else 0.4),
+                        opacity=1.0 if is_last else 0.85)))
+
+    fig.update_layout(
+        title=dict(text='{}: Profile Positions and Bathymetry'.format(float_id)),
+        xaxis=dict(title='Longitude [°E]', range=[region[0], region[1]], showgrid=False,
+                   constrain='domain', ticks='outside'),
+        yaxis=dict(title='Latitude [°N]', range=[region[2], region[3]], showgrid=False,
+                   scaleanchor='x', scaleratio=1 / coslat, constrain='domain', ticks='outside'),
+        showlegend=False, hovermode='closest', plot_bgcolor='white',
+        hoverlabel=dict(font=dict(family='Consolas, monospace', size=13)),
+        margin=dict(l=10, r=10, b=20, t=50, pad=4))
+    return fig
 
 def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
     """Write the geographic position plots for one float; return their figure metadata.
@@ -3946,14 +4429,34 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                         raise Exception(errstr)
                     logger.error(errstr)
             
+            # The original geo plot is kept as position_geo; 'position' is the plot over
+            # bathymetry (PositionBathymetryFigure), when the bathymetry file can be read
+
+            figs['position_geo'] = figs.pop('position')
+            figs['position_geo'].update_layout(title=dict(text='{}: Profile Positions (Map)'.format(float_id)))
+            t_bathy = time.monotonic()
+            try:
+                fig_bathy = PositionBathymetryFigure(float_id, df_profiles, dives, colors)
+                logger.debug('Float {}: bathymetry position plot built in {:.1f} s'.format(
+                    float_id, time.monotonic() - t_bathy))
+            except Exception as e:
+                fig_bathy = None
+                errstr = 'Failed to make the bathymetry position plot for float {}: {}'.format(float_id, e)
+                if hasattr(args, 'halt') and args.halt:
+                    raise Exception(errstr)
+                logger.error(errstr)
+            if fig_bathy is not None:
+                figs['position'] = fig_bathy
+
             # Write figures
-            
+
             for fig in figs.keys():
-                    
+
                 # Append meta
+                t_write = time.monotonic()
                 fig_meta = WritePlotImageFiles(
-                    id_str = fig, 
-                    figure = figs[fig], 
+                    id_str = fig,
+                    figure = figs[fig],
                     float_id = float_id,
                     dpath_float = dpath_float,
                     category = 'position',
@@ -3961,7 +4464,11 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                     size = 'fig',
                     ts_pos = [0.97, -0.02],
                     showlegend = True if fig == 'position_all' or fig == 'position_gps' else False,
+                    static_bare = fig == 'position',
                     )
+                if fig in ('position', 'position_geo'):
+                    logger.debug('Float {}: {} plot files written in {:.1f} s'.format(
+                        float_id, fig, time.monotonic() - t_write))
                 if fig_meta is not None:
                     figs_meta.append(fig_meta)
                 
@@ -7801,6 +8308,33 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
     return figs_meta
 
 
+def PumpOperationTraces(df_pump, col, scale, value_fmt):
+    """Return stacked bar traces of a pump quantity per dive, one trace per pump operation.
+
+    df_pump is the float's 'pump' aggregate, one row per pump operation in listing (time) order
+    within each dive. Operation k of a dive (1 = first) goes in trace k, stacked bottom up, so the
+    bar height is the dive total. col is the column to plot ('time' or 'energy'), scale its
+    factor (1/1000 for kJ) and value_fmt the Plotly hover format of the value. Operations are
+    colored from the Viridis scale, first dark, last light.
+    """
+
+    df = df_pump[['dive', 'pres', col]].copy()
+    df['op'] = df.groupby('dive').cumcount() + 1
+    n_ops = int(df['op'].max()) if len(df) else 0
+    colors = plotly.colors.sample_colorscale('Viridis', [i / max(n_ops - 1, 1) for i in range(n_ops)])
+    traces = []
+    for op in range(1, n_ops + 1):
+        d = df[df['op'] == op]
+        traces.append(go.Bar(
+            x=d['dive'].values,
+            y=d[col].values * scale,
+            customdata=d['pres'].values,
+            hovertemplate='#{}: '.format(op) + value_fmt + ' at %{customdata:.0f} dbar<extra></extra>',
+            name='operation {}'.format(op),
+            marker=dict(color=colors[op - 1], line=dict(color='rgb(255,255,255)', width=0.3)),
+            ))
+    return traces
+
 def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
     """Write the aggregate pump plots for one float; return their figure metadata.
 
@@ -8241,7 +8775,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     ),
                 pump_energy_sum = go.Figure(
                     layout=dict(
-                        showlegend = False,
+                        showlegend = True,
                         title = dict(text='{}: Total Pump Energy per Cycle'.format(float_id)),
                         xaxis=dict(
                             title='Dive',
@@ -8261,14 +8795,16 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 size=14,
                                 ),
                             ),
-                        hovermode='x',
+                        barmode='stack',
+                        hovermode='x unified',
+                        legend=dict(title='Pump operation', traceorder='reversed'),
                         plot_bgcolor='white',
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
                     ),
                 pump_time_sum = go.Figure(
                     layout=dict(
-                        showlegend = False,
+                        showlegend = True,
                         title = dict(text='{}: Total Pump Duration per Cycle'.format(float_id)),
                         xaxis=dict(
                             title='Dive',
@@ -8288,7 +8824,9 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 ),
                             ),
                         bargap=0,
-                        hovermode='x',
+                        barmode='stack',
+                        hovermode='x unified',
+                        legend=dict(title='Pump operation', traceorder='reversed'),
                         plot_bgcolor='white',
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
@@ -8870,41 +9408,12 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     name='mean',
                     ))
             
-            figs['pump_energy_sum'].add_trace(go.Bar(
-                x=df_dives_gb_sum.index.values,
-                y=df_dives_gb_sum['energy']/1000,
-                hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    '%{y:.3f} kJ',
-                    '<extra></extra>',
-                    ]),
-                marker=dict(
-                    color='rgb(220,220,220)',
-                    line=dict(
-                        color='rgb(188, 188, 188)',
-                        width=0.5,
-                        ),
-                    ),
-                showlegend=False,
-                ))                    
-                
-            figs['pump_time_sum'].add_trace(go.Bar(
-                x=df_dives_gb_sum.index.values,
-                y=df_dives_gb_sum['time'],
-                hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    '%{y:.0f} s',
-                    '<extra></extra>',
-                    ]),
-                marker=dict(
-                    color='rgb(220,220,220)',
-                    line=dict(
-                        color='rgb(188, 188, 188)',
-                        width=0.5,
-                        ),
-                    ),
-                showlegend=False,
-                ))                    
+            # Total energy and duration per cycle, stacked by pump operation (in dive order)
+
+            for trace in PumpOperationTraces(df_dives, 'energy', 1/1000, '%{y:.3f} kJ'):
+                figs['pump_energy_sum'].add_trace(trace)
+            for trace in PumpOperationTraces(df_dives, 'time', 1, '%{y:.0f} s'):
+                figs['pump_time_sum'].add_trace(trace)
 
             figs['pump_num_ops'].add_trace(go.Bar(
                 x=df_dives_gb.count().index.values,
@@ -9178,8 +9687,9 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
     and surface phases, from the 'engineering_data' sections: one line per dive across the eight
     phase points (x axis 'Descent start' ... 'Surface end'), colored by dive, the last in black;
     pump_first_duration, the duration of each dive's first pump (the first 'pump' record, the
-    first descent pump) as bars, with the mission's first descent pump duration (DFT<phase>,
-    carried forward to the following dives) as a dashed step, and the descent and drift seek
+    first descent pump) as bars, with the mission's first descent pump duration (DFT<phase>) as a
+    dashed step across the bars of the dives that transmitted their mission configuration only
+    (broken elsewhere), and the descent and drift seek
     pump time adjustments (seekPumpAdjT) on a second y axis.
 
     Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no data
@@ -9277,18 +9787,24 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                         'vac = %{y:.2f} inHg',
                         '<extra></extra>',
                         ]),
+                    # Styled as the pump plots (pump_vac, pump_pres, ...): thin line, outlined
+                    # markers, 0.7 opacity. There, marker size shows the pump time; here it is fixed.
                     line=dict(
                         color=colors[i],
-                        width=2 if i == n-1 else 1.2,
+                        width=1,
                         ),
                     marker=dict(
                         color=colors[i],
-                        size=7 if i == n-1 else 5,
-                        symbol='circle',
+                        line=dict(
+                            color='rgb(0, 0, 0)',
+                            width = 0.3,
+                            ),
+                        size=8,
                         ),
                     mode='lines+markers',
                     connectgaps=False,
                     name='{:d}'.format(int(dive)),
+                    opacity=0.7,
                     ))
             figs['phase_vac'] = fig
             fig_size['phase_vac'] = 'figWide'
@@ -9329,10 +9845,17 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                                       if k in mrow and pd.notna(pd.to_numeric(mrow[k], errors = 'coerce'))), None)
                         if value is not None and 0 < value < 65535:
                             dft[int(mrow['dive'])] = float(value)
-                if dft:
-                    dft = pd.Series(dft).sort_index()
-                    dft = dft.reindex(range(int(min(dft.index.min(), first.index.min())),
-                                            int(max(dft.index.max(), first.index.max())) + 1)).ffill()
+                # Only the dives whose mission configuration was transmitted: without it the
+                # configured value is unknown (the float may also change DFT itself), so the line
+                # is broken there instead of carrying the last value forward. Each value is a
+                # step across its own bar (dive - 0.5 to dive + 0.5), so a lone dive still shows.
+                dft_x, dft_y = [], []
+                for dive in sorted(dft):
+                    if dft_x and dft_x[-1] is not None and dft_x[-1] != dive - 0.5:
+                        dft_x.append(None)
+                        dft_y.append(None)
+                    dft_x += [dive - 0.5, dive + 0.5]
+                    dft_y += [dft[dive], dft[dive]]
 
                 fig = go.Figure(
                     layout=dict(
@@ -9378,17 +9901,17 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                         ),
                     name='first pump',
                     ))
-                if len(dft) > 0:
+                if len(dft_x) > 0:
                     fig.add_trace(go.Scatter(
-                        x=dft.index.values,
-                        y=dft.values,
+                        x=dft_x,
+                        y=dft_y,
                         hovertemplate='DFT = %{y:.0f} s<extra></extra>',
                         line=dict(
                             color='rgb(0,0,255)',
                             width=1.5,
                             dash='dash',
-                            shape='hv',
                             ),
+                        connectgaps=False,
                         mode='lines',
                         name='DFT (configured)',
                         ))
@@ -9894,16 +10417,182 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
     return figs_meta
 
 
+# Colors of the SBD data size plot, by message type (the ids of the listing's SBT lines). Related
+# types share a hue: binned profile blues, high-resolution profile purples, drift teals, time
+# series greens, waves oranges, mission configuration pinks, engineering greys.
+SBD_TYPE_COLORS = {
+    '0x00-0x05': 'rgb(40,40,40)',
+    '0x10-0x1F': 'rgb(8,48,107)',
+    '0x20-0x2F': 'rgb(33,113,181)',
+    '0x20-aux':  'rgb(107,174,214)',
+    '0x30-0x3F': 'rgb(158,202,225)',
+    '0x40-0x4F': 'rgb(35,139,69)',
+    '0x50-0x5F': 'rgb(116,196,118)',
+    '0x60-0x6F': 'rgb(140,81,10)',
+    '0x78-0x7F': 'rgb(1,102,94)',
+    '0x80-0x8F': 'rgb(161,217,155)',
+    '0x90-0x97': 'rgb(63,0,125)',
+    '0x98-0x9F': 'rgb(53,151,143)',
+    '0xA0-0xA7': 'rgb(106,81,163)',
+    '0xA8-0xAF': 'rgb(128,205,193)',
+    '0xB0-0xB7': 'rgb(158,154,200)',
+    '0xB8-0xBF': 'rgb(199,234,229)',
+    '0xC1':      'rgb(230,85,13)',
+    '0xC2':      'rgb(191,129,45)',
+    '0xC3':      'rgb(253,174,107)',
+    '0xC5':      'rgb(223,194,125)',
+    '0xCA':      'rgb(254,217,118)',
+    '0xD0-0xD7': 'rgb(197,27,125)',
+    '0xDC':      'rgb(66,146,198)',
+    '0xDE':      'rgb(241,182,218)',
+    '0xE0':      'rgb(37,37,37)',
+    '0xE2':      'rgb(64,64,64)',
+    '0xE3':      'rgb(203,24,29)',
+    '0xE5':      'rgb(82,82,82)',
+    '0xE6':      'rgb(239,59,44)',
+    '0xE7':      'rgb(99,99,99)',
+    '0xE8':      'rgb(130,130,130)',
+    '0xE9':      'rgb(150,150,150)',
+    '0xEA':      'rgb(170,170,170)',
+    '0xEB':      'rgb(115,115,115)',
+    '0xEC':      'rgb(189,189,189)',
+    '0xF0':      'rgb(165,15,21)',
+    '0xF1':      'rgb(252,146,114)',
+    '0xFF':      'rgb(102,37,6)',
+    'frame':     'rgb(217,217,217)',
+    'unparsed':  'rgb(255,0,255)',
+    }
+
+def SbdDataSizeTraces(df_sbd_type, sbd_size_by_dive):
+    """Return the stacked bar traces of the SBD data size plot: one per message type, bottom up.
+
+    df_sbd_type is the float's 'sbd_type' aggregate (the listing's SBT lines), or None; types are
+    stacked in ID order, then 'frame' and 'unparsed'. sbd_size_by_dive is the sum of the SBD
+    message sizes per dive (index: dive). Where it exceeds a dive's SBT total, the difference is
+    shown as 'retransmitted' (SBT counts identical packets once). Dives without SBT lines (listed
+    before build 3352) get a single 'not broken down' bar of their whole size.
+    """
+
+    traces = []
+    sbt_total = pd.Series(dtype=float)
+    if df_sbd_type is not None and len(df_sbd_type) > 0:
+        df = df_sbd_type
+        sbt_total = df.groupby('dive')['size_b'].sum()
+        order = sorted(df['ids'].unique(), key=lambda s: (s in ('frame', 'unparsed'), s == 'unparsed', s))
+        fallback = iter(['rgb(255,127,0)', 'rgb(106,61,154)', 'rgb(177,89,40)', 'rgb(51,160,44)'] * 10)
+        for ids in order:
+            d = df[df['ids'] == ids].groupby('dive').agg(
+                size_b=('size_b', 'sum'), nblob=('nblob', 'sum'), name=('name', 'first'))
+            name = d['name'].iloc[0]
+            label = ids if ids in ('frame', 'unparsed') else '{} {}'.format(ids, name)
+            if ids == 'frame':
+                label = 'frame (packet header and trailer)'
+            traces.append(go.Bar(
+                x=d.index.values,
+                y=d['size_b'].values,
+                customdata=d['nblob'].values,
+                hovertemplate='%{y} bytes, %{customdata} ' + ('packets' if ids == 'frame' else 'blobs'),
+                name=label,
+                marker=dict(
+                    color=SBD_TYPE_COLORS.get(ids) or next(fallback),
+                    line=dict(color='rgb(255,255,255)', width=0.3),
+                    ),
+                ))
+
+    total = sbd_size_by_dive.astype(float)
+    broken = total.index.isin(sbt_total.index)
+    retx = (total[broken] - sbt_total.reindex(total[broken].index)).clip(lower=0)
+    retx = retx[retx > 0]
+    if len(retx):
+        traces.append(go.Bar(
+            x=retx.index.values,
+            y=retx.values,
+            hovertemplate='%{y:.0f} bytes',
+            name='retransmitted',
+            marker=dict(color='rgb(252,187,161)', pattern=dict(shape='/'),
+                        line=dict(color='rgb(255,255,255)', width=0.3)),
+            ))
+    rest = total[~broken]
+    if len(rest):
+        traces.append(go.Bar(
+            x=rest.index.values,
+            y=rest.values,
+            hovertemplate='%{y:.0f} bytes',
+            name='not broken down',
+            marker=dict(color='rgb(220,220,220)', line=dict(color='rgb(188,188,188)', width=0.5)),
+            ))
+    return traces
+
+def SbdDataTypePie(float_id, df_sbd_type, sbd_size_by_dive):
+    """Return a pie chart of the float's total SBD data by message type, or None without SBT data.
+
+    Sums the 'sbd_type' aggregate (the listing's SBT lines) over every dive that has them, one
+    slice per type, colored as in the SBD data size plot (SBD_TYPE_COLORS). sbd_size_by_dive is
+    the sum of the SBD message sizes per dive; where it exceeds a dive's SBT total, the
+    difference is added as a 'retransmitted' slice. Dives without SBT lines are left out; the
+    title gives the number of dives and their range. Slices of at least 3% are labeled with the
+    type and percentage, so the small image (without legend) can be read.
+    """
+
+    if df_sbd_type is None or len(df_sbd_type) < 1:
+        return None
+    df = df_sbd_type
+    by_type = df.groupby('ids').agg(size_b=('size_b', 'sum'), name=('name', 'first'))
+    order = sorted(by_type.index, key=lambda s: (s in ('frame', 'unparsed'), s == 'unparsed', s))
+    by_type = by_type.loc[order]
+    labels = [ 'frame (packet header and trailer)' if ids == 'frame' else ids if ids == 'unparsed'
+               else '{} {}'.format(ids, by_type.at[ids, 'name']) for ids in order ]
+    values = list(by_type['size_b'].astype(float))
+    colors = [ SBD_TYPE_COLORS.get(ids, 'rgb(255,127,0)') for ids in order ]
+    short = list(order)
+
+    sbt_total = df.groupby('dive')['size_b'].sum()
+    sent = sbd_size_by_dive.astype(float).reindex(sbt_total.index)
+    retx = float((sent - sbt_total).clip(lower=0).sum())
+    if retx > 0:
+        labels.append('retransmitted')
+        values.append(retx)
+        colors.append('rgb(252,187,161)')
+        short.append('retx')
+
+    total = sum(values)
+    text = [ '{}<br>{:.0f}%'.format(s, 100 * v / total) if total and v / total >= 0.03 else ''
+             for s, v in zip(short, values) ]
+    dives = sbt_total.index
+    return go.Figure(
+        data=[go.Pie(
+            labels=labels,
+            values=values,
+            text=text,
+            textinfo='text',
+            textposition='inside',
+            hovertemplate='%{label}<br>%{value:,.0f} bytes (%{percent})<extra></extra>',
+            marker=dict(colors=colors, line=dict(color='rgb(255,255,255)', width=0.5)),
+            sort=False,
+            direction='clockwise',
+            )],
+        layout=dict(
+            showlegend=True,
+            title=dict(text='{}: SBD Data by Message Type<br><sup>{:,.0f} bytes in {} dives ({}–{})</sup>'.format(
+                float_id, total, len(dives), int(dives.min()), int(dives.max()))),
+            hoverlabel=dict(font=dict(family='Consolas, monospace', size=14)),
+            legend=dict(title='Message type'),
+            plot_bgcolor='white',
+            margin=dict(l=10,r=10,b=20,t=70,pad=4),
+            ),
+        )
+
 def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
     """Write the Iridium and GPS plots for one float; return their figure metadata.
 
     Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
     max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
 
-    Plots the 'sbd', 'gps', 'iridium_position' and 'summary' data as satcom, satcom_gps_ttf,
+    Plots the 'sbd', 'sbd_type', 'gps', 'iridium_position' and 'summary' data as satcom, satcom_gps_ttf,
     satcom_gps_cno, satcom_gps_nsat, satcom_gps_hdop, satcom_gps_fix_cep, satcom_sbd_count,
-    satcom_sbd_data_size, satcom_sbd_data_size_avg and satcom_iridium_fix_cep_avg (category
-    'satcom').
+    satcom_sbd_data_size (stacked by message type), satcom_sbd_data_type (pie of the total by
+    message type; only with SBT data), satcom_sbd_data_size_avg and satcom_iridium_fix_cep_avg
+    (category 'satcom').
 
     Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no 'sbd'
     and no 'gps' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
@@ -10198,16 +10887,17 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             #range=[ 0, np.max(df_gps['hdop'].values)+1 ],
                             ),
                         bargap=0,
+                        barmode='stack',
                         hoverlabel=dict(
                             font=dict(
                                 family='Consolas, monospace',
-                                size=14,
+                                size=12,
                                 ),
                             ),
-                        hovermode='x',
+                        hovermode='x unified',
                         legend=dict(
-                            # title='Dive',
-                            # font=dict(size=10)
+                            title='Message type',
+                            traceorder='reversed',
                             ),
                         plot_bgcolor='white',
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
@@ -10826,32 +11516,14 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 
             # add traces -- sbd message size
             
-            figs['satcom_sbd_data_size'].add_trace(go.Bar(
-                x = df_sbd_gb_sum.index.values,
-                y = df_sbd_gb_sum['size_b'],
-                customdata=np.stack(
-                    (
-                        df_sbd_gb.count()['size_b'],
-                       ), 
-                    -1
-                    ),
-                hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    '%{customdata} SBD messages',
-                    '%{y} bytes',
-                    '<extra></extra>',
-                    ]),
-                marker=dict(
-                    color='rgb(220,220,220)',
-                    line=dict(
-                        color='rgb(188, 188, 188)',
-                        width=0.5,
-                        ),
-                    ),
-                #mode='markers',
-                showlegend=False,
-                # opacity=0.7,
-                ))
+            for trace in SbdDataSizeTraces(float_aggregate_data.get('sbd_type'), df_sbd_gb_sum['size_b']):
+                figs['satcom_sbd_data_size'].add_trace(trace)
+
+            # add pie -- total SBD data by message type
+
+            pie = SbdDataTypePie(float_id, float_aggregate_data.get('sbd_type'), df_sbd_gb_sum['size_b'])
+            if pie is not None:
+                figs['satcom_sbd_data_type'] = pie
                 
             # figs['satcom_sbd_data_size_avg'].add_trace(go.Scatter(
                 # x=df_sbd_gb_mean.index.values,
@@ -12963,7 +13635,110 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
             logger.error(errstr)
-    
+
+    return figs_meta
+
+# Colors of the energy plot components, in ENERGY_COMPONENTS order
+ENERGY_COLORS = {
+    'pump_descent_j': 'rgb(158,202,225)',
+    'pump_ascent_j':  'rgb(33,113,181)',
+    'air_pump_j':     'rgb(8,48,107)',
+    'ctd_profile_j':  'rgb(116,196,118)',
+    'ctd_drift_j':    'rgb(35,139,69)',
+    'ctd_surface_j':  'rgb(199,233,192)',
+    'iridium_j':      'rgb(230,85,13)',
+    'gps_j':          'rgb(253,174,107)',
+    'internal_res_j': 'rgb(150,150,150)',
+    }
+
+def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
+    """Write the estimated energy use plot for one float; return its figure metadata.
+
+    Takes the shared plot-group parameters and uses float_id, float_aggregate_data and
+    dpath_float. Plots the 'energy' aggregate (EnergyEstimates) as energy_per_cycle (category
+    'energy'): bars per dive stacked by component in ENERGY_COMPONENTS order, in kJ, with the
+    dive total and each component in the hover label. The title gives the float total and, for an
+    RBR CTD, that the CTD estimates are reduced.
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
+    'energy' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
+
+    figs_meta = []
+    df = float_aggregate_data.get('energy')
+    if not isinstance(df, pd.DataFrame) or len(df) < 1:
+        return figs_meta
+
+    try:
+
+        df = df[df['total_j'] > 0]
+        if len(df) < 1:
+            return figs_meta
+        ctdtype = df['ctdtype'].iloc[0] if 'ctdtype' in df.columns else ''
+        note = ' (RBR CTD: CTD x{:g})'.format(ENERGY_CTD_RBR_FACTOR) if str(ctdtype).upper() == 'RBR' else ''
+        fig = go.Figure(
+            layout=dict(
+                showlegend = True,
+                title = dict(text='{}: Estimated Energy Use per Cycle, Total = {:,.1f} kJ{}'.format(
+                    float_id, df['total_j'].sum() / 1000, note)),
+                xaxis=dict(
+                    title='Dive',
+                    ),
+                yaxis=dict(
+                    title='Energy [kJ]',
+                    rangemode='tozero',
+                    ),
+                bargap=0,
+                barmode='stack',
+                hoverlabel=dict(
+                    font=dict(
+                        family='Consolas, monospace',
+                        size=12,
+                        ),
+                    ),
+                hovermode='x unified',
+                legend=dict(
+                    title='Component',
+                    traceorder='reversed',
+                    ),
+                plot_bgcolor='white',
+                margin=dict(l=10,r=10,b=20,t=50,pad=4)
+                )
+            )
+        for col, label in ENERGY_COMPONENTS:
+            if col not in df.columns or not (df[col] > 0).any():
+                continue
+            fig.add_trace(go.Bar(
+                x=df['dive'].values,
+                y=df[col].values / 1000,
+                customdata=df['total_j'].values / 1000,
+                hovertemplate='%{y:.3f} kJ (total %{customdata:.2f} kJ)',
+                name=label,
+                marker=dict(
+                    color=ENERGY_COLORS.get(col),
+                    line=dict(color='rgb(255,255,255)', width=0.3),
+                    ),
+                ))
+
+        fig_meta = WritePlotImageFiles(
+            id_str = 'energy_per_cycle',
+            figure = fig,
+            float_id = float_id,
+            dpath_float = dpath_float,
+            category = 'energy',
+            size = 'figWideS',
+            ts_pos = [1.00, -0.06],
+            showlegend = True,
+            )
+        if fig_meta is not None:
+            figs_meta.append(fig_meta)
+
+    except:
+        errstr = 'Failed to generate energy plots for float {}'.format(float_id)
+        if hasattr(args, 'halt') and args.halt:
+            raise Exception(errstr)
+        logger.error(errstr)
+
     return figs_meta
 
 
@@ -12984,6 +13759,7 @@ PLOT_WRITERS = [
     WriteSurfacePlots,
     WriteSatcomPlots,
     WriteWavePlots,
+    WriteEnergyPlots,
     ]
 
 
@@ -13016,7 +13792,8 @@ def WritePlotFiles():
         for float_id in float_aggregate_map.keys():
             
             logger.info('Writing plot files for float {:04d}...'.format(float_id))
-            
+            t_float_start = time.monotonic()
+
             try:
                 
                 figs_meta = []
@@ -13056,7 +13833,14 @@ def WritePlotFiles():
                 # Write plots, one function per plot group
                 
                 for write_plots in PLOT_WRITERS:
-                    figs_meta += write_plots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
+                    t_group = time.monotonic()
+                    new_meta = write_plots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
+                    # Write this group's PNG images in one batch; drop figures whose images failed
+                    FlushImageQueue()
+                    new_meta = [m for m in new_meta if not m.get('failed')]
+                    figs_meta += new_meta
+                    logger.debug('Float {}: {} wrote {} figures in {:.1f} s'.format(
+                        float_id, write_plots.__name__, len(new_meta), time.monotonic() - t_group))
                 
                 # Save figure metadata
                 
@@ -13082,7 +13866,7 @@ def WritePlotFiles():
                 
                 # Write HTML file
                     
-                WriteHtmlFile(float_id)
+                WriteHtmlFile(float_id, time.monotonic() - t_float_start)
               
 
                     
@@ -13109,16 +13893,18 @@ def WritePlotImageFiles(
         category = 'uncategorized', 
         size = 'fig',
         ts_pos = [1, -.06],
-        showlegend = True
+        showlegend = True,
+        static_bare = False
         ):
     """Write one figure as interactive HTML, PNG, small PNG and thumbnail files.
 
     Writes <dpath_float>/<float_id>_<id_str>.html (Plotly from the CDN, at the html_width and
-    html_height of opts[size]; None lets the plot fill the page), <float_id>_<id_str>_small.png
-    (small_width x small_height, without the legend), <float_id>_<id_str>_thumb.png (the small
-    image reduced to the figThumb width) and <float_id>_<id_str>.png (width x height, without the
-    legend). The figure's layout is changed in place. With --display-figures (-D) the figure is
-    also shown in the browser.
+    html_height of opts[size]; None lets the plot fill the page) now, and queues the PNG images
+    for FlushImageQueue, which WritePlotFiles calls after each plot group: <float_id>_<id_str>
+    _small.png (small_width x small_height, without the legend), <float_id>_<id_str>_thumb.png
+    (the small image reduced to the figThumb width) and <float_id>_<id_str>.png (width x height,
+    without the legend). The figure's layout is changed in place; the queue holds a snapshot of
+    it. With --display-figures (-D) the figure is also shown in the browser.
 
     Args:
         id_str: Figure id, used in the file names and as the key of the figure metadata.
@@ -13130,12 +13916,15 @@ def WritePlotImageFiles(
         size: Key of opts giving the image sizes (e.g. 'fig', 'figWide', 'figWideL').
         ts_pos: Position for a timestamp annotation; currently unused.
         showlegend: Whether the HTML plot shows the legend (the PNG images never do).
+        static_bare: If true, the PNG images also leave out the color bars and the axis tick
+            labels and titles (the HTML plot keeps them).
 
     Returns:
-        The figure metadata dict (id_str, dt_str, title, category, size, the fpath_* paths with the
-        --strip-path regex removed, and the size_* file sizes in bytes; the fpath_svg* paths are
-        set but no SVG files are written), or None if any file could not be written (logged, or
-        raised with --halt-on-error, -H).
+        The figure metadata dict (id_str, dt_str, title, category, size and the fpath_* paths; the
+        fpath_svg* paths are set but no SVG files are written). FlushImageQueue adds the size_*
+        file sizes in bytes and removes the --strip-path regex from the paths once the images are
+        written, or sets 'failed'. None if the HTML file could not be written (logged, or raised
+        with --halt-on-error, -H).
     """
     try: 
         
@@ -13209,156 +13998,109 @@ def WritePlotImageFiles(
             return None
                 
 
-        # Write small images
-        
+        # Queue the small and full-size PNG images; FlushImageQueue writes them (and the thumbnail
+        # and file sizes) once the plot group is done. Both images use the same layout (no
+        # legend, the small margins) and differ only in size, so one snapshot of the figure
+        # serves both.
+
+        if static_bare:
+            for trace_type in ('heatmap', 'contour'):
+                figure.update_traces(showscale=False, selector=dict(type=trace_type))
+            figure.update_xaxes(showticklabels=False, ticks='', title_text='')
+            figure.update_yaxes(showticklabels=False, ticks='', title_text='')
+
         figure.update_layout(
-            showlegend=False, 
+            showlegend=False,
             # title_font_size=12,
-            height=opts[size]['small_height'], 
+            height=opts[size]['small_height'],
             width=opts[size]['small_width'],
             margin=opts[size]['margin'],
             )
-        
-        try:
-            figure.write_image(
-                fig_meta['fpath_img_small'],
-                height=opts[size]['small_height'], 
-                width=opts[size]['small_width'],
-                )
-        except:
-            errstr = 'Failed to write file: ' + fig_meta['fpath_img_small']
-            if hasattr(args, 'halt') and args.halt:
-                raise Exception(errstr)
-            logger.error(errstr)
-            return None
-            
-        # try:
-        #     figure.write_image(
-        #         fig_meta['fpath_svg_small'],
-        #         height=opts[size]['small_height'], 
-        #         width=opts[size]['small_width'],
-        #         )
-        # except:
-        #     errstr = 'Failed to write file: ' + fig_meta['fpath_svg_small']
-        #     if hasattr(args, 'halt') and args.halt:
-        #         raise Exception(errstr)
-        #     logger.error(errstr)
-        #     return None
+        snapshot = figure.to_dict()
+        image_queue.append(dict(fig_meta = fig_meta, figure = snapshot, size = size))
 
-        # TODO Write thumbnail
-        try:
-           
-            with Image.open(fig_meta['fpath_img_small']) as image:
-                image.thumbnail((opts['figThumb']['width'], opts['figThumb']['height']), resample=Image.BICUBIC)
-                image.save(fig_meta['fpath_img_thumb'])
-           
-        except:
-            errstr = 'Failed to write file: ' + fig_meta['fpath_img_thumb']
-            if hasattr(args, 'halt') and args.halt:
-                raise Exception(errstr)
-            logger.error(errstr)
-            return None
-                        
-        # Add timestamp to plot
-        
-        # figure.add_annotation(
-            # font=dict(size=8,color="rgb(169,169,169)"),
-            # xref="paper",
-            # yref="paper",
-            # x=0.5,
-            # y=1,
-            # yshift=40,
-            # text=fig_meta['dt_str'],
-            # showarrow=False
-            # )
-        
-        # Write JSON file
-        # try:
-            # with open(fig_meta['fpath_json'], 'w', encoding='utf-8') as file:
-                # file.write(figure.to_json())
-        # except:
-            # errstr = 'Failed to write file: ' + fig_meta['fpath_json']
-            # if hasattr(args, 'halt') and args.halt:
-                # raise Exception(errstr)
-            # logger.error(errstr)
-            # return None
-        
-
-        
-        # Write PNG file
-        
-        figure.update_layout(
-            showlegend=False,
-            height=opts[size]['height'], 
-            width=opts[size]['width'],
-            )
-        
-        try:
-            figure.write_image(
-                fig_meta['fpath_img'],
-                height=opts[size]['height'], 
-                width=opts[size]['width'],
-                )
-        except:
-            errstr = 'Failed to write file: ' + fig_meta['fpath_img']
-            if hasattr(args, 'halt') and args.halt:
-                raise Exception(errstr)
-            logger.error(errstr)
-            return None
- 
-        # try:
-        #     figure.write_image(
-        #         fig_meta['fpath_svg'],
-        #         height=opts[size]['height'], 
-        #         width=opts[size]['width'],
-        #         )
-        # except:
-        #     errstr = 'Failed to write file: ' + fig_meta['fpath_svg']
-        #     if hasattr(args, 'halt') and args.halt:
-        #         raise Exception(errstr)
-        #     logger.error(errstr)
-        #     return None
- 
- 
-        # Display figures if option set
-        
         if hasattr(args, 'display') and  args.display:
             figure.show()
-        
-        # Get file sizes
-        
-        # fig_meta['size_json'] = os.path.getsize(fig_meta['fpath_json'])
-        fig_meta['size_html']       = os.path.getsize(fig_meta['fpath_html'])
-        fig_meta['size_img']        = os.path.getsize(fig_meta['fpath_img'])
-        fig_meta['size_img_small']  = os.path.getsize(fig_meta['fpath_img_small'])
-        fig_meta['size_img_thumb']  = os.path.getsize(fig_meta['fpath_img_thumb'])
-        #fig_meta['size_svg']        = os.path.getsize(fig_meta['fpath_svg'])
-        #fig_meta['size_svg_small']  = os.path.getsize(fig_meta['fpath_svg_small'])
-        
-        # Strip paths
-            
-        if hasattr(args, 'strip') and len(args.strip):
-            fig_meta['fpath_html']      = re.sub(args.strip, '', fig_meta['fpath_html'])
-            fig_meta['fpath_img']       = re.sub(args.strip, '', fig_meta['fpath_img'])
-            fig_meta['fpath_img_small'] = re.sub(args.strip, '', fig_meta['fpath_img_small'])
-            fig_meta['fpath_svg']       = re.sub(args.strip, '', fig_meta['fpath_svg'])
-            fig_meta['fpath_svg_small'] = re.sub(args.strip, '', fig_meta['fpath_svg_small'])
-            fig_meta['fpath_img_thumb'] = re.sub(args.strip, '', fig_meta['fpath_img_thumb'])
-            
+
         return fig_meta
-        
-    except: 
+
+    except:
         errstr = 'Failed to write plot image files for float {}: {}'.format(
             float_id,
             id_str
             )
-        
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
         logger.error(errstr)
-   
-    return None
-        
+        return None
+
+def FlushImageQueue():
+    """Write the PNG images queued by WritePlotImageFiles; return the ids of the figures that failed.
+
+    All queued images (a small and a full-size PNG per figure) are rendered in one
+    plotly.io.write_images call, which Kaleido spreads over the tabs of its browser
+    (--image-tabs, started with the sync server in the main program). If the batch fails, each
+    image is retried alone, so one bad figure doesn't lose the others. Then, per figure, the
+    thumbnail is made from the small image, the file sizes are recorded in its metadata and the
+    --strip-path regex is applied to its paths, as WritePlotImageFiles did before it queued the
+    images. A figure whose images could not be written is marked fig_meta['failed'] = True
+    (logged, or raised with --halt-on-error, -H); WritePlotFiles drops it from the float page.
+    """
+    global image_queue
+    jobs, image_queue = image_queue, []
+    if not jobs:
+        return []
+
+    figures, paths, widths, heights = [], [], [], []
+    for job in jobs:
+        o, m = opts[job['size']], job['fig_meta']
+        for path, w, h in ((m['fpath_img_small'], o['small_width'], o['small_height']),
+                           (m['fpath_img'], o['width'], o['height'])):
+            fig = dict(job['figure'], layout = dict(job['figure'].get('layout', {}), width = w, height = h))
+            figures.append(fig)
+            paths.append(path)
+            widths.append(w)
+            heights.append(h)
+
+    try:
+        pio.write_images(figures, paths, width = widths, height = heights)
+        written = [True] * len(paths)
+    except Exception as e:
+        logger.warning('Failed to write {} images in one batch, writing them one at a time: {}'.format(len(paths), e))
+        written = []
+        for fig, path, w, h in zip(figures, paths, widths, heights):
+            try:
+                pio.write_image(fig, path, width = w, height = h)
+                written.append(True)
+            except Exception:
+                written.append(False)
+
+    failed = []
+    for k, job in enumerate(jobs):
+        fig_meta = job['fig_meta']
+        try:
+            for ok, path in zip(written[2 * k:2 * k + 2], paths[2 * k:2 * k + 2]):
+                if not ok:
+                    raise Exception('Failed to write file: ' + path)
+            with Image.open(fig_meta['fpath_img_small']) as image:
+                image.thumbnail((opts['figThumb']['width'], opts['figThumb']['height']), resample=Image.BICUBIC)
+                image.save(fig_meta['fpath_img_thumb'])
+            fig_meta['size_html']       = os.path.getsize(fig_meta['fpath_html'])
+            fig_meta['size_img']        = os.path.getsize(fig_meta['fpath_img'])
+            fig_meta['size_img_small']  = os.path.getsize(fig_meta['fpath_img_small'])
+            fig_meta['size_img_thumb']  = os.path.getsize(fig_meta['fpath_img_thumb'])
+            if hasattr(args, 'strip') and len(args.strip):
+                for key in ('fpath_html', 'fpath_img', 'fpath_img_small', 'fpath_svg', 'fpath_svg_small', 'fpath_img_thumb'):
+                    fig_meta[key] = re.sub(args.strip, '', fig_meta[key])
+        except Exception as e:
+            fig_meta['failed'] = True
+            failed.append(fig_meta['id_str'])
+            errstr = 'Failed to write plot image files: {} ({})'.format(fig_meta['fpath'], e)
+            if hasattr(args, 'halt') and args.halt:
+                raise Exception(errstr)
+            logger.error(errstr)
+    return failed
+
 
 """
 Generate CLI arguments:
@@ -13427,6 +14169,14 @@ parser.add_argument(
     dest='bathymetry',
     help='read bathymetry for trajectory plots from classic netCDF ETOPO file FILE (default=\'{}\')'.format(BATHYMETRY_FILE),
     metavar='FILE')
+
+parser.add_argument(
+    '--image-tabs',
+    default=IMAGE_EXPORT_TABS,
+    dest='image_tabs',
+    type=int,
+    help='render PNG images in N browser tabs at once (default={:d})'.format(IMAGE_EXPORT_TABS),
+    metavar='N')
 
 parser.add_argument(
     '-D', '--display-figures',
@@ -13553,12 +14303,13 @@ try:
             logger.error('Invalid plot output directory: ' + args.plot_output)
         else:
             # Keep one Chromium browser running for all image exports instead of kaleido
-            # starting one per image (about 0.6 s instead of 2.2 s per image).
+            # starting one per image (about 0.6 s instead of 2.2 s per image), with
+            # --image-tabs tabs, over which each plot group's batch of images is spread.
             kaleido_server = False
             if float_aggregate_map:
                 try:
                     import kaleido
-                    kaleido.start_sync_server(silence_warnings = True)
+                    kaleido.start_sync_server(n = max(1, args.image_tabs), silence_warnings = True)
                     kaleido_server = True
                 except Exception as e:
                     logger.warning('Failed to start kaleido server, starting a browser per image: {}'.format(e))

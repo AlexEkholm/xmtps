@@ -37,7 +37,7 @@ import os
 import re
 
 # local
-from FloatClasses import DateTime, Dive, Drift, FloatId, Gps, Sbd, Profile, Wave
+from FloatClasses import DateTime, Dive, Drift, FloatId, Gps, Sbd, SbdType, Profile, Wave
 import RhoLUT
 
 """
@@ -525,7 +525,8 @@ def ProcessListingFile(fpath_list):
         WVS, wvs     wave spectra; fill values of bins not received become NaN (wvm is ignored)
 
     Drift and profile samples get density and sigma0 from RhoLUT; temperatures and salinities at
-    or below the lookup table minimum become NaN. A, PMP, PRD/prd, IRI, SBT, SFD, SHX/shx, VLV/vlv
+    or below the lookup table minimum become NaN. SBT lines (SBD data by message type) fill
+    sbd_types, without the total line. A, PMP, PRD/prd, IRI, SFD, SHX/shx, VLV/vlv
     and XSV lines are ignored, and unknown lines are logged at debug level. A line that fails to
     parse is logged as an error (raised with -H) and skipped. After parsing, Dive.PostProcess is
     called and the result is written with WriteJsonDiveDataFile.
@@ -1083,6 +1084,20 @@ def ProcessListingFile(fpath_list):
                 # SBD message data:
 
                 if re.match('^SBT ', line):
+                    # SBT SN dive ids nBlob bytes pct nValues rawBytes ratio  # name
+                    fields, _, name = line.partition('#')
+                    x = fields.split()
+                    if x[3] != 'total':
+                        st          = SbdType()
+                        st.ids      = x[3]
+                        st.name     = name.strip()
+                        st.nblob    = int(x[4])
+                        st.size_b   = int(x[5])
+                        st.nvalues  = -1 if x[7] == '-' else int(x[7])
+                        st.raw_b    = int(x[8])
+                        dive_data.sbd_types.append(st)
+                        del st
+                    del x, fields, name
                     continue
 
                 if re.match('^SHX ', line):

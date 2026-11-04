@@ -109,7 +109,7 @@ Order of writing, all from the same Plotly figure object (`WritePlotImageFiles`)
 3. Thumbnail, from the small PNG.
 4. Full PNG, without legend.
 
-PNGs are written by Plotly's `write_image` with kaleido at scale 1, so the pixel size is the requested size. Kaleido drives a headless Chrome (production: Chrome for Testing 142, see README "Versions"). The tool starts one kaleido server for the whole run (`kaleido.start_sync_server`) instead of one browser per image.
+PNGs are written by Plotly's `write_image` with kaleido at scale 1, so the pixel size is the requested size. Kaleido drives a headless Chrome (production: Chrome for Testing 142, see README "Versions"). The tool starts one kaleido server for the whole run (`kaleido.start_sync_server`, with `--image-tabs` tabs, default 4) instead of one browser per image. `WritePlotImageFiles` writes the HTML at once and queues the two PNGs; after each plot group, `FlushImageQueue` renders all the group's PNGs in one `plotly.io.write_images` batch spread over the tabs, then writes the thumbnails and records the file sizes. If the batch fails, each image is retried alone, and a figure whose images can't be written is left off the float page. The small and full-size PNG use the same layout (no legend, the small margins) and differ only in size.
 
 The HTML file is a complete page written by `write_html(include_plotlyjs='cdn')`:
 
@@ -171,7 +171,8 @@ Input: `profile_position`, `gps`, `iridium_position`, `sbd`. Written only if the
 | ID | Title | Size | Page | Contents |
 |---|---|---|---|---|
 | `position_globe` | Profile Positions | `fig` | top | Orthographic globe centered on the float's mean profile position. Black line "Trajectory" through the profile positions; one circle per dive in the dive colors, the latest a star. |
-| `position` | Profile Positions | `fig` | top | As `position_globe`, Winkel tripel projection zoomed to the float's area. |
+| `position` | Profile Positions and Bathymetry | `fig` | top | `PositionBathymetryFigure`: plain lon/lat axes, latitude scaled by 1/cos(mid-latitude), over a region square in km (the profiles plus 0.6°). Layers: the bathymetry grid (`-b`, section 10.1) as a depth heatmap (blues at sea, gray-tan on land) whose hover gives the depth at any point ("depth 2743 m", or "land, 12 m"); a hillshade (sun at 315°, 45°, 3× vertical exaggeration) at 35% opacity; isobaths every 500 m (1000 m if deeper than 6000 m) and the coastline, unlabelled lines computed once (`ContourLines`); black track; one marker per profile in the dive colors, the latest a star, whose hover adds the grid depth there. Grids over about 600 cells a side are thinned. The PNG images leave out the color bar and the axis tick labels and titles (`static_bare`); the HTML keeps them. Not written if the bathymetry file can't be read; the page then shows `position_geo`. With `-d` the aggregator logs the time to build it and to write its files, and the time of each plot group (DEBUG). |
+| `position_geo` | Profile Positions (Map) | `fig` | table | The previous `position` plot (until 2026-11-04): as `position_globe`, Winkel tripel projection zoomed to the float's area. |
 | `position_all` | All Positions | `fig` | table | Every position: startup GPS (black star), GPS before descent (×), GPS beacon (star), GPS after ascent (cross), each Iridium message position, and the composite Iridium position of each dive, all in the dive colors; profile positions as large open circles. |
 | `position_gps` | GPS Positions | `fig` | Satcom | GPS fixes only: startup GPS, before descent, beacon, after ascent. |
 
@@ -276,12 +277,12 @@ Input: `pump` (`WritePumpPlots`); `engineering_data`, `pump` and `mission` (`Wri
 | `pump_volt_avg` | Average Pump Battery Voltage | `fig2` | Hydraulic | Statistics per dive; y: "Voltage [V]". |
 | `pump_curr_avg` | Average Pump Battery Current | `fig2` | Hydraulic | Statistics per dive; y: "Current [A]". |
 | `pump_power_avg` | Average Pump Power | `fig2` | table | Statistics per dive; y: "Power [W]". |
-| `pump_energy_sum` | Total Pump Energy per Cycle | `figWideXS` | Hydraulic | Bars; y: "Energy [kJ]". |
-| `pump_time_sum` | Total Pump Duration per Cycle | `figWideXS` | Hydraulic | Bars; y: "Duration [seconds]". |
+| `pump_energy_sum` | Total Pump Energy per Cycle | `figWideXS` | Hydraulic | Bars stacked by pump operation (1 = the dive's first, in listing order; Viridis, first dark), so a bar is the dive total; y: "Energy [kJ]". |
+| `pump_time_sum` | Total Pump Duration per Cycle | `figWideXS` | Hydraulic | Bars stacked by pump operation, as `pump_energy_sum`; y: "Duration [seconds]". |
 | `pump_num_ops` | No. Pump Operations per Cycle | `figWideXS` | Hydraulic | Bars; y: "Pumps". |
 | `pump_energy_v_max_pres` | Total Pump Energy vs. Max. Pres. | `fig` | Hydraulic | One marker per dive; x: "Max. Pressure [dBar]"; y: "Energy [kJ]". |
-| `phase_vac` | Case Vacuum through the Dive Cycle | `figWide` | Hydraulic | Case vacuum at the start and end of descent, drift, ascent and surface; x: "Phase" (eight points, "Descent start" … "Surface end"); y: "Vacuum [inHg]"; one line per dive, the latest black. |
-| `pump_first_duration` | First Pump Duration and Seek Adjustment | `figWideS` | Hydraulic | Bars "first pump" (duration of each dive's first pump record), dashed blue step "DFT (configured)", and on a second y axis "Seek adjustment [seconds]" the lines "descent seek adj." (black) and "drift seek adj." (red); x: "Dive"; y: "First pump [seconds]". |
+| `phase_vac` | Case Vacuum through the Dive Cycle | `figWide` | Engineering | Case vacuum at the start and end of descent, drift, ascent and surface; x: "Phase" (eight points, "Descent start" … "Surface end"); y: "Vacuum [inHg]"; one line per dive, the latest black. |
+| `pump_first_duration` | First Pump Duration and Seek Adjustment | `figWideS` | Hydraulic | Bars "first pump" (duration of each dive's first pump record), dashed blue step "DFT (configured)" (DFT of the dive's mission phase, drawn across the bar of each dive that transmitted its mission configuration and broken at the others: the float sends it only after an upload or when `APT` = 1, and can change its first pump time itself between transmissions), and on a second y axis "Seek adjustment [seconds]" the lines "descent seek adj." (black) and "drift seek adj." (red); x: "Dive"; y: "First pump [seconds]". |
 
 ### 3.10 Air pump (`WriteAirPumpPlots`, category `air`)
 
@@ -291,6 +292,14 @@ Input: `engineering_data`, `mission`. Written only if some dive has air pump dat
 |---|---|---|---|---|
 | `air_pump_duration` | Air Pump Duration | `figWideXS` | Air Pump | Gray bars "surface" (`APRunT` per dive); orange markers "BIT test" (`rgb(255,140,0)`); x: "Dive"; y: "Duration [seconds]". The configured `SAO` is in the hover text only. |
 | `air_pump_pres` | Air Bladder Pressure | `figWideXS` | Air Pump | Black "surface max." (`AirBladMxP`), red step "SAX (max.)", blue step "SAN (min.)", orange "BIT test" markers; y: "Pressure [PSI]". |
+
+### 3.10.1 Energy (`WriteEnergyPlots`, category `energy`)
+
+Input: `energy` (the `_energy` aggregate, [json-file-format.md 4.17.1](json-file-format.md#4171-_energy)). Written when some dive has a positive total. Added 2026-11-04.
+
+| ID | Title | Size | Page | Contents |
+|---|---|---|---|---|
+| `energy_per_cycle` | Estimated Energy Use per Cycle, Total = … kJ | `figWideS` | Engineering | Bars per dive, stacked bottom up: Pump-descent, Pump-ascent, Air pump, CTD-profile, CTD-drift, CTD-surface, Iridium, GPS, Internal Res. (colors `ENERGY_COLORS`). A component that is 0 in every dive is left out. For an RBR CTD the title adds "(RBR CTD: CTD x0.2)". The hover (`x unified`) gives each component and the dive total. x: "Dive"; y: "Energy [kJ]". |
 
 ### 3.11 Surface (`WriteSurfacePlots`, category `surface`)
 
@@ -317,7 +326,8 @@ Input: `sbd`, `gps`, `iridium_position`, summary. Default size `fig2`. "before d
 | `satcom_gps_hdop` | GPS Horiz. Dilution of Precision | `fig2` | Satcom | y: "HDOP". |
 | `satcom_gps_fix_cep` | GPS Fix Uncertainty Est. | `fig2` | Satcom | y: "Uncertainty [m]". |
 | `satcom_sbd_count` | No. SBD Messages | `figWideXS` | Satcom | Bars; y: "No. Messages". |
-| `satcom_sbd_data_size` | SBD Data Size | `figWideXS` | Satcom | Bars; y: "Size [bytes]". |
+| `satcom_sbd_data_size` | SBD Data Size | `figWideXS` | Satcom | Bars stacked by X-message type, from `_sbd_type` (the `SBT` lines), in ID order then `frame` and `unparsed`; fixed color per type (`SBD_TYPE_COLORS`). Bytes of the dive's `SBD` messages beyond its `SBT` total are a `retransmitted` segment. A dive without `SBT` lines (listed before build 3352) is one grey `not broken down` bar of its `SBD` sizes. y: "Size [bytes]". |
+| `satcom_sbd_data_type` | SBD Data by Message Type | `fig2` | Satcom | Pie of the total SBD bytes by message type over the dives with `SBT` lines, plus a `retransmitted` slice; colors as `satcom_sbd_data_size`. Slices of at least 3% are labeled with the type and percentage. The subtitle gives the bytes, the number of dives and their range. Only written when some dive has `SBT` lines. |
 | `satcom_sbd_data_size_avg` | SBD Message Average Size | `fig2` | Satcom | Statistics per dive; y: "Size [bytes]", 0–350. |
 | `satcom_iridium_fix_cep_avg` | Iridium Fix Uncertainty | `fig2` | Satcom | Statistics of the message CEPs per dive, plus "composite" markers (the dive's composite CEP); y: "Uncertainty [km]", log scale. |
 
@@ -369,7 +379,7 @@ Structure:
     <h2 id="sat">Satcom</h2> ...
     <h2 id="figs">Figure Files</h2> <table class="figt"> ... </table>
   </div></div>
-  <div class="footer"><i>Page last updated 2026-10-30T15:29Z - version 0.11</i></div>
+  <div class="footer"><i>Page last updated 2026-11-04T19:38Z <span class="page-updated" ...>(runtime: 50 seconds)</span><br />Python utility version 0.11<br />XMTPS version 1.0.3351b (built 2026-11-04)<script>...</script></i></div>
 </body></html>
 ```
 
@@ -389,11 +399,12 @@ Figures shown in each section, in order (rows separated by `/`):
 | Surface Data | `surface_pres`, `surface_pres_avg` / `surface_temp`, `surface_temp_avg` / `surface_sample_count` |
 | Ascent | `ascent`, `ascent_rate_v_pres` / `ascent_rate_v_time`, `ascent_rate_avg` / `ascent_sample_count` |
 | Descent | `descent`, `descent_rate_v_pres` / `descent_rate_v_time`, `descent_rate_avg` / `descent_sample_count` |
-| Hydraulic System | `pump_first_duration` / `pump_pres`, `pump_power_v_pres` / `pump_volt`, `pump_volt_avg` / `pump_curr`, `pump_curr_avg` / `pump_energy`, `pump_energy_v_max_pres` / `pump_num_ops` / `pump_time_sum` / `pump_energy_sum` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` / `phase_vac` |
+| Hydraulic System | `pump_first_duration` / `pump_pres`, `pump_power_v_pres` / `pump_volt`, `pump_volt_avg` / `pump_curr`, `pump_curr_avg` / `pump_energy`, `pump_energy_v_max_pres` / `pump_num_ops` / `pump_time_sum` / `pump_energy_sum` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` |
 | Air Pump | `air_pump_duration`, `air_pump_pres` |
-| Satcom | `satcom` / `position_gps`, `satcom_gps_cno` / `satcom_gps_hdop`, `satcom_gps_nsat` / `satcom_gps_ttf`, `satcom_gps_fix_cep` / `satcom_iridium_fix_cep_avg`, `satcom_sbd_data_size_avg` / `satcom_sbd_count` / `satcom_sbd_data_size` |
+| Engineering (only if one of them is written) | `phase_vac` / `energy_per_cycle` |
+| Satcom | `satcom` / `position_gps`, `satcom_gps_cno` / `satcom_gps_hdop`, `satcom_gps_nsat` / `satcom_gps_ttf`, `satcom_gps_fix_cep` / `satcom_iridium_fix_cep_avg`, `satcom_sbd_data_size_avg` / `satcom_sbd_count` / `satcom_sbd_data_size` / `satcom_sbd_data_type` |
 
-The Hydraulic System section is shown only if the float has `pump` data, so a float without it shows `phase_vac` and `pump_first_duration` only in the figure table.
+The Hydraulic System section is shown only if the float has `pump` data, so a float without it shows `pump_first_duration` only in the figure table.
 
 **Figure Files table** (`table.figt`): one row per written figure, sorted by ID.
 
@@ -401,11 +412,11 @@ The Hydraulic System section is shown only if the float has `pump` data, so a fl
 |---|---|---|
 | 1 | (blank) | row number |
 | 2 | Title | figure title (HTML, not escaped) |
-| 3 | Category | plot category (`position`, `displacement`, `trajectory`, `cycle_timing`, `profile`, `profile_contour`, `ascent`, `descent`, `drift`, `pump`, `air`, `surface`, `satcom`, `wave`) |
+| 3 | Category | plot category (`position`, `displacement`, `trajectory`, `cycle_timing`, `profile`, `profile_contour`, `ascent`, `descent`, `drift`, `pump`, `air`, `energy`, `surface`, `satcom`, `wave`) |
 | 4 | (blank) | the thumbnail, linking to the HTML plot |
 | 5 | Files | the ID, then links: `.html (<size> kB)`, `.png [<w>x<h>] (<size> kB)` for the small PNG, `.png [<w>x<h>] (<size> kB)` for the full PNG |
 
-**Footer**: `Page last updated <YYYY-MM-DDTHH:MM>Z - version <json_vers>` (UTC, the time the page was written; the JSON format version, `0.11`). The float page does not use the shared footer of section 8.
+**Footer**: the shared footer of section 8 without the decoder status line, shown in the browser as "Page last updated 2026-11-04T19:38Z (just now, runtime: 50 seconds)", "Python utility version 0.11", "XMTPS version 1.0.3351b (built 2026-11-04)". The runtime is the time `xmtps-aggregate-json.py` spent writing this float's plots and page, not the whole run. Before 2026-11-04 it was one line, `Page last updated <time>Z - version <json_vers>`.
 
 ## 5. Fleet summary page: `<plots>/index.html`
 
@@ -421,7 +432,7 @@ Written by `bin/py/xmtps-generate-summary-page.py` from all `<serial>_summary.js
 
 ### 5.2 Body
 
-1. Heading `ALAMO/ALTO Float Summary`.
+1. Heading `ALAMO/ALTO Float Summary`, and under it the links "Float Startup" (`engineering/startup.html`) and "Mission Parameters" (`engineering/params.html`), in `<div id="tlinks">`. The paths are relative and assume the production layout of section 11, with both pages in `engineering/` below the summary page.
 2. Map (`div#pit`, 390 × 420 px): a Plotly figure embedded as a `div` (`to_html(full_html=False, include_plotlyjs='cdn', div_id='plot')`), so it also loads plotly.js from the Plotly CDN. Orthographic globe centered on 30° N, 45° W; 15°/30° graticule; dashed lines at the tropics and polar circles; equator line. One marker per float at its latest valid GPS position (`latest.gps`), colored by days since the latest SBD message: green `rgb(123,255,123)` size 6 under 30 days, blue `rgb(123,123,255)` size 5 under 180 days, red `rgb(255,123,123)` size 4 otherwise. Hover shows the serial. Mode bar hidden. The map includes floats the table leaves out (it does not check the cycle or profiled distance).
 3. Table `#stable` (class `stripe`), one row per float, most recent report first. A float is left out if `latest.cycle` < 1 or its `profdepthsum` is not positive. Production on 2026-10-30: 250 rows (40 ACTIVE, 11 OVERDUE, 199 ARCHIVED).
 4. Footer (section 8) on the left, and an "Auto Refresh" checkbox on the right.
@@ -501,7 +512,7 @@ The page footer is section 8.
 
 ## 8. Page footer and decoder status
 
-The summary, mission and startup pages share a footer written by `WriteStatusFooter` in `bin/py/PageStatus.py`, inside `<div id="foot"><div id="lfoot"><i>`. Production example (summary page, 2026-10-30):
+The summary, mission and startup pages, and the float plot pages (without the decoder status line; section 4), share a footer written by `WriteStatusFooter` in `bin/py/PageStatus.py`, inside `<div id="foot"><div id="lfoot"><i>`. Production example (summary page, 2026-10-30):
 
 ```
 Page last updated 2026-10-30T18:25Z <span class="page-updated" epoch="1793384720" runtime="55 seconds">(runtime: 55 seconds)</span>
@@ -523,7 +534,7 @@ The service name `xmtps-alamo` and the binary path are constants (`DECODER_SERVI
 
 The footer script (`ELAPSED_SCRIPT`) replaces the span's text on page load with "(N minutes ago, runtime: ...)": "just now" (< 2 min), minutes (< 3 h), hours (< 4 days), days. Without JavaScript the span keeps "(runtime: ...)".
 
-The float page (section 4) has its own one-line footer without decoder status.
+The float page (section 4) uses this footer with `decoder_status=False`, so it has no "Decoder status" line, and its runtime is the time spent writing that float's plots.
 
 ## 9. Static assets and external scripts
 
@@ -544,7 +555,7 @@ The icon colors are the pixel colors at the icon centers; the shape is not speci
 
 ### 10.1 Bathymetry netCDF
 
-The trajectory plot (section 3.3) reads seafloor depth from an ETOPO grid. The file is set with `-b`/`--bathymetry` (aliases `--etopo`, `--etopo2`) of `bin/py/xmtps-aggregate-json.py`; the default is `BATHYMETRY_FILE`.
+The trajectory plot (section 3.3) and the `position` plot (section 3.1) read seafloor depth from an ETOPO grid. The file is set with `-b`/`--bathymetry` (aliases `--etopo`, `--etopo2`) of `bin/py/xmtps-aggregate-json.py`; the default is `BATHYMETRY_FILE`.
 
 | Item | ETOPO 2022 (default) | ETOPO2v2c (older, still supported) |
 |---|---|---|
@@ -573,7 +584,7 @@ Sampling (`BathymetryPressure`):
 5. Depth = −elevation; points at or above sea level become NaN.
 6. Depth is converted to pressure with Saunders (1981): `c1 = (5.92 + 5.25 sin²(lat)) × 10⁻³`, `p = ((1 − c1) − sqrt((1 − c1)² − 8.84 × 10⁻⁶ × depth)) / 4.42 × 10⁻⁶` (dBar).
 
-If the file cannot be read, a warning is logged once (`Failed to read bathymetry file ...`) and the trajectory plot is drawn without the bathymetry line.
+If the file cannot be read, a warning is logged once (`Failed to read bathymetry file ...`) the trajectory plot is drawn without the bathymetry line, and the `position` plot is not written (the float page shows `position_geo` instead).
 
 ### 10.2 Decoder status
 
@@ -719,7 +730,7 @@ Code vs. production:
 Code vs. README and docstrings:
 
 17. **Listing include pattern.** The service converts only listings of serials starting with 908, 909, 91, 92, 93, 94, 10 or 11; README's example uses `[0-9]+`. Production has 66 listing directories outside the pattern (9003–9079, and 4790, 6796, 7127, 9511, 9672), none with files changed in the last 10 days; the pattern keeps the service from converting them. A future float with another prefix (for example 95xx or 12xxx) would be silently skipped.
-18. **Footer wording.** The `bin/py/PageStatus.py` docstring shows a one-line footer ("python version 0.11 - decoder status: ... - xmtps version ..."); the code writes four lines ("Python utility version", "Decoder status:", "XMTPS version"). README says the *summary* page footer shows the decoder status; all three fleet pages show it.
+18. **Footer wording.** Fixed 2026-11-04: the `bin/py/PageStatus.py` docstring now shows the four lines the code writes. README says the *summary* page footer shows the decoder status; all three fleet pages show it.
 19. **README "Command-line options"** does not list `-b`/`--bathymetry` of `xmtps-aggregate-json.py` (it is described only in the "Versions" table).
 20. **Run-time limit.** The service kills only its direct children (the background subshells) after `MAX_RUN_T`; whether the Python processes they started are also stopped is not handled by the script [inferred: they keep running until they finish]. The limit is checked only after all floats have been started.
 21. **Process limit.** The count `ps --no-headers -o pid --ppid=$PID | wc -w` also counts the subshell of the command substitution itself [inferred], and the loop allows up to `MAX_PROC` (8) counted processes, so about 7–8 floats run in parallel, not 8 or 9.

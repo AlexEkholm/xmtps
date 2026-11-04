@@ -12,11 +12,43 @@ Decoder:
   number of blobs, bytes, percentage of the total and, for the compressed sensor series (binned,
   high-resolution and drift profiles, drift times, corrected salinity), the number of values, their
   size as plain counts (3 bytes each, 2 for the first-difference encoding, plus the 4-byte blob
-  frame) and the compression ratio; other types have ratio 1. A `frame` line counts the 12-byte
+  frame) and the compression ratio (bytes sent as a fraction of that size, two decimals); other
+  types have ratio 1.00. A `frame` line counts the 12-byte
   packet header and trailer, an `unparsed` line any incomplete blob, and a `total` line the whole.
-  `xmtps-list2json.py` skips `SBT` lines.
+  `xmtps-list2json.py` reads them (below).
 
 Python tools:
+
+- `xmtps-list2json.py` reads the `SBT` lines into a new per-dive `sbd_types` list (`SbdType`), and
+  `xmtps-aggregate-json.py` aggregates them into `<serial>_sbd_type.json`.
+- The SBD Data Size plot is a stacked bar chart by X-message type, as in the `SBT` lines, with
+  any retransmitted bytes on top. Dives listed before build 3352 show one grey "not broken down"
+  bar.
+- New plot `satcom_sbd_data_type`: a pie chart of the float's total SBD data by message type.
+- New aggregate `<serial>_energy.json` and plot `energy_per_cycle` (new "Engineering" section of the
+  float page, which also holds the case vacuum plot `phase_vac`, moved from "Hydraulic System"): estimated energy use per dive, stacked by component (oil pump descent and ascent,
+  air pump, CTD profile, drift and surface samples, Iridium, GPS, battery internal resistance).
+  The constants were fitted to the WHOI SOLO-II energy plots against the SOLO-II listing files:
+  0.25 J per CTD scan, 3.3 J per spot sample, 0.70 W Iridium and 0.27 W GPS. For RBR CTDs the
+  CTD estimates are reduced by 80%.
+- Float plot pages: the footer is the shared one of the fleet pages, without the decoder status:
+  page update time (and time since, in the browser) with the run time of that float's plots, the
+  Python utility version and the XMTPS version.
+- Float summary page: links to the Float Startup and Mission Parameters pages under the title.
+- `xmtps-aggregate-json.py` writes each plot group's PNG images in one batch, spread over 4
+  browser tabs (`--image-tabs`). A full rebuild of float 9305's plots on argus took 125 s instead
+  of 239 s; the images are unchanged.
+- Float pages: the Profile Positions plot (`position`) is now "Profile Positions and Bathymetry":
+  the profiles over ETOPO 2022 depth with hillshade, isobaths and gray land, and the depth under
+  the mouse anywhere on the map ("12m"; "0m" on land). Its PNG images have no color bar or axis labels. The previous map is
+  kept as `position_geo` ("Profile Positions (Map)") in the figure table, and is shown instead
+  when the bathymetry file can't be read. With `-d`, the time to build and
+  write it, and the time of each plot group, are logged.
+- The Total Pump Duration and Total Pump Energy per Cycle plots are stacked by pump operation
+  (first, second, ... of the dive).
+- First Pump Duration plot: the configured DFT line is drawn only at dives that transmitted their
+  mission configuration, instead of carrying the last value forward. A float with `APT` = 0
+  (9305 from dive 189) showed a stale DFT for over 100 dives while its first pump changed.
 
 - WIMS wave spectra (`Wave.PostProcess`): the low-frequency response correction coefficients are
   [f0, w] = [0.02622, 0.08951] Hz, from WIMS user manual rev. 3.22 (was [0.02595, 0.08834] Hz).

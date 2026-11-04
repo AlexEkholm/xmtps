@@ -330,13 +330,13 @@ string XFloatDiveData::GeneratePressureCorrectionListingString() const {
  *  earlier packet of the dive) are counted once. The packet header and trailer are counted in a
  *  separate @c frame row, and bytes left over after the last complete blob in an @c unparsed row.
  *
- *  The compression ratio compares the bytes sent with the bytes the same values would take
- *  without compression. Only the sensor series are compressed: binned, high-resolution and drift
+ *  The compression ratio is the bytes sent divided by the bytes the same values would take
+ *  without compression, as a fraction of 1 with two decimals. Only the sensor series are compressed: binned, high-resolution and drift
  *  profiles, drift sample times and corrected salinity (spec A.3, A.4). For these, the
  *  uncompressed size is the blob's header and terminator plus each value as a plain count: 3
  *  bytes (the width of VVV) for the curvature encoding, 2 bytes (the width of v0) for the
  *  first-difference encoding. The overlapping first value of a later part is not counted. Every
- *  other message type is sent uncompressed, with ratio 1.
+ *  other message type is sent uncompressed, with ratio 1.00.
  *
  *  @throw          util::log::MessageException if an error occurs.
  *
@@ -533,7 +533,7 @@ string XFloatDiveData::GenerateSbdDataSummaryListingString() const {
       os << format(fmt) % id_instrument() % id_dive() % r.ids % r.blobs % r.bytes
              % (total.bytes ? 100.0 * r.bytes / total.bytes : 0.0)
              % (r.compressed ? std::to_string(r.values) : string("-")) % r.raw
-             % (r.bytes ? (double) r.raw / r.bytes : 1.0) % r.name
+             % (r.raw ? (double) r.bytes / r.raw : 1.0) % r.name
          << endl;
     };
     for(const auto& kv : rows)

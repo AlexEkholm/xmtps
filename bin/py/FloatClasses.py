@@ -540,6 +540,9 @@ class Dive:
             profile: profile CTD bins (Profile).
             pump: pump runs (Pump).
             sbd: Iridium SBD messages ([Sbd]).
+            sbd_types: the dive's SBD data by X-message type ([SbdType]), without the total; empty
+                for listings written before build 3352. JSON files written before it was added
+                have no such attribute.
             surface: surface CTD samples (Surface).
             wave: wave spectra (Wave), or None; the attribute is deleted by PostProcess() if
                 the dive has no wave data.
@@ -557,6 +560,7 @@ class Dive:
         self.profile     = Profile()
         self.pump        = Pump()
         self.sbd         = []
+        self.sbd_types   = []
         self.surface     = Surface()
         self.wave        = None
    
@@ -1112,7 +1116,29 @@ class Sbd(Position):
         self.momsn    = -1
         self.mtmsn    = -1
         self.pid      = -1
-        
+
+class SbdType:
+    """The SBD data of one X-message type in a dive (the listing's SBT line, build 3352 and later)."""
+
+    def __init__(self):
+        """Initialize an empty row; -1 where not set.
+
+        Attributes:
+            ids: message type, as in the listing: an ID range ('0x10-0x1F'), a single ID
+                ('0xE7'), '0x20-aux', 'frame' (packet header and trailer) or 'unparsed'.
+            name: description of the type.
+            nblob: number of blobs (packets, for 'frame').
+            size_b: bytes sent, retransmissions counted once.
+            nvalues: number of values of a compressed type, -1 for an uncompressed one.
+            raw_b: size without compression in bytes (size_b for an uncompressed type).
+        """
+        self.ids      = ''
+        self.name     = ''
+        self.nblob    = -1
+        self.size_b   = -1
+        self.nvalues  = -1
+        self.raw_b    = -1
+
 class Surface:
     """CTD samples taken at the surface (the listing's SFC/sfc lines)."""
     

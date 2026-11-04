@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Status line for the footer of the float summary page (xmtps-generate-summary-page.py).
+"""Status lines for the footer of the summary, mission and startup pages and the float plot pages.
 
-The footer reads, for example:
+The footer reads, for example (one item per line):
 
-    Page last updated 2026-10-26T17:40Z (105 minutes ago, runtime: 3 minutes) - python version
-    0.11 - decoder status: active (uptime: 3 hours, 4 minutes) - xmtps version 1.0.3318b
-    (built 2026-10-26)
+    Page last updated 2026-10-26T17:40Z (105 minutes ago, runtime: 3 minutes)
+    Python utility version 0.11
+    Decoder status: active (uptime: 3 hours, 4 minutes)
+    XMTPS version 1.0.3318b (built 2026-10-26)
+
+The float plot pages leave out the decoder status line, and their runtime is the time spent
+writing that float's plots.
 
 The time since the update ("105 minutes ago") is filled in by the browser when the page is viewed
 (see ELAPSED_SCRIPT); everything else is fixed when the page is written. The decoder status and
@@ -117,7 +121,7 @@ def DecoderVersion(binary=DECODER_BINARY):
     return '{} (built {})'.format(m.group(1), m.group(2)) if m else 'unknown'
 
 
-def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None):
+def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None, decoder_status=True):
     """Write the footer status lines into a yattag document.
 
     Args:
@@ -125,6 +129,8 @@ def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None):
         json_version: the Python tools' JSON format version, shown as the Python utility version.
         runtime_s: the duration of the JSON and plot update run in seconds, or None to leave the
             runtime out.
+        decoder_status: whether to include the "Decoder status" line. The float plot pages
+            (xmtps-aggregate-json.py) leave it out.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
     runtime = FormatDuration(runtime_s) if runtime_s is not None else ''
@@ -135,9 +141,11 @@ def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None):
             text('(runtime: ' + runtime + ')')
     # One item per line. The breaks are tags, not text (text() escapes them), and the first one
     # is outside the span, whose text the script replaces.
-    for line in ('Python utility version ' + json_version,
-                 'Decoder status: ' + DecoderStatus(),
-                 'XMTPS version ' + DecoderVersion()):
+    lines = ['Python utility version ' + json_version]
+    if decoder_status:
+        lines.append('Decoder status: ' + DecoderStatus())
+    lines.append('XMTPS version ' + DecoderVersion())
+    for line in lines:
         doc.stag('br')
         text(line)
     doc.asis(ELAPSED_SCRIPT)

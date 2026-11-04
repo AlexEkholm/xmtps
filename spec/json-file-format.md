@@ -183,6 +183,7 @@ The repository copy `example/json/dives/9303_0440.json` is in the same format bu
 | `profile` | `Profile` | Binned CTD profile (3.8). |
 | `pump` | `Pump` | Pump runs (3.10). |
 | `sbd` | list of `Sbd` | Iridium SBD messages of the dive, in listing order (3.12). |
+| `sbd_types` | list of `SbdType` | The dive's SBD data by X-message type, from the `SBT` lines without the `total` (3.12.1). Empty for listings written before build 3352; absent from files written before the tools read `SBT` (2026-11-04), which readers must allow (`json_vers` was not changed). |
 | `surface` | `Surface` | Surface time series and pressure correction (3.9). |
 | `wave` | `Wave` | Wave spectra and statistics (3.15). The key is absent when the listing has no `WVS` line. |
 
@@ -396,6 +397,21 @@ SBD  9303  483  287 000000002418110  6328     0  11 2026-10-19T14:46:44Z  +28.44
 | `pid` | int | | Packet ID, field 7. |
 
 The IMEI (field 4) is not stored. Unset defaults are -1. See [iridium-mail-format.md](iridium-mail-format.md) and [sbd-file-format.md](sbd-file-format.md) for where these values come from.
+
+#### 3.12.1 `SbdType`
+
+One object per `SBT` line except `total` ([listing-file-format.md 6.1](listing-file-format.md#61-sbt-sbd-data-by-message-type)):
+
+| Attribute | Type | Units | Contents and source |
+|---|---|---|---|
+| `ids` | string | | Message type, field 3: an ID range, a single ID, `0x20-aux`, `frame` or `unparsed`. |
+| `name` | string | | Description, the text after `#`. |
+| `nblob` | int | | Number of blobs (packets for `frame`), field 4. |
+| `size_b` | int | bytes | Bytes sent, retransmissions counted once, field 5. |
+| `nvalues` | int | | Values carried by a compressed type, field 7; -1 for `-`. |
+| `raw_b` | int | bytes | Size without compression, field 8. |
+
+The `pct` and `ratio` fields are not stored; they follow from `size_b` and `raw_b`.
 
 ### 3.13 `MissionParameters`
 
@@ -775,6 +791,7 @@ Each file is one pandas DataFrame written with `DataFrame.to_json(path, orient='
 | `_mission` | some dive has `mission.fwver` or `mission.parameters` | dive with mission data |
 | `_engineering_data` | always when the float has a dive | dive |
 | `_engineering_errors` | some dive has an `errors` entry | error line |
+| `_energy` | always when the float has a dive (written since 2026-11-04) | dive |
 | `_wave`, `_wave_spectra` | some dive ≥ 0 has a `Wave` with `slen` ≥ 1 (both are left out if either is empty) | dive, frequency bin |
 
 An existing file that is no longer produced (for example `_wave` after the last wave dive is removed) is not deleted.
@@ -873,6 +890,8 @@ One row per SBD message of every dive, including negative dives and messages wit
 | `cep_km` | float | km (`null` for 999999) |
 | `size_b` | float | bytes |
 | `momsn`, `mtmsn`, `pid` | int | |
+
+`_sbd_type` (written since 2026-11-04): one row per `SbdType` of every dive, in read order, the same columns as 3.12.1 plus `dive`: `dive`, `ids`, `name`, `nblob`, `size_b`, `nvalues`, `raw_b`. Dives without `SBT` lines have no rows; the file has only the header if no dive has any.
 
 ### 4.11 `_engineering` and `_engineering_data`
 
@@ -1011,6 +1030,34 @@ One row per dive (including negative dives), sorted by dive. Phase start times c
 | `total_duration_s` | float | s | Sum of the durations that are not `null`; 0.0 when all are. |
 
 Column order in the file: `dive`, then `ascent_*`, `descent_*`, `drift_*`, `surface_*` (each `dt_epoch`, `dt_str`, `duration_s`), then `total_duration_s`.
+
+### 4.17.1 `_energy`
+
+Estimated energy use, one row per dive found in any of `_pump`, `_sbd`, `_gps`, `_drift`, `_surface`, `_cycle_timing` or `_engineering_data` (including negative dives), sorted by dive. Written by `EnergyEstimates()` since 2026-11-04.
+
+These are estimates, not measurements. The constants were fitted to the WHOI SOLO-II energy plots on argus, which a MATLAB job draws from the SOLO-II engineering data. The fit reproduces the plots' components from the SOLO-II listing files, and their "Net" total to within 0.2% on four floats. ALAMO reports some quantities differently, so substitutes are used: ascent duration for the CTD scan count, and the SBD message times for the Iridium session time.
+
+| Column | Type | Units | Contents |
+|---|---|---|---|
+| `dive` | int | | |
+| `ctdtype` | string | | The float's CTD type: the latest `_mission.ctdtype` that is set, else the latest `_engineering_data` `bit.sensor_type_name`; `""` if unknown (no reduction). |
+| `pump_descent_j` | float | J | `_pump.energy` of the dive's first oil pump operation (the first descent pump). |
+| `pump_ascent_j` | float | J | `_pump.energy` of the dive's other operations. Seek pumps during descent and drift are included, because the pump records have no phase. |
+| `air_pump_j` | float | J | `surface.air_pump_current_a` × `surface.air_pump_runtime_s` × V0. V0 is the dive's highest pump voltage. |
+| `ctd_profile_j` | float | J | 0.25 J × `profile_scans`. |
+| `ctd_drift_j` | float | J | 3.3 J × `drift_samples`. |
+| `ctd_surface_j` | float | J | 3.3 J × `surface_samples`. |
+| `iridium_j` | float | J | 0.70 W × `iridium_s`. |
+| `gps_j` | float | J | 0.27 W × `gps_s`. |
+| `internal_res_j` | float | J | Battery internal-resistance loss of the oil pump: Σ (V0 − `volt`) × `curr` × `time` over the dive's `_pump` rows. V0 is a lower bound of the no-load voltage, so this underestimates. |
+| `ascent_s` | float | s | `_cycle_timing.ascent_duration_s`; `null` if unset. |
+| `profile_scans` | float | | `surface.prof_num_raw_samples` if positive, else `ascent_s` (1 scan per second), else 0. |
+| `drift_samples`, `surface_samples` | int | | Rows of `_drift` and `_surface` for the dive. |
+| `iridium_s` | float | s | Σ over the dive's SBD sessions of (last − first message time + 10 s). Messages more than 1800 s apart start a new session. |
+| `gps_s` | float | s | Σ `_gps.ttf_sec` over the dive's fixes with ttf_sec > 0. |
+| `total_j` | float | J | Sum of the component columns. |
+
+For an RBR CTD, `ctd_profile_j`, `ctd_drift_j` and `ctd_surface_j` are reduced by 80% (× 0.2, `ENERGY_CTD_RBR_FACTOR`). Energies are rounded to 0.1 J. The constants are named `ENERGY_*` in `xmtps-aggregate-json.py`.
 
 ### 4.18 `_wave`
 

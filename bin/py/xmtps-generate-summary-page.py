@@ -331,7 +331,8 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                     # Create styles - title
                     text('#tit { margin: auto; text-align: center; }')
                     text('#tit h1  { margin: 0px; }')
-                    
+                    text('#tlinks { margin-top: 6px; font-size: 14px; color: #aaa; }')
+
                     text('#pit { margin: auto; height: 420px; width: 390px;  }')
                     
                     # Create styles - table
@@ -371,7 +372,16 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                         with tag('div', id='tit'):
                             with tag('h1'):
                                 text('ALAMO/ALTO Float Summary')
-                                
+                            # Links to the startup and mission parameters pages, which
+                            # xmtps-generate-startup-page.py and xmtps-generate-mission-page.py
+                            # write to engineering/ below this page (update-plots-service.sh)
+                            with tag('div', id='tlinks'):
+                                with tag('a', href='engineering/startup.html'):
+                                    text('Float Startup')
+                                text(' | ')
+                                with tag('a', href='engineering/params.html'):
+                                    text('Mission Parameters')
+
                         # doc.stag('img', src='summary.png')
                         with tag('div', id='pit'):
                             doc.asis(summary_plot)

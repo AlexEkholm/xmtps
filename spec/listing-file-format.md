@@ -279,7 +279,7 @@ The e-mail fields are specified in [iridium-mail-format.md](iridium-mail-format.
 
 ### 6.1 `SBT`: SBD data by message type
 
-Subsection `SBD Data by Message Type`, right after the `SBD` lines (build 3352 and later). It breaks the dive's SBD data down by X-message type, with the compression ratio of each type. Writer: `XFloatDiveData::GenerateSbdDataSummaryListingString()` (`src/data/XFloatDiveData.cpp`).
+Subsection `SBD Data by Message Type`, right after the `SBD` lines (build 3352 and later). It breaks the dive's SBD data down by X-message type, with the compression ratio of each type (compressed size as a fraction of uncompressed). Writer: `XFloatDiveData::GenerateSbdDataSummaryListingString()` (`src/data/XFloatDiveData.cpp`).
 
 The packets are split into blobs exactly as the decoder splits them ([A.1.3](xmessage-format.md#a13-blob-structure-id-jj-data-)): from byte 8 to the byte before the 4-byte trailer, a blob ends after max(`jj` & 0x0FFF, 4) bytes. A retransmitted packet (SBD data identical to an earlier packet of the dive) is counted once, although it has its own `SBD` line.
 
@@ -287,18 +287,18 @@ The packets are split into blobs exactly as the decoder splits them ([A.1.3](xme
 #      SN dive ids       nBlob  bytes   pct nValues rawBytes  ratio  name
 #                                 (b)   (%)              (b)
 SBT  9303  440 0x00-0x05     2     48   1.4       -       48   1.00  # GPS fix
-SBT  9303  440 0x10-0x1F     1    156   4.4     264      796   5.10  # profile pressure (binned)
-SBT  9303  440 0x20-0x2F     1    303   8.6     264      796   2.63  # profile temperature (binned)
-SBT  9303  440 0x20-aux      1    204   5.8     264      796   3.90  # profile aux temperature (binned)
-SBT  9303  440 0x30-0x3F     1    239   6.8     264      796   3.33  # profile salinity (binned)
+SBT  9303  440 0x10-0x1F     1    156   4.4     264      796   0.20  # profile pressure (binned)
+SBT  9303  440 0x20-0x2F     1    303   8.6     264      796   0.38  # profile temperature (binned)
+SBT  9303  440 0x20-aux      1    204   5.8     264      796   0.26  # profile aux temperature (binned)
+SBT  9303  440 0x30-0x3F     1    239   6.8     264      796   0.30  # profile salinity (binned)
 ...
-SBT  9303  440 0x98-0x9F     1     31   0.9       8       28   0.90  # drift pressure
+SBT  9303  440 0x98-0x9F     1     31   0.9       8       28   1.11  # drift pressure
 ...
 SBT  9303  440 0xC1          3    825  23.5       -      825   1.00  # ocean surface waves
 ...
 SBT  9303  440 0xF0          1     66   1.9       -       66   1.00  # Argo data
 SBT  9303  440 frame        12    144   4.1       -      144   1.00  # packet header and trailer (nBlob: packets)
-SBT  9303  440 total        26   3511 100.0    1088     5787   1.65  # all SBD data
+SBT  9303  440 total        26   3511 100.0    1088     5787   0.61  # all SBD data
 ```
 
 Format `SBT %5d %4d %-9s %5d %6d %5.1f %7s %8d %6.2f  # %s`.
@@ -313,7 +313,7 @@ Format `SBT %5d %4d %-9s %5d %6d %5.1f %7s %8d %6.2f  # %s`.
 | pct | `%5.1f` | % | Share of the dive's SBD bytes. |
 | nValues | `%7s` | | For a compressed type, the number of values carried; `-` otherwise. On the `total` line, the sum over the compressed types. |
 | rawBytes | `%8d` | bytes | The size without compression (see below). Equal to `bytes` for an uncompressed type. |
-| ratio | `%6.2f` | | Compression ratio, rawBytes / bytes. Below 1 when a short series costs more than its plain counts. |
+| ratio | `%6.2f` | | Compression ratio, bytes / rawBytes, as a fraction of 1. Above 1 when a short series costs more than its plain counts. |
 | name | `# %s` | | Description of the type (comment, not meant to be parsed). |
 
 Rows are in ID order, one per type present. They are followed by `frame` (the 8-byte packet header and the 4-byte `$cc>` trailer, 12 bytes per packet), `unparsed` (bytes after the last complete blob of a packet, or a packet shorter than 8 bytes; only when there are any), and `total` (the sum of all rows, which equals the dive's SBD bytes).
@@ -325,7 +325,7 @@ Rows are in ID order, one per type present. They are followed by `frame` (the 8-
 
 Every other type is sent as fixed-width fields and gets ratio 1.00. The `total` ratio covers all SBD data, frame included.
 
-Parser: `SBT` lines are skipped.
+Parser: each `SBT` line except `total` becomes an `SbdType` in the dive's `sbd_types` ([json-file-format.md 3.12.1](json-file-format.md#3121-sbdtype)).
 
 ## 7. Position data: `APS`, `GPS`
 
@@ -1226,7 +1226,7 @@ The example in the repository, `example/listing/lis9303-0440.txt`, was written b
 | `MIS` | yes | CfgMsgVer, FWVer, sensor type |
 | `m` | yes | idx, name, value, units, sub-group |
 | `mis` | no (unknown) | — |
-| `SBT` | skipped | — |
+| `SBT` | `sbd_types` (`SbdType`), without `total` | ids, name, nBlob, bytes, nValues, rawBytes |
 | `SHX`, `shx` | skipped | — |
 | `X`, `SFP`, `sfp`, `M` (2014) | no (unknown) | — |
 
