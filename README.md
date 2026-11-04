@@ -448,6 +448,7 @@ so far. The Python tools (`xmtps-list2json.py`) parse these files.
 | `XSV` | XMTPS software version | X-message format version, XMTPS version, build configuration and date. |
 | `LIS` | Listing details | Serial number, dive, DAC ID, IMEI, WMO ID. |
 | `SBD` | SBD messages | One line per message: size, IMEI, MOMSN, MTMSN, packet ID, session time and position, CEP. |
+| `SBT` | SBD data by message type | One line per X-message type in the dive's SBD data: blobs, bytes, share of the total, and for the compressed sensor series the values carried, their size as plain counts and the compression ratio; then the packet frame, any unparsed bytes and a `total` line. |
 | `GPS` | GPS | GPS fixes: time, position, time to fix, satellites, SNR, HDOP, status. |
 | `A` | Argo data | Mission phase, pressures, durations, cycle timing and sensor gains and offsets (`midx` 0–5). |
 | `PRC` | Pressure correction | Surface pressure offset (`presOffset`), whether it is valid, and the dives and samples it comes from, then the dive's uncorrected surface pressure min (outliers excluded), mean, max and standard deviation; a note above it says whether it was subtracted from this listing's pressures and how to recover the raw ones (see [Surface pressure offset correction](#surface-pressure-offset-correction)). |

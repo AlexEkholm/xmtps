@@ -2974,7 +2974,9 @@ string XFloatDiveData::GenerateListingString() const {
             [&](const shared_ptr<XFloatMailMessage>& msg) {
               if(msg) os << msg->GenerateListingString() << endl;
             });
-        os << endl;
+
+        XMSG_SECTION("SBD Data by Message Type");
+        os << GenerateSbdDataSummaryListingString() << endl;
 
       } CATCH_BLOCK("Failed to generate SBD data listing entry from dive data object!")
 

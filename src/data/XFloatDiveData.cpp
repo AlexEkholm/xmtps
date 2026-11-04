@@ -45,6 +45,8 @@
 #include "XFloatDiveData.h"   // header
 #include "XFloat.h"           // parent float (GetGpsProfilePosition())
 
+#include <map>
+
 namespace argo {
 namespace iridium {
 namespace xfloat {
@@ -320,6 +322,231 @@ string XFloatDiveData::GeneratePressureCorrectionListingString() const {
    return os.str();
 
  }
+
+/** Generate the listing string that breaks this dive's SBD data down by X-message type.
+ *
+ *  The SBD packets are split into blobs exactly as @ref DecodeXMsgData() splits them, and the
+ *  blob bytes are summed per message type. Retransmitted packets (SBD data identical to an
+ *  earlier packet of the dive) are counted once. The packet header and trailer are counted in a
+ *  separate @c frame row, and bytes left over after the last complete blob in an @c unparsed row.
+ *
+ *  The compression ratio compares the bytes sent with the bytes the same values would take
+ *  without compression. Only the sensor series are compressed: binned, high-resolution and drift
+ *  profiles, drift sample times and corrected salinity (spec A.3, A.4). For these, the
+ *  uncompressed size is the blob's header and terminator plus each value as a plain count: 3
+ *  bytes (the width of VVV) for the curvature encoding, 2 bytes (the width of v0) for the
+ *  first-difference encoding. The overlapping first value of a later part is not counted. Every
+ *  other message type is sent uncompressed, with ratio 1.
+ *
+ *  @throw          util::log::MessageException if an error occurs.
+ *
+ *  @return         The listing string: the column comments and one @c SBT line per message type
+ *                  present, then the @c frame, @c unparsed (if any) and @c total lines.
+ */
+string XFloatDiveData::GenerateSbdDataSummaryListingString() const {
+
+  /* A row of the breakdown. Values and raw bytes are counted only for compressed types. */
+  struct Row {
+    string ids, name;
+    int blobs = 0;
+    long bytes = 0, values = 0, raw = 0;
+    bool compressed = false;
+  };
+
+  ostringstream os;
+
+  try {
+
+    lock_guard<recursive_mutex> guard(mutex_);
+
+    /* Message type of a blob: sort key, ID label and name. The key orders the rows by ID. */
+    auto classify = [](uint8_t id, uint8_t fmt, int& key, string& ids, string& name) {
+      key = id << 1;
+      if(id <= 0x05) { key = 0; ids = "0x00-0x05"; name = "GPS fix"; }
+      else if(id >= 0x10 && id <= 0x1F) { key = 0x10 << 1; ids = "0x10-0x1F"; name = "profile pressure (binned)"; }
+      else if(id >= 0x20 && id <= 0x2F && fmt == 3) { key = (0x20 << 1) + 1; ids = "0x20-aux"; name = "profile aux temperature (binned)"; }
+      else if(id >= 0x20 && id <= 0x2F) { key = 0x20 << 1; ids = "0x20-0x2F"; name = "profile temperature (binned)"; }
+      else if(id >= 0x30 && id <= 0x3F) { key = 0x30 << 1; ids = "0x30-0x3F"; name = "profile salinity (binned)"; }
+      else if(id >= 0x40 && id <= 0x4F) { key = 0x40 << 1; ids = "0x40-0x4F"; name = "fall time series"; }
+      else if(id >= 0x50 && id <= 0x5F) { key = 0x50 << 1; ids = "0x50-0x5F"; name = "rise time series"; }
+      else if(id >= 0x60 && id <= 0x6F) { key = 0x60 << 1; ids = "0x60-0x6F"; name = "pump"; }
+      else if(id >= 0x78 && id <= 0x7F) { key = 0x78 << 1; ids = "0x78-0x7F"; name = "drift sample times"; }
+      else if(id >= 0x80 && id <= 0x8F) { key = 0x80 << 1; ids = "0x80-0x8F"; name = "surface time series"; }
+      else if(id >= 0x90 && id <= 0x97) { key = 0x90 << 1; ids = "0x90-0x97"; name = "profile pressure (high resolution)"; }
+      else if(id >= 0x98 && id <= 0x9F) { key = 0x98 << 1; ids = "0x98-0x9F"; name = "drift pressure"; }
+      else if(id >= 0xA0 && id <= 0xA7) { key = 0xA0 << 1; ids = "0xA0-0xA7"; name = "profile temperature (high resolution)"; }
+      else if(id >= 0xA8 && id <= 0xAF) { key = 0xA8 << 1; ids = "0xA8-0xAF"; name = "drift temperature"; }
+      else if(id >= 0xB0 && id <= 0xB7) { key = 0xB0 << 1; ids = "0xB0-0xB7"; name = "profile salinity (high resolution)"; }
+      else if(id >= 0xB8 && id <= 0xBF) { key = 0xB8 << 1; ids = "0xB8-0xBF"; name = "drift salinity"; }
+      else if(id >= 0xD0 && id <= 0xD7) { key = 0xD0 << 1; ids = "0xD0-0xD7"; name = "mission configuration"; }
+      else {
+        ids = (format("0x%02X") % (int) id).str();
+        switch(id) {
+          case 0xC1: case 0xC3: name = "ocean surface waves"; break;
+          case 0xC2: name = "auxiliary sensor data"; break;
+          case 0xC5: name = "WIMS configuration parameters"; break;
+          case 0xCA: name = "acoustic (marginal ice zone)"; break;
+          case 0xDC: name = "profile corrected salinity (binned)"; break;
+          case 0xDE: name = "mission command echo"; break;
+          case 0xE0: name = "engineering: diagnostic dive"; break;
+          case 0xE2: name = "engineering: dive cycle"; break;
+          case 0xE3: name = "engineering: mission abort"; break;
+          case 0xE5: name = "engineering: BIT passed"; break;
+          case 0xE6: name = "engineering: BIT failed"; break;
+          case 0xE7: name = "engineering: descent"; break;
+          case 0xE8: name = "engineering: drift"; break;
+          case 0xE9: name = "engineering: ascent"; break;
+          case 0xEA: name = "engineering: surface"; break;
+          case 0xEB: name = "valve"; break;
+          case 0xEC: name = "engineering: ice detection"; break;
+          case 0xF0: name = "Argo data"; break;
+          case 0xF1: name = "test pattern"; break;
+          case 0xFF: name = "extended records"; break;
+          default: name = "unknown"; break;
+        }
+      }
+    };
+
+    /* Number of values a compressed sensor-series blob carries, and the bytes per value without
+     * compression; 0 values for a blob that is not compressed. */
+    auto count_values = [](const vector<uint8_t>& b, long& values, int& width) {
+      values = 0;
+      width = 0;
+      const uint8_t id = b[0], fmt = b[1] >> 4;
+      const size_t size = b.size();
+      size_t nn_offset;
+      int part;
+      if((id >= 0x10 && id <= 0x3F) || (id >= 0x90 && id <= 0xBF) || (id >= 0x78 && id <= 0x7F)) {
+        nn_offset = 4;
+        part = id >= 0x78 && id <= 0x7F ? id - 0x78 : id >= 0x90 ? id & 0x07 : id & 0x0F;
+      } else if(id == 0xDC && size > 4) {
+        nn_offset = 8;
+        part = b[4];
+      } else {
+        return;
+      }
+      if(fmt == 1 || fmt == 3) {              // Curvature: NN values, counting VVV (spec A.3.1).
+        if(size < nn_offset + 2)
+          return;
+        values = u16(b.data(), nn_offset);
+        if(part > 0 && values > 0)
+          values--;                           // Later parts repeat the previous part's last value.
+        width = 3;
+      } else if(fmt == 0 && id != 0xDC && size > 4) {  // First difference (spec A.3.2).
+        const long payload = size - 4, sub_blocks = (payload + 26) / 27;
+        values = payload - 2 * sub_blocks;    // Each sub-block: scale, u16 v0, i8 differences.
+        width = 2;
+      }
+      if(values < 0)
+        values = 0;
+    };
+
+    std::map<int, Row> rows;
+    Row frame, unparsed;
+    frame.ids = "frame";
+    frame.name = "packet header and trailer (nBlob: packets)";
+    unparsed.ids = "unparsed";
+    unparsed.name = "incomplete blob";
+
+    vector<vector<uint8_t> > packets;
+    for(const shared_ptr<XFloatMailMessage>& msg : mail_messages_) {
+
+      if(!msg)
+        continue;
+      const vector<uint8_t> data(msg->sbd_data());
+      if(data.empty() || std::find(packets.begin(), packets.end(), data) != packets.end())
+        continue;
+      packets.push_back(data);
+
+      // Packets too short to decode are counted as unparsed.
+      const size_t n = data.size();
+      if(n < 8) {
+        unparsed.bytes += n;
+        continue;
+      }
+
+      // Header 'X nn mm dd p' (8 bytes) and trailer '$cc>' (4 bytes), which the decoder skips.
+      frame.blobs++;
+      frame.bytes += 12;
+
+      // Split into blobs as DecodeXMsgData() does: a blob is complete at max(size, 4) bytes.
+      vector<uint8_t> blob;
+      size_t blob_len = 0;
+      for(size_t i = 8; i < n - 4; ++i) {
+
+        blob.push_back(data[i]);
+        if(blob.size() < 3)
+          continue;
+        if(blob.size() == 3) {
+          blob_len = 0x0FFF & u16(blob.data(), 1);
+          continue;
+        }
+        if(blob.size() < blob_len)
+          continue;
+
+        int key;
+        Row tmp;
+        classify(blob[0], blob[1] >> 4, key, tmp.ids, tmp.name);
+        Row& row = rows[key];
+        if(row.ids.empty()) {
+          row.ids = tmp.ids;
+          row.name = tmp.name;
+        }
+
+        long values;
+        int width;
+        count_values(blob, values, width);
+        row.blobs++;
+        row.bytes += blob.size();
+        if(width) {
+          row.compressed = true;
+          row.values += values;
+          row.raw += 4 + (blob[0] == 0xDC ? 4 : 0) + values * width;
+        } else {
+          row.raw += blob.size();
+        }
+        blob.clear();
+      }
+      unparsed.bytes += blob.size();
+    }
+    frame.raw = frame.bytes;
+    unparsed.raw = unparsed.bytes;
+
+    Row total;
+    total.ids = "total";
+    total.name = "all SBD data";
+    for(const auto& kv : rows) {
+      total.blobs += kv.second.blobs;
+      total.bytes += kv.second.bytes;
+      total.values += kv.second.values;
+      total.raw += kv.second.raw;
+    }
+    total.bytes += frame.bytes + unparsed.bytes;
+    total.raw += frame.raw + unparsed.raw;
+    total.compressed = true;
+
+    os << "#      SN dive ids       nBlob  bytes   pct nValues rawBytes  ratio  name" << endl
+       << "#                                 (b)   (%)              (b)" << endl;
+
+    static const format fmt("SBT %5d %4d %-9s %5d %6d %5.1f %7s %8d %6.2f  # %s");
+    auto print = [&](const Row& r) {
+      os << format(fmt) % id_instrument() % id_dive() % r.ids % r.blobs % r.bytes
+             % (total.bytes ? 100.0 * r.bytes / total.bytes : 0.0)
+             % (r.compressed ? std::to_string(r.values) : string("-")) % r.raw
+             % (r.bytes ? (double) r.raw / r.bytes : 1.0) % r.name
+         << endl;
+    };
+    for(const auto& kv : rows)
+      print(kv.second);
+    print(frame);
+    if(unparsed.bytes)
+      print(unparsed);
+    print(total);
+
+  }CATCH_BLOCK("Failed to generate SBD data summary listing string!")
+
+  return os.str();
+}
 
 /** Get the end-of-dive GPS message.
  *

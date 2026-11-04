@@ -5,6 +5,17 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 ## 2026-11-04
 
+Decoder:
+
+- Listing files have a new subsection, "SBD Data by Message Type", after the SBD message lines.
+  It has one `SBT` line per X-message type in the dive's SBD data (retransmissions counted once):
+  number of blobs, bytes, percentage of the total and, for the compressed sensor series (binned,
+  high-resolution and drift profiles, drift times, corrected salinity), the number of values, their
+  size as plain counts (3 bytes each, 2 for the first-difference encoding, plus the 4-byte blob
+  frame) and the compression ratio; other types have ratio 1. A `frame` line counts the 12-byte
+  packet header and trailer, an `unparsed` line any incomplete blob, and a `total` line the whole.
+  `xmtps-list2json.py` skips `SBT` lines.
+
 Python tools:
 
 - WIMS wave spectra (`Wave.PostProcess`): the low-frequency response correction coefficients are

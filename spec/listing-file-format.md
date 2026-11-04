@@ -11,7 +11,7 @@ Status: written on 2026-10-30 from the source tree (version 1.0, after build 333
 3. [Lexical conventions](#3-lexical-conventions)
 4. [Section order](#4-section-order)
 5. [Header block: title, completeness, `XSV`, `LIS`](#5-header-block-title-completeness-xsv-lis)
-6. [Iridium SBD messages: `SBD`](#6-iridium-sbd-messages-sbd)
+6. [Iridium SBD messages: `SBD`, `SBT`](#6-iridium-sbd-messages-sbd-sbt)
 7. [Position data: `APS`, `GPS`](#7-position-data-aps-gps)
 8. [Dive data](#8-dive-data)
 9. [Engineering data: `E05` to `E0C`, `e0A`, `e0c`](#9-engineering-data-e05-to-e0c-e0a-e0c)
@@ -136,7 +136,7 @@ The column headers are exact text. Units are in parentheses in headers and in sq
 | # | Top-level banner (`=`) | Subsections (`-`) | Condition | Tags |
 |---|---|---|---|---|
 | 1 | `Intermediate Listing for Float #<serial>, Dive #<dive>` | `Dive Data Completeness`, `XMTPS Software Version`, `Listing Details` | always | `XSV`, `LIS` |
-| 2 | `Iridium Short-Burst Data (SBD) Message(s)` | — | the dive has at least one mail message | `SBD` |
+| 2 | `Iridium Short-Burst Data (SBD) Message(s)` | `SBD Data by Message Type` (after the `SBD` lines; build 3351 and later) | the dive has at least one mail message | `SBD`, `SBT` |
 | 3 | `Position Data` | `Acoustic Position` (if any 0xCA blob), `GPS` (if any GPS fix) | the dive has a GPS fix or a mail message (`HasPositionData()`) | `APS`, `GPS` |
 | 4 | `Dive Data` | `Argo Data`, `Pressure Correction`, `Fall Time-Series Data`, `Drift Data`, `Profile Data (Binned) - Sensor Columns`, `Profile Data (Binned)`, `Profile Data (Unbinned)`, `Valve Data`, `Pump Data`, `Rise Time-Series Data`, `Surface Time-Series Data`, `Surface Time-Series Data - Derived Fields`, `Ocean Surface Wave-Field Data` | drift data, a complete binned or unbinned profile, fall or rise data, surface data, or wave data (`HasDiveData()`) | `A`, `PRC`, `F`/`f`, `D`/`d`, `PRD`/`prd`, `PRO`/`pro`, `PRU`/`pru`, `VLV`/`vlv`, `PMP`/`pmp`, `R`/`r`, `SFC`/`sfc`, `SFD`, `WVS`/`wvs`/`wvm` |
 | 5 | `Engineering Data` | `Engineering (Abort)`, `(BIT failed)`, `(BIT passed)`, `(Descent)`, `(Diagnostic Dive)`, `(Park/Drift)`, `(Ascent)`, `(Ice)`, `(Standard Dive)`, `(Surface)` | any engineering message except ice (`HasEngineeringData()`; section 17) | `E05`, `E06`, `E07`, `E08`, `E09`, `E0C`, `e0c`, `E0A`, `e0A` |
@@ -250,7 +250,7 @@ Format `LIS %5d %4d   %04d %015d %07d`.
 
 Parser: reads SN (`x[1]`), dive (`x[2]`), DAC-ID (`x[3]`) and WMO-ID (`x[5]`); the IMEI is ignored. Reading `LIS` also triggers the up-to-date check: without `--force`, the listing is skipped if its JSON file is newer (or exists at all, with `--skip`).
 
-## 6. Iridium SBD messages: `SBD`
+## 6. Iridium SBD messages: `SBD`, `SBT`
 
 Top-level section `Iridium Short-Burst Data (SBD) Message(s)`. One line per mail message assigned to the dive, in ascending MOMSN order (`XFloatDiveData::AssignMailMessage`, `src/data/XFloatMailMessage.cpp`). Retransmissions (same SBD bytes under a new MOMSN) are listed too, so a packet ID can appear twice. Writer: `XFloatMailMessage::GenerateListingComment()` and `GenerateListingString()` (`src/data/XFloatMailMessage.h`).
 
@@ -276,6 +276,56 @@ Format `SBD %5d %4d %4d %015d %5d %5d %3d %20s %19s %4d`.
 | CEP | `%4d` | km | The mail's `CEPradius`. |
 
 The e-mail fields are specified in [iridium-mail-format.md](iridium-mail-format.md). Parser: reads size, MOMSN, MTMSN, PID, date/time, position and CEP (`x[3]`, `x[5]` to `x[10]`).
+
+### 6.1 `SBT`: SBD data by message type
+
+Subsection `SBD Data by Message Type`, right after the `SBD` lines (build 3351 and later). It breaks the dive's SBD data down by X-message type, with the compression ratio of each type. Writer: `XFloatDiveData::GenerateSbdDataSummaryListingString()` (`src/data/XFloatDiveData.cpp`).
+
+The packets are split into blobs exactly as the decoder splits them ([A.1.3](xmessage-format.md#a13-blob-structure-id-jj-data-)): from byte 8 to the byte before the 4-byte trailer, a blob ends after max(`jj` & 0x0FFF, 4) bytes. A retransmitted packet (SBD data identical to an earlier packet of the dive) is counted once, although it has its own `SBD` line.
+
+```
+#      SN dive ids       nBlob  bytes   pct nValues rawBytes  ratio  name
+#                                 (b)   (%)              (b)
+SBT  9303  440 0x00-0x05     2     48   1.4       -       48   1.00  # GPS fix
+SBT  9303  440 0x10-0x1F     1    156   4.4     264      796   5.10  # profile pressure (binned)
+SBT  9303  440 0x20-0x2F     1    303   8.6     264      796   2.63  # profile temperature (binned)
+SBT  9303  440 0x20-aux      1    204   5.8     264      796   3.90  # profile aux temperature (binned)
+SBT  9303  440 0x30-0x3F     1    239   6.8     264      796   3.33  # profile salinity (binned)
+...
+SBT  9303  440 0x98-0x9F     1     31   0.9       8       28   0.90  # drift pressure
+...
+SBT  9303  440 0xC1          3    825  23.5       -      825   1.00  # ocean surface waves
+...
+SBT  9303  440 0xF0          1     66   1.9       -       66   1.00  # Argo data
+SBT  9303  440 frame        12    144   4.1       -      144   1.00  # packet header and trailer (nBlob: packets)
+SBT  9303  440 total        26   3511 100.0    1088     5787   1.65  # all SBD data
+```
+
+Format `SBT %5d %4d %-9s %5d %6d %5.1f %7s %8d %6.2f  # %s`.
+
+| Column | Format | Units | Meaning |
+|---|---|---|---|
+| SN | `%5d` | | Serial number. |
+| dive | `%4d` | | Dive number. |
+| ids | `%-9s` | | The message type: an ID range for types that use several IDs (`0x10-0x1F`), a single ID (`0xE7`), `0x20-aux` for the auxiliary temperature channel (0x2n blobs with format nibble 3, [A.4.3](xmessage-format.md#a43-auxiliary-temperature-channel-format-nibble-3-on-0x2n)), or `frame`, `unparsed` or `total`. |
+| nBlob | `%5d` | | Number of blobs. On the `frame` line, the number of packets; on the `total` line, the number of blobs of all types. |
+| bytes | `%6d` | bytes | Bytes sent, including each blob's ID, `jj` and `;`. |
+| pct | `%5.1f` | % | Share of the dive's SBD bytes. |
+| nValues | `%7s` | | For a compressed type, the number of values carried; `-` otherwise. On the `total` line, the sum over the compressed types. |
+| rawBytes | `%8d` | bytes | The size without compression (see below). Equal to `bytes` for an uncompressed type. |
+| ratio | `%6.2f` | | Compression ratio, rawBytes / bytes. Below 1 when a short series costs more than its plain counts. |
+| name | `# %s` | | Description of the type (comment, not meant to be parsed). |
+
+Rows are in ID order, one per type present. They are followed by `frame` (the 8-byte packet header and the 4-byte `$cc>` trailer, 12 bytes per packet), `unparsed` (bytes after the last complete blob of a packet, or a packet shorter than 8 bytes; only when there are any), and `total` (the sum of all rows, which equals the dive's SBD bytes).
+
+**Compressed types and the uncompressed size.** Only the sensor series are compressed: the binned profile (0x10–0x3F), the high-resolution profile and drift series (0x90–0xBF), drift sample times (0x78–0x7F) and corrected salinity (0xDC) ([A.3](xmessage-format.md#a3-sensor-series-binned-profile-0x1n0x2n0x3n-high-resolution-profile-0x900xb7-drift-0x980xbf), [A.4](xmessage-format.md#a4-drift-sample-times-0x780x7f-corrected-salinity-0xdc-auxiliary-sensor-data-0xc2-auxiliary-temperature-channel)). For these, rawBytes is the blob's 4-byte ID, size and terminator (8 bytes for 0xDC, with its prefix), plus each value as a plain count:
+
+- Curvature encoding (format nibble 1 or 3): NN values, 3 bytes each (the width of VVV). A later part (index > 0) repeats the previous part's last value as VVV, so it counts NN − 1.
+- First-difference encoding (format nibble 0): 2 bytes each (the width of v0). The number of values is the payload (size − 4) minus 2 per 27-byte sub-block.
+
+Every other type is sent as fixed-width fields and gets ratio 1.00. The `total` ratio covers all SBD data, frame included.
+
+Parser: `SBT` lines are skipped.
 
 ## 7. Position data: `APS`, `GPS`
 
@@ -1176,6 +1226,7 @@ The example in the repository, `example/listing/lis9303-0440.txt`, was written b
 | `MIS` | yes | CfgMsgVer, FWVer, sensor type |
 | `m` | yes | idx, name, value, units, sub-group |
 | `mis` | no (unknown) | — |
+| `SBT` | skipped | — |
 | `SHX`, `shx` | skipped | — |
 | `X`, `SFP`, `sfp`, `M` (2014) | no (unknown) | — |
 

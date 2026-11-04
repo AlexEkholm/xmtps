@@ -639,6 +639,8 @@ class XFloatDiveData:
 
     string GeneratePressureCorrectionListingString() const;
 
+    string GenerateSbdDataSummaryListingString() const;
+
     shared_ptr<x::XGPS> GetGpsPositionEndOfDive() const;
 
     shared_ptr<x::XGPS> GetGpsPositionStartOfDive() const;

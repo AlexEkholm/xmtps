@@ -525,8 +525,8 @@ def ProcessListingFile(fpath_list):
         WVS, wvs     wave spectra; fill values of bins not received become NaN (wvm is ignored)
 
     Drift and profile samples get density and sigma0 from RhoLUT; temperatures and salinities at
-    or below the lookup table minimum become NaN. A, PMP, PRD/prd, IRI, SFD, SHX/shx, VLV/vlv and
-    XSV lines are ignored, and unknown lines are logged at debug level. A line that fails to
+    or below the lookup table minimum become NaN. A, PMP, PRD/prd, IRI, SBT, SFD, SHX/shx, VLV/vlv
+    and XSV lines are ignored, and unknown lines are logged at debug level. A line that fails to
     parse is logged as an error (raised with -H) and skipped. After parsing, Dive.PostProcess is
     called and the result is written with WriteJsonDiveDataFile.
     """
@@ -1081,7 +1081,10 @@ def ProcessListingFile(fpath_list):
                     continue
              
                 # SBD message data:
-             
+
+                if re.match('^SBT ', line):
+                    continue
+
                 if re.match('^SHX ', line):
                     # TODO
                     continue
