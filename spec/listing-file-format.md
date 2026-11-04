@@ -136,7 +136,7 @@ The column headers are exact text. Units are in parentheses in headers and in sq
 | # | Top-level banner (`=`) | Subsections (`-`) | Condition | Tags |
 |---|---|---|---|---|
 | 1 | `Intermediate Listing for Float #<serial>, Dive #<dive>` | `Dive Data Completeness`, `XMTPS Software Version`, `Listing Details` | always | `XSV`, `LIS` |
-| 2 | `Iridium Short-Burst Data (SBD) Message(s)` | `SBD Data by Message Type` (after the `SBD` lines; build 3351 and later) | the dive has at least one mail message | `SBD`, `SBT` |
+| 2 | `Iridium Short-Burst Data (SBD) Message(s)` | `SBD Data by Message Type` (after the `SBD` lines; build 3352 and later) | the dive has at least one mail message | `SBD`, `SBT` |
 | 3 | `Position Data` | `Acoustic Position` (if any 0xCA blob), `GPS` (if any GPS fix) | the dive has a GPS fix or a mail message (`HasPositionData()`) | `APS`, `GPS` |
 | 4 | `Dive Data` | `Argo Data`, `Pressure Correction`, `Fall Time-Series Data`, `Drift Data`, `Profile Data (Binned) - Sensor Columns`, `Profile Data (Binned)`, `Profile Data (Unbinned)`, `Valve Data`, `Pump Data`, `Rise Time-Series Data`, `Surface Time-Series Data`, `Surface Time-Series Data - Derived Fields`, `Ocean Surface Wave-Field Data` | drift data, a complete binned or unbinned profile, fall or rise data, surface data, or wave data (`HasDiveData()`) | `A`, `PRC`, `F`/`f`, `D`/`d`, `PRD`/`prd`, `PRO`/`pro`, `PRU`/`pru`, `VLV`/`vlv`, `PMP`/`pmp`, `R`/`r`, `SFC`/`sfc`, `SFD`, `WVS`/`wvs`/`wvm` |
 | 5 | `Engineering Data` | `Engineering (Abort)`, `(BIT failed)`, `(BIT passed)`, `(Descent)`, `(Diagnostic Dive)`, `(Park/Drift)`, `(Ascent)`, `(Ice)`, `(Standard Dive)`, `(Surface)` | any engineering message except ice (`HasEngineeringData()`; section 17) | `E05`, `E06`, `E07`, `E08`, `E09`, `E0C`, `e0c`, `E0A`, `e0A` |
@@ -279,7 +279,7 @@ The e-mail fields are specified in [iridium-mail-format.md](iridium-mail-format.
 
 ### 6.1 `SBT`: SBD data by message type
 
-Subsection `SBD Data by Message Type`, right after the `SBD` lines (build 3351 and later). It breaks the dive's SBD data down by X-message type, with the compression ratio of each type. Writer: `XFloatDiveData::GenerateSbdDataSummaryListingString()` (`src/data/XFloatDiveData.cpp`).
+Subsection `SBD Data by Message Type`, right after the `SBD` lines (build 3352 and later). It breaks the dive's SBD data down by X-message type, with the compression ratio of each type. Writer: `XFloatDiveData::GenerateSbdDataSummaryListingString()` (`src/data/XFloatDiveData.cpp`).
 
 The packets are split into blobs exactly as the decoder splits them ([A.1.3](xmessage-format.md#a13-blob-structure-id-jj-data-)): from byte 8 to the byte before the 4-byte trailer, a blob ends after max(`jj` & 0x0FFF, 4) bytes. A retransmitted packet (SBD data identical to an earlier packet of the dive) is counted once, although it has its own `SBD` line.
 
