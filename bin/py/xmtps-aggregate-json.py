@@ -3547,12 +3547,15 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
     # sea, so land is a single value that the color scale paints gray and the hover reads "0m"
     depth_m = np.where(depth > 0, np.maximum(np.round(depth), 1), 0).astype(np.int16)
 
-    # Depth colors: gray for land (0 m), light to dark blue from 1 m to the deepest point
+    # Depth colors: gray for land (0 m), light to dark blue from 1 m to the deepest point. The
+    # heatmap is drawn as negative depth so that the colorbar has the shallowest depth (and land) at
+    # the top; its tick labels and the hover show positive depths.
     dmax = max(float(depth_m.max()), 2.0)
     f1 = 1.0 / dmax
-    colorscale = [[0.0, 'rgb(190,190,190)'], [f1 * 0.5, 'rgb(190,190,190)'],
-                  [f1, 'rgb(222,235,247)'], [0.25, 'rgb(158,202,225)'],
-                  [0.55, 'rgb(66,146,198)'], [0.8, 'rgb(8,81,156)'], [1.0, 'rgb(8,38,90)']]
+    colorscale = [[0.0, 'rgb(8,38,90)'], [0.2, 'rgb(8,81,156)'], [0.45, 'rgb(66,146,198)'],
+                  [0.75, 'rgb(158,202,225)'], [1.0 - f1, 'rgb(222,235,247)'],
+                  [1.0 - f1 * 0.5, 'rgb(190,190,190)'], [1.0, 'rgb(190,190,190)']]
+    depth_ticks = list(range(0, int(dmax) + 1, 1000))
 
     # Hillshade: cosine of the angle between the surface normal and a sun at azimuth 315 degrees,
     # altitude 45 degrees (rows are latitudes, increasing north)
@@ -3566,10 +3569,10 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
     name = bathymetry['name'] if bathymetry else 'bathymetry'
     fig = go.Figure()
     fig.add_trace(go.Heatmap(
-        x=np.round(lon, 5), y=np.round(lat, 5), z=depth_m, zmin=0, zmax=dmax, colorscale=colorscale,
-        hovertemplate='%{z}m<extra></extra>',
+        x=np.round(lon, 5), y=np.round(lat, 5), z=-depth_m, zmin=-dmax, zmax=0, colorscale=colorscale,
+        customdata=depth_m, hovertemplate='%{customdata}m<extra></extra>',
         colorbar=dict(title=dict(text='Depth [m]'), len=0.6, y=0.3,
-                      tickvals=list(range(0, int(dmax) + 1, 1000))),
+                      tickvals=[-d for d in depth_ticks], ticktext=[str(d) for d in depth_ticks]),
         name='depth'))
     fig.add_trace(go.Heatmap(
         x=np.round(lon, 5), y=np.round(lat, 5), z=shade, zmin=0, zmax=255, opacity=0.35,
