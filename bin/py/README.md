@@ -149,7 +149,10 @@ Things to know:
 - **The include pattern selects the floats:** listing paths must match
   `(90|91|92|93|94|10|11)[0-9]+` (ALAMO 9000-9499, ALTO 10000-11999), so stray directories with
   other serial numbers (for example 4790 or 9672) are never converted. Before 2026-11-05 the
-  pattern began `(908|909|...)`, which left out the older ALAMOs 9003-9079.
+  pattern began `(908|909|...)`, which left out the older ALAMOs 9003-9079. Of those, the ones
+  without usable profile data (`NOPROF` in the script: 9004, 9005, 9011, 9012, 9024, 9025, 9027,
+  9037, 9038, 9042, 9047, 9050, 9056, 9059, 9063) are excluded with a second `-x`. The others
+  have temperature profiles but, except 9003, no valid salinity.
 - **Restart after editing:** the script runs in a loop, so a change to it takes effect only after
   `sudo systemctl restart xmtps-alamo-plot`. Changes to the Python tools take effect on the next
   pass.

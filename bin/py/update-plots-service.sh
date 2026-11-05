@@ -10,6 +10,10 @@ DPLOT="/data1/alamo/data/plots2"
 
 DBIN="/data1/alamo/bin/py"
 
+# Older ALAMOs whose listings hold no usable profile (no profiles, or no valid temperature):
+# never converted. Checked 2026-11-05 by converting 9003-9079 to a scratch directory.
+NOPROF="/(9004|9005|9011|9012|9024|9025|9027|9037|9038|9042|9047|9050|9056|9059|9063)/"
+
 MAX_PROC=8
 MAX_RUN_T=3600
 PID=$$
@@ -26,8 +30,9 @@ for id in `find /data1/alamo/data/list/ -cmin -14400 -type f | awk -F/ '{print $
 #for id in `find /data1/alamo/data/list/ -type f | awk -F/ '{print $6}' | sort -nu`; do
 
     # run json and plot updates in background
+    # NOPROF: older ALAMOs (9003-9079) without usable profile data, left out (checked 2026-11-05)
     (   source /data1/alamo/bin/py/.venv/bin/activate
-        /data1/alamo/bin/py/.venv/bin/python $DBIN/xmtps-list2json.py -v -i"$DLIST/(90|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" -x"/\\..*" -o"$DJSON" "$DLIST/$id"
+        /data1/alamo/bin/py/.venv/bin/python $DBIN/xmtps-list2json.py -v -i"$DLIST/(90|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" -x"/\\..*" -x"$NOPROF" -o"$DJSON" "$DLIST/$id"
         /data1/alamo/bin/py/.venv/bin/python $DBIN/xmtps-aggregate-json.py -v -i"$DJSON/[0-9]+/dives/[0-9]+_-?[0-9]+.json" -o"$DJSON" -p"$DPLOT" "$DJSON/$id/dives" 
     ) &
 

@@ -51,7 +51,10 @@ Python tools:
   `(908|909|91|...)`), so the older ALAMOs 9003-9079 are converted to JSON and plotted too. A
   test conversion of 9005, 9023, 9035 and 9061 wrote JSON for every listing (a few line and
   post-processing errors on 9023 and 9035). Stray directories (4790, 6796, 7127, 9511, 9672)
-  stay excluded.
+  stay excluded, and so do the older ALAMOs without usable profile data (`NOPROF`: 9004, 9005,
+  9011, 9012, 9024, 9025, 9027, 9037, 9038, 9042, 9047, 9050, 9056, 9059, 9063), found by
+  converting 9003-9079 to a scratch directory. The rest have temperature profiles; only 9003 also
+  has valid salinity.
 - Energy estimate: CTD energies from the manufacturers' documentation, replacing the SOLO-II
   fit (0.25 J a scan, 3.3 J a spot sample, × 0.2 for RBR). Sea-Bird SBE 41CP: 22 mA at 12 V with
   the pump running (hardware reference 41528F), so 0.264 J a 1 Hz profile scan and 0.66 J a spot
