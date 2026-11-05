@@ -27,7 +27,7 @@ for id in `find /data1/alamo/data/list/ -cmin -14400 -type f | awk -F/ '{print $
 
     # run json and plot updates in background
     (   source /data1/alamo/bin/py/.venv/bin/activate
-        /data1/alamo/bin/py/.venv/bin/python $DBIN/xmtps-list2json.py -v -i"$DLIST/(908|909|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" -x"/\\..*" -o"$DJSON" "$DLIST/$id"
+        /data1/alamo/bin/py/.venv/bin/python $DBIN/xmtps-list2json.py -v -i"$DLIST/(90|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" -x"/\\..*" -o"$DJSON" "$DLIST/$id"
         /data1/alamo/bin/py/.venv/bin/python $DBIN/xmtps-aggregate-json.py -v -i"$DJSON/[0-9]+/dives/[0-9]+_-?[0-9]+.json" -o"$DJSON" -p"$DPLOT" "$DJSON/$id/dives" 
     ) &
 

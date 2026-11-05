@@ -15,7 +15,7 @@ include and -x exclude regular expressions. Unless -f is given, a listing is ski
 JSON file is newer than it, and with -s whenever its JSON file exists.
 
 Example:
-    xmtps-list2json.py -v -i"/data1/alamo/data/list/(908|909|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" -x"/\\..*" -o/data1/alamo/data/json /data1/alamo/data/list/<id>
+    xmtps-list2json.py -v -i"/data1/alamo/data/list/(90|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" -x"/\\..*" -o/data1/alamo/data/json /data1/alamo/data/list/<id>
 
 Author: aekholm
 """

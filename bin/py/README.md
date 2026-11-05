@@ -116,7 +116,7 @@ It activates the virtual environment and then, forever:
 2. **Converts each float** in the background, at most `MAX_PROC` at a time:
 
    ```
-   xmtps-list2json.py -v -i"$DLIST/(908|909|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" \
+   xmtps-list2json.py -v -i"$DLIST/(90|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" \
        -x"/\..*" -o"$DJSON" "$DLIST/<sn>"
    xmtps-aggregate-json.py -v -i"$DJSON/[0-9]+/dives/[0-9]+_-?[0-9]+.json" \
        -o"$DJSON" -p"$DPLOT" "$DJSON/<sn>/dives"
@@ -147,8 +147,9 @@ Things to know:
   change to `FloatClasses.py` or `RhoLUT.py`, existing data is updated only by running both tools
   by hand with `-f`.
 - **The include pattern selects the floats:** listing paths must match
-  `(908|909|91|92|93|94|10|11)[0-9]+`, so floats whose serial numbers start otherwise (for example
-  9046) are never converted.
+  `(90|91|92|93|94|10|11)[0-9]+` (ALAMO 9000-9499, ALTO 10000-11999), so stray directories with
+  other serial numbers (for example 4790 or 9672) are never converted. Before 2026-11-05 the
+  pattern began `(908|909|...)`, which left out the older ALAMOs 9003-9079.
 - **Restart after editing:** the script runs in a loop, so a change to it takes effect only after
   `sudo systemctl restart xmtps-alamo-plot`. Changes to the Python tools take effect on the next
   pass.

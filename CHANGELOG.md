@@ -42,6 +42,16 @@ Python tools:
   `WVS` `fbase` and `fdiv` in the dive JSON (`Wave.fbase`, `Wave.fdiv`), and the `_wave`
   aggregate gains `slen` and `fe_hz` (the true sample rate; for older dive JSON, `fsam` halved
   for the every-other-bin firmware).
+- Energy estimate: Iridium and GPS powers from the datasheets of the fitted parts, replacing the
+  SOLO-II fit. Iridium 9602 (Product Developers Guide rev 5): SBD transfer average 190 mA at
+  5.0 V, 0.95 W (was 0.70 W) over the session time. u-blox NEO-M8N (NEO-M8 data sheet R14,
+  confirmed by an ALTO checklog): acquisition 32 mA at 3.0 V, 0.096 W (was 0.27 W) over the time
+  to fix. Regulator losses are not counted. 11273: Iridium 30.1 to 40.8 kJ, GPS 14.4 to 5.1 kJ.
+- `update-plots-service.sh`: the listing pattern now starts `(90|91|92|93|94|10|11)` (was
+  `(908|909|91|...)`), so the older ALAMOs 9003-9079 are converted to JSON and plotted too. A
+  test conversion of 9005, 9023, 9035 and 9061 wrote JSON for every listing (a few line and
+  post-processing errors on 9023 and 9035). Stray directories (4790, 6796, 7127, 9511, 9672)
+  stay excluded.
 - Energy estimate: CTD energies from the manufacturers' documentation, replacing the SOLO-II
   fit (0.25 J a scan, 3.3 J a spot sample, × 0.2 for RBR). Sea-Bird SBE 41CP: 22 mA at 12 V with
   the pump running (hardware reference 41528F), so 0.264 J a 1 Hz profile scan and 0.66 J a spot

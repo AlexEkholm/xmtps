@@ -358,12 +358,17 @@ def AppendRows(df, df_new):
 ENERGY_CTD_SBE_J_PER_SCAN = 0.022 * 12 * 1.0     # 0.264 J
 ENERGY_CTD_SBE_J_PER_SAMPLE = 0.022 * 12 * 2.5   # 0.66 J
 ENERGY_CTD_RBR_J_PER_SAMPLE = 0.024              # 24 mJ, scan or spot sample
-# Other constants fitted to the SOLO-II energy plots (WHOI SOLO-II pages on argus, MATLAB) against
-# the SOLO-II listing files, and applied to ALAMO data
-ENERGY_IRIDIUM_W = 0.70            # while the Iridium modem is in a session
+# Iridium and GPS power, from the datasheets of the fitted parts (module terminals; regulator losses
+# not counted):
+# - Iridium 9602 SBD transceiver (Product Developers Guide rev 5, Table 9): SBD message transfer
+#   average 190 mA at 5.0 V, 0.95 W, over the session time below.
+# - u-blox NEO-M8N GPS (NEO-M8 data sheet UBX-15031086 R14): acquisition 32 mA at 3.0 V
+#   (GPS+GLONASS), 0.096 W, over the time to fix.
+# The session timing constants were fitted to the SOLO-II energy plots (WHOI SOLO-II pages on argus).
+ENERGY_IRIDIUM_W = 0.190 * 5.0     # 0.95 W while the Iridium modem is in a session
 ENERGY_IRIDIUM_SESSION_GAP_S = 1800 # SBD messages further apart start a new session
 ENERGY_IRIDIUM_LAST_MSG_S = 10     # added to each session span for its last message
-ENERGY_GPS_W = 0.27                # while acquiring a fix (time to fix)
+ENERGY_GPS_W = 0.032 * 3.0         # 0.096 W while acquiring a fix (time to fix)
 # WIMS wave sensor: typical running power at 15 V (WIMS user manual rev. 3.22, Table 3), for one run
 # of about 590 s per dive with wave data (the operators' figure). The power while not sampling is
 # negligible and not counted.

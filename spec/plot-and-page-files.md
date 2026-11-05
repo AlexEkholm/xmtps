@@ -638,7 +638,7 @@ The script activates the venv `/data1/alamo/bin/py/.venv` and loops forever:
 3. For each recent float, in the background:
 
    ```
-   python xmtps-list2json.py -v -i"$DLIST/(908|909|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" \
+   python xmtps-list2json.py -v -i"$DLIST/(90|91|92|93|94|10|11)[0-9]+/lis[0-9]+-(-?)[0-9]+.txt" \
        -x"/\..*" -o"$DJSON" "$DLIST/<serial>"
    python xmtps-aggregate-json.py -v -i"$DJSON/[0-9]+/dives/[0-9]+_-?[0-9]+.json" \
        -o"$DJSON" -p"$DPLOT" "$DJSON/<serial>/dives"
