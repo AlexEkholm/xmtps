@@ -7,6 +7,13 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- Oil pump power and energy are computed from the battery voltage and current: power = `volt` ×
+  `curr` (was `volt` × `curr_adj`, with `curr_adj` = `curr` × 12 / `volt` / 0.85). The pumps run
+  from a 12 V rail made by a buck-boost converter from the batteries, but `pumpI` is the battery
+  current, so the 12 V / 85 % conversion did not apply. Pump energy rises by about 6 % (11273:
+  498.6 to 528.1 kJ). `curr_adj` is dropped from the dive and `_pump` JSON, and the pump current
+  plots show `curr`. Floats must be reprocessed (`xmtps-list2json.py -f`, then
+  `xmtps-aggregate-json.py -f`) for their JSON and plots to change.
 - Energy plot (`energy_per_cycle`): the title no longer adds "(RBR CTD: CTD x0.2)" for floats with
   an RBR CTD. The CTD estimates are still reduced as before.
 - Energy plot (`energy_per_cycle`): the dive total is on its own line at the top of the hover label

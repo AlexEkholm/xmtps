@@ -1066,34 +1066,33 @@ class Pump:
         Attributes:
             pres: pressure at the run, in dBar.
             time: pump run time, in seconds.
-            volt: pump voltage, in V.
-            curr: pump current, in A.
-            curr_adj: adjusted current, in A (computed by PostProcess()).
+            volt: battery voltage while pumping, in V.
+            curr: battery current while pumping, in A. The pumps run from a 12 V rail made by a
+                buck-boost converter from the batteries, but the current is measured at the
+                batteries, so it includes the converter's losses.
             vac: case vacuum after pumping, in inHg.
-            power: power, in W (computed by PostProcess()).
-            energy: energy, in J (computed by PostProcess()).
+            power: power drawn from the batteries, in W (computed by PostProcess()).
+            energy: energy drawn from the batteries, in J (computed by PostProcess()).
             n: number of runs; -1 until PostProcess().
         """
         self.pres = []
         self.time = []
         self.volt = []
         self.curr = []
-        self.curr_adj = []
         self.vac = []
         self.power = []
         self.energy = []
         self.n = -1
         
     def PostProcess(self):
-        """Set n and compute the adjusted current, power and energy of each pump run.
+        """Set n and compute the power and energy drawn from the batteries by each pump run.
 
-        curr_adj = curr * 12 / volt / 0.85 (A, rounded to 3 decimals; NaN if volt is 0),
-        power = volt * curr_adj (W, 3 decimals) and energy = power * time (J, 2 decimals).
+        power = volt * curr (W, 3 decimals; battery voltage and current) and energy = power * time
+        (J, 2 decimals).
         """
         self.n = len(self.pres)
-        
-        self.curr_adj = [ round(c * 12 / v / 0.85, 3) if v else np.nan for (c, v) in zip(self.curr, self.volt) ]
-        self.power = [ round(v * i, 3) for (i, v) in zip(self.curr_adj, self.volt) ]
+
+        self.power = [ round(v * i, 3) for (i, v) in zip(self.curr, self.volt) ]
         self.energy = [ round(p * t, 2) for (p, t) in zip(self.power, self.time) ] 
    
 class Sbd(Position):

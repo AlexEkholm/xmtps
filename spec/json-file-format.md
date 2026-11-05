@@ -336,11 +336,10 @@ pmp  9303  483   0    0      70.68         93       7.31      0.217     655.35  
 |---|---|---|---|
 | `pres` | list of float | dBar | `pres` (field 5). |
 | `time` | list of float | s | `pumpT` (field 6). |
-| `volt` | list of float | V | `pumpV` (field 7). |
-| `curr` | list of float | A | `pumpI` (field 8). |
-| `curr_adj` | list of float | A | `curr × 12 / volt / 0.85`, 3 decimals; `NaN` if `volt` is 0. The current referred to a 12 V supply at 85 % efficiency [inferred]. |
+| `volt` | list of float | V | `pumpV` (field 7), the battery voltage while pumping. |
+| `curr` | list of float | A | `pumpI` (field 8), the battery current while pumping. The pumps run from a 12 V rail made by a buck-boost converter from the batteries, but the current is measured at the batteries, so it includes the converter's losses. |
 | `vac` | list of float | inHg | `vac1` (field 10), the case vacuum after the run. `vac0` is not stored. Fill 655.35 is kept. |
-| `power` | list of float | W | `volt × curr_adj`, 3 decimals. |
+| `power` | list of float | W | `volt × curr`, 3 decimals: the power drawn from the batteries. Files written before 2026-11-05 have `curr_adj` = `curr × 12 / volt / 0.85` and `power` = `volt × curr_adj`, which treated the current as the 12 V rail current; they are rewritten when the float is reprocessed. |
 | `energy` | list of float | J | `power × time`, 2 decimals. |
 | `n` | int | | Number of runs. |
 
@@ -858,7 +857,7 @@ One row per surface sample, then a separator row.
 
 ### 4.8 `_pump`
 
-One row per pump run. Columns `dive`, `pres` (dBar), `time` (s), `volt` (V), `curr` (A), `curr_adj` (A), `vac` (inHg, `vac1`), `power` (W), `energy` (J), all from `Dive.pump` (section 3.10). All floats except `dive`.
+One row per pump run. Columns `dive`, `pres` (dBar), `time` (s), `volt` (V), `curr` (A), `vac` (inHg, `vac1`), `power` (W), `energy` (J), all from `Dive.pump` (section 3.10). All floats except `dive`.
 
 ### 4.9 `_gps`
 

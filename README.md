@@ -686,7 +686,7 @@ part of the format (`json_vers`, currently `0.11`, identifies it). Missing value
 | `drift` | `Drift` | Drift samples: `pres`, `temp`, `saln`, `dens`, `sigma0` and their times (measured when the float sends drift times, otherwise estimated between descent and ascent). |
 | `profile` | `Profile` | Binned profile: `pres`, `temp`, `tcnd` (second temperature channel), `saln`, `saln_corr` (dynamically corrected salinity, NaN if not sent), `dens`, `sigma0`. |
 | `surface` | `Surface` | Surface time series: `pres`, `temp`, `saln` and times; and the surface pressure offset correction from the `PRC` line: `pres_correction` (dBar, NaN without a `PRC` line), `pres_correction_valid`, `pres_correction_num_samples`, `pres_correction_num_dives`. |
-| `pump` | `Pump` | Pump actions: `pres`, `time` (s), `volt`, `curr`, `curr_adj`, `vac`, `power`, `energy`. |
+| `pump` | `Pump` | Pump actions: `pres`, `time` (s), `volt`, `curr` (battery voltage and current), `vac`, `power`, `energy` (drawn from the batteries). |
 | `gps`, `sbd` | lists of `Gps`, `Sbd` | GPS fixes and the dive's SBD messages (position, CEP, MOMSN, packet ID, size). |
 | `sbd_types` | list of `SbdType` | The dive's SBD data by message type, from the `SBT` lines (empty for listings before build 3352). |
 | `wave` | `Wave` | Wave spectra (`Szz_g` … in g²/Hz, `Szz` … in m²/Hz), directional moments and derived values: significant wave height `swh` (m), periods (s), mean direction `mwd` (°). Bins not received are NaN. The displacement spectra have the noise-floor mask (bins where `Szz_g` is below 0.0005 g²/Hz are zeroed) and the low-frequency response correction (cosine taper, [f0, w] = [0.02622, 0.08951] Hz) applied alike to all six spectra. Directions are clockwise from true north (magnetic north when the declination is unavailable) and give the direction the waves propagate toward, not from. A dive without a valid GPS fix uses the declination at the float's most recent valid fix after deployment. |
@@ -712,7 +712,7 @@ Read one with `pandas.read_json(path, orient="split")`.
 | `_descent`, `_ascent` | time-series sample | `pres`, `dt_epoch`, `dt_ref_delta_sec`, `dt_str`, `phase_code`, `rate` |
 | `_drift` | drift sample | `pres`, `temp`, `saln`, `dens`, `sigma0`, `dt_epoch`, `dt_ref_delta_sec`, `dt_str` |
 | `_surface` | surface sample | `dt_epoch`, `dt_str`, `pres`, `temp`, `dt_ref_delta_sec`, `pres_corr` (the dive's valid pressure correction, else NaN) |
-| `_pump` | pump action | `pres`, `time`, `volt`, `curr`, `curr_adj`, `vac`, `power`, `energy` |
+| `_pump` | pump action | `pres`, `time`, `volt`, `curr`, `vac`, `power`, `energy` |
 | `_gps` | GPS fix | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `idx`, `ttf_sec`, `nsat`, `snr_min`, `snr_avg`, `snr_max`, `hdop` |
 | `_sbd` | SBD message | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `size_b`, `momsn`, `mtmsn`, `pid` |
 | `_iridium_position` | dive | Iridium position composited from the dive's messages (CEP⁻²-weighted): time (with its range `dt_min_*`/`dt_max_*`), `lat`, `lon`, `cep_km` (GPS-calibrated: `sqrt(1 / sum(CEP^-2) + 1.55^2)`), `num_pos` |

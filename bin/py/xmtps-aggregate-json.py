@@ -628,7 +628,6 @@ def AggregateDiveData():
                                                  'time', 
                                                  'volt', 
                                                  'curr', 
-                                                 'curr_adj', 
                                                  'vac', 
                                                  'power',
                                                  'energy',
@@ -1204,7 +1203,6 @@ def AggregateDiveData():
                                 'time':   np.array(pump_data.time, dtype='float'),
                                 'volt':   np.array(pump_data.volt, dtype='float'),
                                 'curr':   np.array(pump_data.curr, dtype='float'),
-                                'curr_adj':   np.array(pump_data.curr_adj, dtype='float'),
                                 'vac':    np.array(pump_data.vac, dtype='float'),
                                 'power':  np.array(pump_data.power, dtype='float'),
                                 'energy': np.array(pump_data.energy, dtype='float'),
@@ -8409,7 +8407,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 ['pres', ]] = np.nan
             df_dives.loc[
                 (df_dives['curr'] <= 0 )|(df_dives['curr'] >= 100)|df_dives['curr'].isna(),
-                ['curr', 'curr_adj', 'energy', 'power' ]] = np.nan
+                ['curr', 'energy', 'power' ]] = np.nan
             
             df_dives_gb = df_dives.groupby(['dive'])
             df_dives_gb_min = df_dives_gb.min()
@@ -8422,7 +8420,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             # Calculate data ranges
             
             rng = dict(
-                curr   = np.array([0, np.percentile(df_dives['curr_adj'][~df_dives['curr_adj'].isna()].values, [99])[0]]).astype(np.double),
+                curr   = np.array([0, np.percentile(df_dives['curr'][~df_dives['curr'].isna()].values, [99])[0]]).astype(np.double),
                 pres   = np.array([np.max(df_dives['pres'][~df_dives['pres'].isna()].values), -10]).astype(np.double),
                 time   = np.percentile(df_dives['time'][~df_dives['time'].isna()].values, [1,99]).astype(np.double),
                 volt   = np.percentile(df_dives['volt'][~df_dives['volt'].isna()].values, [0,100]).astype(np.double),
@@ -8948,7 +8946,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             (
                                 df_dive['time'], 
                                 df_dive['volt'], 
-                                df_dive['curr_adj'], 
+                                df_dive['curr'], 
                                 df_dive['power'], 
                                 df_dive['energy'], ), 
                             -1
@@ -8987,7 +8985,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             (
                                 df_dive['time'], 
                                 df_dive['volt'], 
-                                df_dive['curr_adj'], 
+                                df_dive['curr'], 
                                 df_dive['energy'],
                                 df_dive.index.values
                                 ), 
@@ -9028,7 +9026,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             (
                                 df_dive['pres'], 
                                 df_dive['time'], 
-                                df_dive['curr_adj'], 
+                                df_dive['curr'], 
                                 df_dive['power'], 
                                 df_dive['energy'], ), 
                             -1
@@ -9062,7 +9060,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
 
                     figs['pump_curr'].add_trace(go.Scatter(
                         # x=df_dive['dt_ref_delta_sec'],
-                        y=df_dive['curr_adj'],
+                        y=df_dive['curr'],
                         customdata=np.stack(
                             (
                                 df_dive['pres'], 
@@ -9107,7 +9105,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 df_dive['pres'], 
                                 df_dive['time'], 
                                 df_dive['volt'], 
-                                df_dive['curr_adj'], 
+                                df_dive['curr'], 
                                 df_dive['energy'], ), 
                             -1
                             ),
@@ -9146,7 +9144,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 df_dive['pres'], 
                                 df_dive['time'], 
                                 df_dive['volt'], 
-                                df_dive['curr_adj'], 
+                                df_dive['curr'], 
                                 df_dive['power'], 
                                 ), 
                             -1
@@ -9402,7 +9400,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 var = x[0]
                 
                 if var == 'curr':
-                    dive, min, mean, max, std = df_dives_gb_mean.index.values, df_dives_gb_min['curr_adj'], df_dives_gb_mean['curr_adj'], df_dives_gb_max['curr_adj'], df_dives_gb_std['curr_adj']
+                    dive, min, mean, max, std = df_dives_gb_mean.index.values, df_dives_gb_min['curr'], df_dives_gb_mean['curr'], df_dives_gb_max['curr'], df_dives_gb_std['curr']
                 else: 
                     dive, min, mean, max, std = df_dives_gb_mean.index.values, df_dives_gb_min[var], df_dives_gb_mean[var], df_dives_gb_max[var], df_dives_gb_std[var]
                 hovertemplate = x[1]
