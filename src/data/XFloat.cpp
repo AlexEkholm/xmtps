@@ -1401,6 +1401,29 @@ shared_ptr<XFloatDiveData> XFloat::GetCachedDiveData(int dive) const {
   return it != dive2data_map_.end() ? it->second : shared_ptr<XFloatDiveData>();
 }
 
+/** Start a new startup session for a startup dive number.
+ *
+ *  A float that is restarted numbers its startup dives from -1 again, so a startup dive number
+ *  can recur. When a later session begins (see @ref XFloatDiveData::IsNewStartupSession()), the
+ *  cached dive data object is replaced by a new, empty one, so that the sessions are not merged.
+ *  The caller archives the previous session's listing file first.
+ *
+ *  @param[in]  dive        The startup (negative) dive number.
+ *
+ *  @return     The new dive data object.
+ */
+shared_ptr<XFloatDiveData> XFloat::StartNewStartupSession(int dive) {
+
+  shared_ptr<XFloatDiveData> x;
+
+  try {
+    lock_guard<recursive_mutex> guard(mutex_);
+    x = dive2data_map_[dive] = make_shared<XFloatDiveData>(GetFloat(id_instrument()), dive);
+  } CATCH_BLOCK("Failed to start a new startup session!")
+
+  return x;
+}
+
 /** Get the valid GPS positions of this float, oldest first.
  *
  *  Positions before the start of mission or the deployment are left out. Without the SQL
@@ -1986,8 +2009,12 @@ int XFloatDiveData::DecodeMailMessageData(shared_ptr<XFloatMailMessage>& msg) {
     BOOST_LOG_SCOPED_THREAD_ATTR("MomsnID", attr::constant<int>(msg->id_sbd_momsn()));
     BOOST_LOG_SCOPED_THREAD_ATTR("PcktID", attr::constant<int>(msg->id_sbd_packet()));
 
+    // Startup messages (negative dive numbers) are always decoded: the float sends them before
+    // its start of mission and deployment, and every startup session gets its listing file.
+    const bool is_startup = msg->id_dive() < 0 && msg->id_dive() != XFLT_DIVE_UNKNOWN;
+
     // Skip messages that were transmitted before the start-of-mission date/time.
-    if(!parent_instrument()->start_of_mission_datetime().is_not_a_date_time()) {
+    if(!is_startup && !parent_instrument()->start_of_mission_datetime().is_not_a_date_time()) {
 
       if(!msg->iridium_position_datetime().is_not_a_date_time()
           && (parent_instrument()->start_of_mission_datetime() - window)
@@ -2009,7 +2036,7 @@ int XFloatDiveData::DecodeMailMessageData(shared_ptr<XFloatMailMessage>& msg) {
 
     // Skip messages that were transmitted before the deployment date/time.
     metadata = parent_instrument()->metadata();
-    if(metadata && !metadata->deployment_datetime().is_not_a_date_time()
+    if(!is_startup && metadata && !metadata->deployment_datetime().is_not_a_date_time()
         && !msg->iridium_position_datetime().is_not_a_date_time()
         && (metadata->deployment_datetime() - window) > msg->iridium_position_datetime()) {
 
@@ -3576,6 +3603,22 @@ string XFloatDiveData::GeneratePhyString() const {
   return os.str();
 }
 
+/** The least time between two startup sessions that reuse a startup dive number, when the dive
+ *  numbering cannot be checked (the previous startup dive is not known in this run).
+ *
+ *  A startup dive's packets are sent within an hour or so; a float that is restarted (for example
+ *  after a battery change) starts its startup dives from -1 again days or years later.
+ */
+static const time_duration XFLT_STARTUP_SESSION_GAP(12, 0, 0);
+
+/** The least time between a startup dive's last message and a message that restarts its number.
+ *
+ *  Startup dives count down (-1, -2, ...). A message whose startup dive number is not below the
+ *  previous startup message's number starts a new session if it comes at least this long after
+ *  the last message of its dive; a shorter gap is taken as a late packet of the same session.
+ */
+static const time_duration XFLT_STARTUP_RESTART_MIN_GAP(1, 0, 0);
+
 vector<shared_ptr<XFloatMailMessage>> XFloatDiveData::GetDiveDataMailMessagesFromDatabase() {
 
   static const time_duration window(0, 15, 0);
@@ -3605,17 +3648,41 @@ vector<shared_ptr<XFloatMailMessage>> XFloatDiveData::GetDiveDataMailMessagesFro
     where << " AND id_dive = " << id_dive();
     where << " AND msg_is_valid = 1";
 
-    if(inst && !inst->start_of_mission_datetime().is_not_a_date_time())
+    // Startup dives (negative dive numbers) keep all their messages, as in
+    // DecodeMailMessageData().
+    const bool is_startup = id_dive() < 0;
+
+    if(!is_startup && inst && !inst->start_of_mission_datetime().is_not_a_date_time())
       where << " AND iridium_position_datetime >= '"
             << bpt::to_iso_string(inst->start_of_mission_datetime() - window)
             << "'";
 
-    if(meta && !meta->deployment_datetime().is_not_a_date_time())
+    if(!is_startup && meta && !meta->deployment_datetime().is_not_a_date_time())
       where << " AND iridium_position_datetime >= '"
             << bpt::to_iso_string(meta->deployment_datetime() - window)
             << "'";
 
-    return XFloatMailMessage::SelectObjectsFromDatabase(where.str());
+    vector<shared_ptr<XFloatMailMessage>> msgs(XFloatMailMessage::SelectObjectsFromDatabase(where.str()));
+
+    // A startup dive number can recur when a float is restarted. Keep only the latest session,
+    // as the dive data object in memory does (see IsNewStartupSession()); the earlier sessions
+    // already have their dated listing files.
+    if(is_startup && msgs.size() > 1) {
+      stable_sort(msgs.begin(), msgs.end(),
+          [](const shared_ptr<XFloatMailMessage>& a, const shared_ptr<XFloatMailMessage>& b) {
+            return a->iridium_position_datetime() < b->iridium_position_datetime();
+          });
+      size_t first = 0;
+      for(size_t i = 1; i < msgs.size(); ++i)
+        if(!msgs[i]->iridium_position_datetime().is_not_a_date_time()
+            && !msgs[i - 1]->iridium_position_datetime().is_not_a_date_time()
+            && msgs[i]->iridium_position_datetime()
+                > msgs[i - 1]->iridium_position_datetime() + XFLT_STARTUP_SESSION_GAP)
+          first = i;
+      msgs.erase(msgs.begin(), msgs.begin() + first);
+    }
+
+    return msgs;
 
   } CATCH_BLOCK("Failed to get mail messages for dive data object from database!")
 
@@ -4073,6 +4140,82 @@ void XFloatDiveData::WriteListingFile() {
 
   } CATCH_BLOCK("Failed to write listing file!")
 
+}
+
+/** Check whether a message starts a new session of this startup dive.
+ *
+ *  Startup dives count down (-1, -2, ...), and a restarted float starts again from -1. The
+ *  message starts a new session when this is a startup dive (negative dive number) that already
+ *  holds messages, and either:
+ *  - the dive number did not decrement: it is not below @p last_startup_dive, the previous
+ *    startup message's dive number, and the message comes at least
+ *    @ref XFLT_STARTUP_RESTART_MIN_GAP after this dive's last message; or
+ *  - the previous startup dive is not known in this run (for example after a daemon restart) and
+ *    the message comes more than @ref XFLT_STARTUP_SESSION_GAP after this dive's last message.
+ *
+ *  @param[in]  msg                 The mail message about to be decoded into this dive.
+ *  @param[in]  last_startup_dive   The previous startup message's dive number, or
+ *                                  @ref XFLT_DIVE_UNKNOWN.
+ *
+ *  @return     TRUE if the message belongs to a later startup session.
+ */
+bool XFloatDiveData::IsNewStartupSession(
+    const shared_ptr<XFloatMailMessage>& msg, int last_startup_dive) const {
+
+  lock_guard<recursive_mutex> guard(mutex_);
+
+  if(!msg
+      || id_dive() >= 0 || id_dive() == XFLT_DIVE_UNKNOWN
+      || num_sbd_msgs() == 0
+      || iridium_position_datetime_last().is_not_a_date_time()
+      || msg->iridium_position_datetime().is_not_a_date_time())
+    return false;
+
+  const time_duration gap = msg->iridium_position_datetime() - iridium_position_datetime_last();
+
+  if(last_startup_dive != XFLT_DIVE_UNKNOWN)
+    return id_dive() >= last_startup_dive && gap >= XFLT_STARTUP_RESTART_MIN_GAP;
+
+  return gap > XFLT_STARTUP_SESSION_GAP;
+}
+
+/** Keep this startup session's listing file under a dated name.
+ *
+ *  Called before a later session of the same startup dive number replaces this dive data object.
+ *  The listing file is brought up to date, then renamed from @c lis<serial>-<dive>.txt to
+ *  @c lis<serial>-<dive>_<YYYYMMDD>T<HHMMSS>.txt, the date and time (UTC) of the session's first
+ *  message. The later session then writes the unchanged name. An existing file of the dated name
+ *  is replaced, so reprocessing gives the same files.
+ */
+void XFloatDiveData::ArchiveStartupListingFile() {
+
+  try {
+
+    lock_guard<recursive_mutex> guard(mutex_);
+
+    if(!intermediate_listing_file_generation_is_enabled_)
+      return;
+
+    WriteListingFile();
+
+    const path& from = intermediate_listing_file_path();
+    if(from.empty() || !exists(from))
+      return;
+
+    ptime t = iridium_position_datetime_first();
+    if(t.is_not_a_date_time())
+      t = iridium_position_datetime_last();
+    if(t.is_not_a_date_time())
+      return;
+
+    path to(from.parent_path());
+    // bpt::to_iso_string() gives YYYYMMDDTHHMMSS[,fffffff]; keep the whole seconds.
+    to /= from.stem().string() + "_" + bpt::to_iso_string(t).substr(0, 15) + from.extension().string();
+
+    linf() << "Keeping the listing file of an earlier startup session as: " << to << "...";
+    boost::filesystem::rename(from, to);
+
+  } CATCH_NOTHROW("Failed to keep the listing file of an earlier startup session!")
 }
 
 /** Write the PHY file for this dive.

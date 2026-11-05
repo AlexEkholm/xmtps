@@ -983,11 +983,14 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
                 os_where << "id_instrument = " + lexical_cast<string>(*it);
                 if(!xfloat->start_of_mission_datetime().is_not_a_date_time())
 
-                    // Ignore messages transmitted before start-of-mission.
-                    os_where << " AND iridium_position_datetime > '"
+                    // Ignore messages transmitted before start-of-mission, except startup
+                    // messages (negative dive numbers), which are all reprocessed so that
+                    // every startup listing file is regenerated.
+                    os_where << " AND (iridium_position_datetime > '"
                             + util::date::DateUtils::GenerateIso8601String(
                                     xfloat->start_of_mission_datetime(),
-                                    true) + "'";
+                                    true) + "' OR (id_dive < 0 AND id_dive <> "
+                            + lexical_cast<string>(XFLT_DIVE_UNKNOWN) + "))";
 
                 // Fetch messages from database.
                 xmsgs = XFloatMailMessage::SelectObjectsFromDatabase(

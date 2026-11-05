@@ -271,6 +271,12 @@ class XFloat:
      */
     flat_map<int, shared_ptr<XFloatDiveData> > dive2data_map_;
 
+    /** The startup (negative) dive number of the last startup message decoded in this run, or
+     *  @ref XFLT_DIVE_UNKNOWN. Startup dives count down (-1, -2, ...); a startup message whose
+     *  dive number is not below this one shows that the float was restarted. Kept in memory only.
+     */
+    int last_startup_dive_ = XFLT_DIVE_UNKNOWN;
+
     /** The reported instrument firmware version.
      *
      */
@@ -636,6 +642,20 @@ class XFloat:
     shared_ptr<XFloatDiveData> GetDiveData(int dive, bool load_from_local_cache_only = false);
 
     shared_ptr<XFloatDiveData> GetCachedDiveData(int dive) const;
+
+    shared_ptr<XFloatDiveData> StartNewStartupSession(int dive);
+
+    /** The startup dive number of the last startup message decoded in this run. */
+    int last_startup_dive() const {
+      lock_guard<recursive_mutex> guard(mutex_);
+      return last_startup_dive_;
+    }
+
+    /** Record the startup dive number of a decoded startup message. */
+    void set_last_startup_dive(int dive) {
+      lock_guard<recursive_mutex> guard(mutex_);
+      last_startup_dive_ = dive;
+    }
 
     vector<shared_ptr<x::XGPS> > GetGpsPositions() const;
 

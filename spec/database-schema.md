@@ -544,6 +544,8 @@ The mail body text and the raw header text are parsed but not stored. Both are c
 - its Iridium session time, or else its `Date` header, is more than 15 minutes before `XFloat.start_of_mission_datetime`; or
 - its Iridium session time is more than 15 minutes before the deployment time (the in-memory value from the `.meta` file, also stored in `XFloatMetadata.deployment_datetime`).
 
+Startup messages (negative dive numbers) are exempt from both filters, so every startup session is decoded and gets its listing file.
+
 Ignored messages stay in `XFloatMail`.
 
 ### 10.4 Reloading a dive that is not in memory
@@ -556,6 +558,8 @@ WHERE id_instrument = <serial> AND id_dive = <dive> AND msg_is_valid = 1
   [AND iridium_position_datetime >= '<start of mission − 15 min, YYYYMMDDTHHMMSS>']
   [AND iridium_position_datetime >= '<deployment time − 15 min, YYYYMMDDTHHMMSS>'];
 ```
+
+The two time conditions are left out for a startup dive (negative dive number). A startup dive number recurs when a float is restarted, so for a startup dive only the latest session is kept: the messages are sorted by Iridium time and those before the last gap of more than 12 hours are dropped. The `XFloatDive` row of a startup dive therefore describes its latest session.
 
 It resets the dive's Iridium times and message count and decodes each message again. This happens, for example, when a float that was not reprocessed at startup sends another packet of an earlier dive, or when the pressure-offset computation needs a preceding dive.
 
@@ -596,9 +600,12 @@ For each serial number in the reprocessing list:
           HEX(sbd_data) AS sbd_data, …
    FROM XFloatMail
    WHERE id_instrument = <serial>
-     [AND iridium_position_datetime > '<start of mission, YYYY-MM-DDTHH:MM:SSZ>']
+     [AND (iridium_position_datetime > '<start of mission, YYYY-MM-DDTHH:MM:SSZ>'
+           OR (id_dive < 0 AND id_dive <> -999))]
    ORDER BY id_sbd_momsn;
    ```
+
+   Startup messages (negative dive numbers; −999 is the unknown dive) are selected whatever their time, so every startup listing file is regenerated.
 
 3. Push each message into the stage 2 queue. They then follow the normal path (section 10.2): the `XFloatMail` row is upserted again, the RAW/SBD files are written if missing, and stage 3 rebuilds the `XFloatDive` and `XGPS` rows.
 

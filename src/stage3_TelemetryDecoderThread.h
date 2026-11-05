@@ -361,11 +361,23 @@ public:
             // Get the corresponding instrument and dive data objects
             xdive = (xfloat = XFloat::GetFloat(msg->id_instrument()))->GetDiveData(msg_id_dive = msg->id_dive());
 
+            // A restarted float reuses its startup dive numbers. When the startup dive number did
+            // not decrement, keep the earlier session's listing file under a date-time name and
+            // start a new dive data object for this one.
+            if(xdive && xdive->IsNewStartupSession(msg, xfloat->last_startup_dive())) {
+                xdive->ArchiveStartupListingFile();
+                xdive = xfloat->StartNewStartupSession(msg_id_dive);
+            }
+
             // Decode the mail message data.
             if(xdive->DecodeMailMessageData(msg))
 
                 // Ignore invalid messages.
                 return;
+
+            // Remember the startup dive number, to see whether the next one decrements.
+            if(msg_id_dive < 0 && msg_id_dive != XFLT_DIVE_UNKNOWN)
+                xfloat->set_last_startup_dive(msg_id_dive);
 
         }CATCH_BLOCK("Failed to decode telemetry data from mail message object!")
 

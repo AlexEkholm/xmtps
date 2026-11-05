@@ -609,6 +609,10 @@ class XFloatDiveData:
 
     int DecodeMailMessageData(shared_ptr<XFloatMailMessage>& msg);
 
+    bool IsNewStartupSession(const shared_ptr<XFloatMailMessage>& msg, int last_startup_dive) const;
+
+    void ArchiveStartupListingFile();
+
     void DecodeXMsgData(
         const vector<uint8_t>& data,
         shared_ptr<vector<uint8_t> > xmsg_id_types = shared_ptr<vector<uint8_t> >())

@@ -5,6 +5,27 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 ## 2026-11-05
 
+Decoder:
+
+- Startup messages (negative dive numbers) are no longer dropped by the start-of-mission and
+  deployment-time filters. Reprocessing a float (`-r`, `-R`, `-A`) now selects all of its startup
+  messages and regenerates every startup listing file (`lis<serial>--NNN.txt`); before, only the
+  startup session after the newest built-in-test fix was kept (11273: `--007` was rewritten,
+  `--001` to `--006` were not). Changed in `XFloatDiveData::DecodeMailMessageData()`,
+  `XFloatDiveData::GetDiveDataMailMessagesFromDatabase()` and the reprocessing query in
+  `stage1_MailRetrievalThread.cpp`.
+- Each startup session keeps its own listing file. A restarted float numbers its startup dives
+  from -1 again, and the sessions used to merge into one dive and one listing (11017's `-001`
+  holds messages from several startups). A startup message whose dive number does not
+  decrement from the previous startup message's starts a new session, if its dive already has
+  messages at least 1 h older (without a previous startup dive in the run, a gap of more than
+  12 h). The earlier listing is renamed `lis<serial>-<dive>_<YYYYMMDD>T<HHMMSS>.txt` (UTC time
+  of its first message) and the newest session keeps the unchanged name. Reloading a startup
+  dive from the database keeps only its latest session (split at gaps of more than 12 h).
+  `xmtps-list2json.py` skips the renamed listings. New: `XFloatDiveData::IsNewStartupSession()`,
+  `ArchiveStartupListingFile()`, `XFloat::StartNewStartupSession()`,
+  `XFloat::last_startup_dive()`.
+
 Python tools:
 
 - Oil pump power and energy are computed from the battery voltage and current: power = `volt` ×

@@ -544,6 +544,12 @@ def ProcessListingFile(fpath_list):
             logger.error('Invalid path listing file: ' + fpath_list)
             return
         
+        # Skip the dated listings of earlier startup sessions (lis<serial>-<dive>_<YYYYMMDD>T<HHMMSS>.txt):
+        # the dive's JSON comes from its latest session, the undated listing.
+        if re.fullmatch(r'lis\d+--\d+_\d{8}T\d{6}\.txt', os.path.basename(fpath_list)):
+            logger.debug('Ignoring listing of an earlier startup session: ' + fpath_list + ' ...')
+            return
+
         # Check inclusions
         if args.include is not None and len(args.include):
             include = False
