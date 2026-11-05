@@ -43,6 +43,11 @@ Python tools:
 
 Documentation:
 
+- New [spec/mrv-firmware-changelog.md](spec/mrv-firmware-changelog.md): the MRV firmware changelogs
+  (VOP 8.0.0 – 10.13.0 and MFA 1.5.a – 4.5.d), collected from `Dropbox/mrv/firmware`, with notes
+  on which source files the other copies duplicate.
+- spec/xmessage-format.md C.2: the retransmission upload commands `TDD <dive>` and
+  `TDP <dive> <packet>`, with their production use and the firmware changes that affect them.
 - spec/listing-file-format.md: the `SBT` ratio column was rawBytes / bytes in builds 3352 and
   3353 and is bytes / rawBytes from build 3354; the change was intended.
 - spec/plot-and-page-files.md: the bathymetry map's hover (`2743m`, `0m` on land) and plain gray

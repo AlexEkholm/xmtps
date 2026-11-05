@@ -226,7 +226,7 @@ If saving fails because the SQL server is unavailable, the message is held and r
 |---|---|---|
 | The same e-mail processed again (re-fetch, restart, reprocessing). | The database row is updated in place: the primary key is (`id_imei`, `id_dive`, `id_sbd_momsn`, `id_sbd_packet`, `id_msg`). The RAW and SBD files already exist and are not rewritten. | `sql/xmtps-schema.sql`, `src/utility/SqlTableDescription.h`, `WriteRawFile`, `WriteSbdFile` |
 | An e-mail with a Message-ID already assigned to the dive. | Ignored by the dive (`Ignoring mail message with duplicate ID`); not decoded again. | `XFloatDiveData::AssignMailMessage` (`src/data/XFloatMailMessage.cpp`) |
-| A packet resent unchanged under a new MOMSN (identical SBD bytes). | Assigned to the dive (its Iridium position counts) but its blobs are not decoded again. It gets its own RAW and SBD files, named by its own MOMSN. | `XFloatDiveData::AssignMailMessage` |
+| A packet resent unchanged under a new MOMSN (identical SBD bytes), for example after a `TDD` or `TDP` upload ([xmessage-format.md C.2](xmessage-format.md#retransmission-requests-tdd-tdp)). | Assigned to the dive (its Iridium position counts) but its blobs are not decoded again. It gets its own RAW and SBD files, named by its own MOMSN. | `XFloatDiveData::AssignMailMessage` |
 | Several e-mails with the same MOMSN (failed sessions do not advance the MOMSN). | Kept apart: incomplete ones are named by MOMSN and header date; complete ones by MOMSN, dive and packet. | `WriteRawFile`, `CHANGELOG.md` (2020-01-15) |
 
 Dive data is keyed by (serial, dive) from the packet header, not by anything in the e-mail.

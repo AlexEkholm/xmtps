@@ -16091,6 +16091,123 @@
               ]
             },
             {
+              "id": "retransmission-requests-tdd-tdp",
+              "level": 4,
+              "heading": "Retransmission requests (`TDD`, `TDP`)",
+              "title": "Retransmission requests (`TDD`, `TDP`)",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "text": "Two upload commands ask the float to send stored SBD data again. The ALAMO/ALTO Deployment and Piloting Guide v1.0 (p. 76, \"Reserved – Miscellaneous\") lists both as DO NOT USE, without a description:"
+                },
+                {
+                  "type": "table",
+                  "align": [
+                    "left",
+                    "left",
+                    "left",
+                    "left"
+                  ],
+                  "header": [
+                    "Command",
+                    "Guide",
+                    "Arguments",
+                    "Effect seen in production"
+                  ],
+                  "rows": [
+                    [
+                      "`TDD <dive>`",
+                      "Transmit all Dive Data packets",
+                      "dive 0–10000",
+                      "The float sends every packet of that dive again at its next surfacing, under new MOMSNs."
+                    ],
+                    [
+                      "`TDP <dive> <packet>`",
+                      "Transmit iD of Packet",
+                      "dive 0–10000, packet 0–256",
+                      "The float sends that one packet again at its next surfacing."
+                    ]
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "text": "The dive comes first in `TDP`. 11699 was sent `TDP 9 11` on 2025-10-14 and echoed it in dive 10, before it had made dive 11. Dive 9's missing packet 11 then arrived on 2025-10-16 as MOMSN 176."
+                },
+                {
+                  "type": "paragraph",
+                  "text": "Production examples, from `/data1/alamo/data/sbd/outgoing` and the RAW files:"
+                },
+                {
+                  "type": "list",
+                  "ordered": false,
+                  "items": [
+                    [
+                      {
+                        "type": "paragraph",
+                        "text": "`tdd 6; tdd 29;` to 9293 and `tdd 24;` to 9294 (2026-09-09): every packet of those dives arrived again (packets 0–13 and 0–7)."
+                      }
+                    ],
+                    [
+                      {
+                        "type": "paragraph",
+                        "text": "`tdd 11;` to 11218 (2026-10-12): all of packets 0–13 arrived again."
+                      }
+                    ],
+                    [
+                      {
+                        "type": "paragraph",
+                        "text": "`tdd 429;` to 9303 (2026-08-17): echoed in dive 433, but nothing came back. No packet of dive 429 had ever been received, so the float probably never stored the dive."
+                      }
+                    ],
+                    [
+                      {
+                        "type": "paragraph",
+                        "text": "About 24 `TDD` and 2 `TDP` uploads have been sent since 2023, mostly as single commands (`TDD 69;`)."
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "type": "paragraph",
+                  "text": "A retransmitted packet is assigned to its dive by the dive number in its packet header. If its bytes are identical to a packet already received, its blobs are not decoded again (see [iridium-mail-format.md](iridium-mail-format.md), section 10). A dive's missing packet IDs can be found from the listing's `SBD` lines, the RAW file names (`raw<SN>-<MOMSN>-<dive>-<pid>.txt`) or the query in [database-schema.md](database-schema.md). The highest packet ID is normally sent first, so a dive has `max(pid) + 1` packets."
+                },
+                {
+                  "type": "paragraph",
+                  "text": "None of the MRV firmware changelogs ([mrv-firmware-changelog.md](mrv-firmware-changelog.md)) name `TDD` or `TDP`. These entries affect what the float can resend:"
+                },
+                {
+                  "type": "list",
+                  "ordered": false,
+                  "items": [
+                    [
+                      {
+                        "type": "paragraph",
+                        "text": "10.0.0 added the XMessage file system (XFS): stored SBD data survives a reboot."
+                      }
+                    ],
+                    [
+                      {
+                        "type": "paragraph",
+                        "text": "10.2.0 (encryption build): changing the key from the console wipes the dive data stored in EEPROM."
+                      }
+                    ],
+                    [
+                      {
+                        "type": "paragraph",
+                        "text": "10.2.1 made packet IDs unique within a dive. 10.2.0 reused the highest PID, so a `TDP` could not tell those packets apart."
+                      }
+                    ],
+                    [
+                      {
+                        "type": "paragraph",
+                        "text": "10.12.0 fixed XFS Issue 155: it reuses the oldest storage blocks rather than recently used ones, which could overwrite a recent dive."
+                      }
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
               "id": "decoding-notes-decoder",
               "level": 4,
               "heading": "Decoding notes [decoder]",

@@ -3015,6 +3015,33 @@ The commands use the mission-parameter mnemonics, with a phase index where the p
 - A few were not echoed although the float called in. One, to 9213 on 2026-09-28, verifiably did not take effect: its mission parameters still show the old values.
 - A handful of echoes match no recorded upload (`ppe`, `wst` commands). They were presumably sent another way.
 
+#### Retransmission requests (`TDD`, `TDP`)
+
+Two upload commands ask the float to send stored SBD data again. The ALAMO/ALTO Deployment and Piloting Guide v1.0 (p. 76, "Reserved – Miscellaneous") lists both as DO NOT USE, without a description:
+
+| Command | Guide | Arguments | Effect seen in production |
+|---|---|---|---|
+| `TDD <dive>` | Transmit all Dive Data packets | dive 0–10000 | The float sends every packet of that dive again at its next surfacing, under new MOMSNs. |
+| `TDP <dive> <packet>` | Transmit iD of Packet | dive 0–10000, packet 0–256 | The float sends that one packet again at its next surfacing. |
+
+The dive comes first in `TDP`. 11699 was sent `TDP 9 11` on 2025-10-14 and echoed it in dive 10, before it had made dive 11. Dive 9's missing packet 11 then arrived on 2025-10-16 as MOMSN 176.
+
+Production examples, from `/data1/alamo/data/sbd/outgoing` and the RAW files:
+
+- `tdd 6; tdd 29;` to 9293 and `tdd 24;` to 9294 (2026-09-09): every packet of those dives arrived again (packets 0–13 and 0–7).
+- `tdd 11;` to 11218 (2026-10-12): all of packets 0–13 arrived again.
+- `tdd 429;` to 9303 (2026-08-17): echoed in dive 433, but nothing came back. No packet of dive 429 had ever been received, so the float probably never stored the dive.
+- About 24 `TDD` and 2 `TDP` uploads have been sent since 2023, mostly as single commands (`TDD 69;`).
+
+A retransmitted packet is assigned to its dive by the dive number in its packet header. If its bytes are identical to a packet already received, its blobs are not decoded again (see [iridium-mail-format.md](iridium-mail-format.md), section 10). A dive's missing packet IDs can be found from the listing's `SBD` lines, the RAW file names (`raw<SN>-<MOMSN>-<dive>-<pid>.txt`) or the query in [database-schema.md](database-schema.md). The highest packet ID is normally sent first, so a dive has `max(pid) + 1` packets.
+
+None of the MRV firmware changelogs ([mrv-firmware-changelog.md](mrv-firmware-changelog.md)) name `TDD` or `TDP`. These entries affect what the float can resend:
+
+- 10.0.0 added the XMessage file system (XFS): stored SBD data survives a reboot.
+- 10.2.0 (encryption build): changing the key from the console wipes the dive data stored in EEPROM.
+- 10.2.1 made packet IDs unique within a dive. 10.2.0 reused the highest PID, so a `TDP` could not tell those packets apart.
+- 10.12.0 fixed XFS Issue 155: it reuses the oldest storage blocks rather than recently used ones, which could overwrite a recent dive.
+
 #### Decoding notes [decoder]
 
 - `XMissionCmdEcho` calls `CheckXMsgData(data, 0xDE, -1)`. That checks the ID, that `jj` (lower 12 bits) is at least 4 and no more than the data received, and that the terminator is at `jj - 1`.

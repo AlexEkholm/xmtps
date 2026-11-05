@@ -48,6 +48,12 @@ Iridium gateway ──e-mail──▶ stage 1/2 ──▶ RAW, SBD files, MySQL
 | Per-dive, aggregate and summary JSON, `.lastprocessed` | [json-file-format.md](json-file-format.md) |
 | Plots, float pages, summary, mission and startup pages; the bathymetry and other non-JSON inputs | [plot-and-page-files.md](plot-and-page-files.md) |
 
+### Reference
+
+| Document | Contents |
+|---|---|
+| [mrv-firmware-changelog.md](mrv-firmware-changelog.md) | The MRV float firmware changelogs (VOP 8.0.0 – 10.13.0, MFA 1.5.a – 4.5.d), as supplied by MRV Systems. |
+
 Some directories under `/data1/alamo/data` on argus were not written by the current XMTPS. `kkyy/` holds TESAC KKYY files, made by `alamo-upload-kkyy.sh` from the listings (2017–2018). `mat/` holds MATLAB files from the scripts in `/data1/alamo/matlab` (2017–2021). `netcdf/` holds NetCDF files from older XMTPS builds, whose NetCDF writer is now disabled (2019–2021). `plots/` holds the old plot pages, replaced by `plots2/`.
 
 ## Known issues

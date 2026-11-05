@@ -3958,6 +3958,49 @@ The commands use the mission-parameter mnemonics, with a phase index where the p
 \item A handful of echoes match no recorded upload (\code{ppe}, \code{wst} commands). They were presumably sent another way.
 \end{itemize}
 
+\subsubsection{\texorpdfstring{Retransmission requests (\code{TDD}, \code{TDP})}{Retransmission requests (TDD, TDP)}}\label{sec:retransmission-requests-tdd-tdp}
+
+Two upload commands ask the float to send stored SBD data again. The ALAMO/ALTO Deployment and Piloting Guide v1.0 (p. 76, “Reserved – Miscellaneous”) lists both as DO NOT USE, without a description:
+
+\begingroup\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.1786\linewidth}>{\raggedright\arraybackslash}p{0.2411\linewidth}>{\raggedright\arraybackslash}p{0.2411\linewidth}>{\raggedright\arraybackslash}p{0.2857\linewidth}@{}}
+\toprule
+\textbf{Command} & \textbf{Guide} & \textbf{Arguments} & \textbf{Effect seen in production} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Command} & \textbf{Guide} & \textbf{Arguments} & \textbf{Effect seen in production} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\code{TDD <dive>} & Transmit all Dive Data packets & dive 0–10000 & The float sends every packet of that dive again at its next surfacing, under new MOMSNs. \\
+\code{TDP <dive> <packet>} & Transmit iD of Packet & dive 0–10000, packet 0–256 & The float sends that one packet again at its next surfacing. \\
+\end{longtable}
+\endgroup
+
+The dive comes first in \code{TDP}. 11699 was sent \code{TDP 9 11} on 2025-10-14 and echoed it in dive 10, before it had made dive 11. Dive 9's missing packet 11 then arrived on 2025-10-16 as MOMSN 176.
+
+Production examples, from \code{/\allowbreak{}data1/\allowbreak{}alamo/\allowbreak{}data/\allowbreak{}sbd/\allowbreak{}outgoing} and the RAW files:
+
+\begin{itemize}
+\item \code{tdd 6;\allowbreak{} tdd 29;\allowbreak{}} to 9293 and \code{tdd 24;\allowbreak{}} to 9294 (2026-09-09): every packet of those dives arrived again (packets 0–13 and 0–7).
+\item \code{tdd 11;\allowbreak{}} to 11218 (2026-10-12): all of packets 0–13 arrived again.
+\item \code{tdd 429;\allowbreak{}} to 9303 (2026-08-17): echoed in dive 433, but nothing came back. No packet of dive 429 had ever been received, so the float probably never stored the dive.
+\item About 24 \code{TDD} and 2 \code{TDP} uploads have been sent since 2023, mostly as single commands (\code{TDD 69;\allowbreak{}}).
+\end{itemize}
+
+A retransmitted packet is assigned to its dive by the dive number in its packet header. If its bytes are identical to a packet already received, its blobs are not decoded again (see \href{iridium-mail-format.md}{iridium-mail-format.md}, section 10). A dive's missing packet IDs can be found from the listing's \code{SBD} lines, the RAW file names (\code{raw<SN>-<MOMSN>-<dive>-<pid>.\allowbreak{}txt}) or the query in \href{database-schema.md}{database-schema.md}. The highest packet ID is normally sent first, so a dive has \code{max(\allowbreak{}pid) + 1} packets.
+
+None of the MRV firmware changelogs (\href{mrv-firmware-changelog.md}{mrv-firmware-changelog.md}) name \code{TDD} or \code{TDP}. These entries affect what the float can resend:
+
+\begin{itemize}
+\item 10.0.0 added the XMessage file system (XFS): stored SBD data survives a reboot.
+\item 10.2.0 (encryption build): changing the key from the console wipes the dive data stored in EEPROM.
+\item 10.2.1 made packet IDs unique within a dive. 10.2.0 reused the highest PID, so a \code{TDP} could not tell those packets apart.
+\item 10.12.0 fixed XFS Issue 155: it reuses the oldest storage blocks rather than recently used ones, which could overwrite a recent dive.
+\end{itemize}
+
 \subsubsection{\texorpdfstring{Decoding notes [decoder]}{Decoding notes [decoder]}}\label{sec:decoding-notes-decoder}
 
 \begin{itemize}
