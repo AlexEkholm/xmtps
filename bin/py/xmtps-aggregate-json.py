@@ -374,12 +374,13 @@ ENERGY_GPS_W = 0.032 * 3.0         # 0.096 W while acquiring a fix (time to fix)
 # negligible and not counted.
 ENERGY_WIMS_W = 0.0456             # running
 ENERGY_WIMS_RUN_S = 590.0          # run time per dive with wave data
-# Controller quiescent drain: a constant 30 mW (about 2 mA at 15 V) over each dive cycle, for the
-# controller, clock and sensor standby. Estimated from the floats that ran out of battery: the
-# usable pack energy (from short-lived floats) minus the estimate, over the lifetime of long-lived
-# ones (ALTO 22-46 mW, ALAMO about 29 mW). It matches the SOLO-II CPU's about 2 mA. Not counted
-# during storage before deployment, when the float is not running.
-ENERGY_CONTROLLER_W = 0.030
+# Controller quiescent drain: a constant 35 mW (about 2.4 mA at 15 V) over each dive cycle, for the
+# controller, clock and sensor standby; ALAMO and ALTO share the controller. Estimated from the
+# floats that ran out of battery: the usable pack energy (5.9 MJ, from the short-lived ALTOs 11491
+# and 11495) minus the per-dive terms and self-discharge, over the lifetime of the long-lived ALTOs
+# (35-38 mW in three groups). It matches the SOLO-II CPU's about 2 mA. Not counted during storage
+# before deployment, when the float is not running.
+ENERGY_CONTROLLER_W = 0.035
 # Battery self-discharge: the pack's yearly self-discharge rate times its nominal energy, over the
 # battery age. One pack powers every subsystem. The chemistry is told from the median startup (BIT)
 # no-load voltage (Tadiran 15.0-15.6 V, Saft about 14.2 V, alkaline about 12-13.5 V), the float

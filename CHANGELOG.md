@@ -42,6 +42,10 @@ Python tools:
   `WVS` `fbase` and `fdiv` in the dive JSON (`Wave.fbase`, `Wave.fdiv`), and the `_wave`
   aggregate gains `slen` and `fe_hz` (the true sample rate; for older dive JSON, `fsam` halved
   for the every-other-bin firmware).
+- Energy estimate: controller drain raised from 30 to 35 mW (about 2.4 mA at 15 V), one value for
+  ALAMO and ALTO, which share the controller. Re-estimated with the datasheet per-dive terms and
+  self-discharge: the long-lived ALTO groups give 35-38 mW for a usable pack energy of 5.9 MJ
+  (from 11491 and 11495).
 - Energy estimate: Iridium and GPS powers from the datasheets of the fitted parts, replacing the
   SOLO-II fit. Iridium 9602 (Product Developers Guide rev 5): SBD transfer average 190 mA at
   5.0 V, 0.95 W (was 0.70 W) over the session time. u-blox NEO-M8N (NEO-M8 data sheet R14,

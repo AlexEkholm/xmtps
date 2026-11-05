@@ -1052,7 +1052,7 @@ These are estimates, not measurements. The constants were fitted to the WHOI SOL
 | `gps_j` | float | J | 0.096 W × `gps_s`: the u-blox NEO-M8N's acquisition current, 32 mA at 3.0 V (NEO-M8 data sheet R14). Was 0.27 W before 2026-11-05. |
 | `wims_j` | float | J | 0.0456 W × `wims_s` (WIMS running power at 15 V, WIMS user manual rev. 3.22, Table 3). 0 for floats without wave data. Since 2026-11-05. |
 | `internal_res_j` | float | J | Battery internal-resistance loss of the oil pump: Σ (V0 − `volt`) × `curr` × `time` over the dive's `_pump` rows. V0 is a lower bound of the no-load voltage, so this underestimates. |
-| `controller_j` | float | J | Controller quiescent drain: 0.030 W × `self_discharge_s`, the dive's cycle time (not storage). 30 mW (about 2 mA at 15 V) is estimated from the floats that ran out of battery. Since 2026-11-05. |
+| `controller_j` | float | J | Controller quiescent drain: 0.035 W × `self_discharge_s`, the dive's cycle time (not storage). 35 mW (about 2.4 mA at 15 V; ALAMO and ALTO share the controller) is estimated from the floats that ran out of battery; it was 30 mW earlier on 2026-11-05. Since 2026-11-05. |
 | `self_discharge_j` | float | J | Battery self-discharge: `pack_rate_per_yr` × `pack_wh` × 3600 × `self_discharge_s` / (365.25 × 86400 s). One pack powers every subsystem. 0 for dives ≤ 0 and if the pack is unknown. Since 2026-11-05. |
 | `storage_j` | float | J | The same for `storage_s`: the self-discharge before deployment. Counted in `total_j` and the pie, not in the per-cycle bars. |
 | `ascent_s` | float | s | `_cycle_timing.ascent_duration_s`; `null` if unset. |
