@@ -1036,7 +1036,7 @@ Column order in the file: `dive`, then `ascent_*`, `descent_*`, `drift_*`, `surf
 
 Estimated energy use, one row per dive found in any of `_pump`, `_sbd`, `_gps`, `_drift`, `_surface`, `_cycle_timing` or `_engineering_data` (including negative dives), sorted by dive. Written by `EnergyEstimates()` since 2026-11-04.
 
-These are estimates, not measurements. The constants were fitted to the WHOI SOLO-II energy plots on argus, which a MATLAB job draws from the SOLO-II engineering data. The fit reproduces the plots' components from the SOLO-II listing files, and their "Net" total to within 0.2% on four floats. ALAMO reports some quantities differently, so substitutes are used: ascent duration for the CTD scan count, and the SBD message times for the Iridium session time.
+These are estimates, not measurements. The constants were fitted to the WHOI SOLO-II energy plots on argus, which a MATLAB job draws from the SOLO-II engineering data. The fit reproduces the plots' components from the SOLO-II listing files, and their "Net" total to within 0.2% on four floats. The SOLO-II per-unit estimates (CTD, Iridium, GPS) are taken to be equivalent for ALAMO and ALTO. ALAMO reports some quantities differently, so substitutes are used: ascent duration for the CTD scan count, and the SBD message times for the Iridium session time.
 
 | Column | Type | Units | Contents |
 |---|---|---|---|
@@ -1057,7 +1057,7 @@ These are estimates, not measurements. The constants were fitted to the WHOI SOL
 | `drift_samples`, `surface_samples` | int | | Rows of `_drift` and `_surface` for the dive. |
 | `iridium_s` | float | s | Σ over the dive's SBD sessions of (last − first message time + 10 s). Messages more than 1800 s apart start a new session. |
 | `gps_s` | float | s | Σ `_gps.ttf_sec` over the dive's fixes with ttf_sec > 0. |
-| `wims_s` | float | s | Estimated WIMS run time, per `_wave` row of the dive with `slen` > 1 and `fe_hz` > 0: 2 s + 180 s + 8 × `slen` / (2 × `fe_hz`). This is the manual's spectral-mode run time (section 6.4.1) with its `runinfo` example values `wav.ostsc` = 180 s and `wav.mxseg` = 7, because the floats do not report these (production uses 90 or 180 s and 7, 12 or 14 segments; [xmessage-format.md](xmessage-format.md) C.7). 0 without wave data. |
+| `wims_s` | float | s | WIMS run time: 590 s per `_wave` row of the dive (the operators' figure for one run). The power while not sampling is negligible and not counted. 0 without wave data. |
 | `total_j` | float | J | Sum of the component columns. |
 
 For an RBR CTD, `ctd_profile_j`, `ctd_drift_j` and `ctd_surface_j` are reduced by 80% (× 0.2, `ENERGY_CTD_RBR_FACTOR`). Energies are rounded to 0.1 J. The constants are named `ENERGY_*` in `xmtps-aggregate-json.py`.

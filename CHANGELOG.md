@@ -15,13 +15,12 @@ Python tools:
   plots show `curr`. Floats must be reprocessed (`xmtps-list2json.py -f`, then
   `xmtps-aggregate-json.py -f`) for their JSON and plots to change.
 - Energy estimate: new WIMS component (`wims_j`, `wims_s` in `_energy`) for floats with wave
-  data: the WIMS running power, 0.0456 W at 15 V (WIMS user manual rev. 3.22, Table 3), times
-  an estimated run time per dive with wave data, 2 s + 180 s + 8 × `slen` / (2 × fe) (manual
-  section 6.4.1, with its example `wav.ostsc` 180 s and `wav.mxseg` 7, which the floats do not
-  report). Both energy plots show it as "WIMS"; floats without WIMS are unchanged. To support it,
-  `xmtps-list2json.py` keeps the `WVS` `fbase` and `fdiv` in the dive JSON (`Wave.fbase`,
-  `Wave.fdiv`), and the `_wave` aggregate gains `slen` and `fe_hz` (the true sample rate; for
-  older dive JSON, `fsam` halved for the every-other-bin firmware).
+  data: the WIMS running power, 0.0456 W at 15 V (WIMS user manual rev. 3.22, Table 3), for one
+  run of 590 s per dive with wave data; the power while not sampling is negligible. Both energy
+  plots show it as "WIMS"; floats without WIMS are unchanged. `xmtps-list2json.py` keeps the
+  `WVS` `fbase` and `fdiv` in the dive JSON (`Wave.fbase`, `Wave.fdiv`), and the `_wave`
+  aggregate gains `slen` and `fe_hz` (the true sample rate; for older dive JSON, `fsam` halved
+  for the every-other-bin firmware).
 - Energy plot (`energy_per_cycle`): the title no longer adds "(RBR CTD: CTD x0.2)" for floats with
   an RBR CTD. The CTD estimates are still reduced as before.
 - Energy plot (`energy_per_cycle`): the dive total is on its own line at the top of the hover label
