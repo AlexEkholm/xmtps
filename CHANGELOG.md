@@ -21,6 +21,22 @@ Python tools:
   `WVS` `fbase` and `fdiv` in the dive JSON (`Wave.fbase`, `Wave.fdiv`), and the `_wave`
   aggregate gains `slen` and `fe_hz` (the true sample rate; for older dive JSON, `fsam` halved
   for the every-other-bin firmware).
+- Energy estimate: new battery self-discharge component (`self_discharge_j`, with
+  `battery_age_s`, `self_discharge_s`, `storage_s`, `battery_start_v`, `pack_type`, `pack_wh`
+  and `pack_rate_per_yr`), shown as "Self-discharge" in both energy plots:
+  - Pack: the chemistry from the voltage of the latest startup before the first dive, the
+    startups in time order by their first SBD message (dive numbers are not in time order):
+    Tadiran >= 14.6 V, Saft >= 13.8 V, else alkaline Procell D. ALTO 11017 and 11020-11034
+    (Tadiran packs, 11020-11034 behind inline diodes) are set to Tadiran. Energy by chemistry
+    and float type: ALTO Tadiran 6.7 MJ, ALAMO Tadiran 1.8 MJ, Saft 2.4 MJ, alkaline 32 (ALTO)
+    or 16 (ALAMO) D cells. Rates: 1 %/yr lithium, 3 %/yr alkaline.
+  - Battery age: from the pack's first startup (for a repacked float, the first startup of the
+    latest run at the new pack's voltage level; without a startup before the first dive, the
+    float's earliest SBD message). Each dive with a positive number gets the age gained since
+    the previous one.
+  - The self-discharge before the first dive's cycle (storage and tests) is a separate
+    component, `storage_j` ("Self-discharge (storage)"), counted in the totals and the pie but
+    not in the per-cycle bars.
 - Energy estimate: pump records with an unusable current (`curr` <= 0, >= 100 or missing) are
   left out of the pump and internal-resistance terms, as the pump plots leave them out; both now
   use `PumpCurrentInvalid()`.

@@ -362,6 +362,34 @@ ENERGY_GPS_W = 0.27                # while acquiring a fix (time to fix)
 # negligible and not counted.
 ENERGY_WIMS_W = 0.0456             # running
 ENERGY_WIMS_RUN_S = 590.0          # run time per dive with wave data
+# Battery self-discharge: the pack's yearly self-discharge rate times its nominal energy, over the
+# battery age. One pack powers every subsystem. The chemistry is told from the median startup (BIT)
+# no-load voltage (Tadiran 15.0-15.6 V, Saft about 14.2 V, alkaline about 12-13.5 V), the float
+# type from the serial (ALAMO below ENERGY_ALTO_MIN_SERIAL, else ALTO). Alkaline packs have the
+# lithium packs' cell count in another configuration. Pack energies, from /data1/lab:
+#   ALTO Tadiran   4 x TLP-83121/D (4S x (2 TL-6930 D + HLC-1550)), 32 Ah each to 9 V: 6.7 MJ
+#   ALAMO Tadiran  2 x TLP-82121 (4S x (2 TL-6920 C + HLC-1550)), about 0.9 MJ each: 1.8 MJ
+#   ALAMO Saft     24 x LS 26500, 7.7 Ah x 3.6 V = 27.7 Wh each: 2.4 MJ
+#   alkaline       Procell D, about 15 Ah x 1.5 V: 32 cells (ALTO) or 16 (ALAMO)
+ENERGY_PACK_CHEMISTRY = [          # (chemistry, lowest startup voltage, self-discharge per year)
+    ('tadiran',  14.6, 0.01),      # datasheet < 1 %/yr at 20 C
+    ('saft',     13.8, 0.01),      # datasheet < 1 %/yr at 20 C
+    ('alkaline',  0.0, 0.03),      # typical alkaline
+    ]
+ENERGY_PACK_WH = {                 # (float type, chemistry): nominal pack energy, Wh
+    ('alto',  'tadiran'):  6.7e6 / 3600,
+    ('alamo', 'tadiran'):  1.8e6 / 3600,
+    ('alto',  'saft'):     24 * 7.7 * 3.6,
+    ('alamo', 'saft'):     24 * 7.7 * 3.6,
+    ('alto',  'alkaline'): 32 * 15.0 * 1.5,
+    ('alamo', 'alkaline'): 16 * 15.0 * 1.5,
+    }
+ENERGY_ALTO_MIN_SERIAL = 10000
+# Floats whose startup voltage does not tell their pack: serial -> chemistry. ALTO 11020-11034 have
+# Tadiran packs with inline diodes that lower the voltage to about 12.4-13.5 V.
+ENERGY_PACK_OVERRIDES = { serial: 'tadiran' for serial in range(11020, 11035) }
+ENERGY_PACK_OVERRIDES[11017] = 'tadiran'   # about 15.4 V at every startup but the last (13.41 V)
+ENERGY_SECONDS_PER_YEAR = 365.25 * 86400
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
     ['phase_vac'],
     ['pump_vac', 'pump_vac_avg'],
@@ -388,7 +416,10 @@ ENERGY_COMPONENTS = [              # (column, label), stacked bottom up
     ('gps_j', 'GPS'),
     ('wims_j', 'WIMS'),
     ('internal_res_j', 'Internal Res.'),
+    ('self_discharge_j', 'Self-discharge'),
+    ('storage_j', 'Self-discharge (storage)'),
     ]
+ENERGY_PIE_ONLY = ('storage_j',)  # in the totals and the pie, not in the per-cycle bars
 
 def WaveSampleRate(wave_data):
     """Return the true accelerometer sample rate of a FloatClasses.Wave, in Hz, or NaN.
@@ -415,7 +446,7 @@ def WaveSampleRate(wave_data):
     except Exception:
         return np.nan
 
-def EnergyEstimates(float_aggregate_data):
+def EnergyEstimates(float_aggregate_data, float_id=None):
     """Return the float's estimated energy use per dive (the 'energy' aggregate), in J.
 
     The constants (ENERGY_*) were fitted to the SOLO-II energy plots, which this reproduces from
@@ -437,9 +468,22 @@ def EnergyEstimates(float_aggregate_data):
       gps_j            ENERGY_GPS_W * the sum of the dive's GPS times to fix (ttf_sec)
       wims_j           ENERGY_WIMS_W * ENERGY_WIMS_RUN_S per WIMS run (a 'wave' row with slen > 1);
                        0 for floats without WIMS
+      self_discharge_j pack_rate_per_yr * pack_wh * 3600 * self_discharge_s / ENERGY_SECONDS_PER_YEAR;
+                       the chemistry (pack_type) from the latest startup's 'engineering_data'
+                       bit.battery_start_v (ENERGY_PACK_CHEMISTRY) unless the serial is in
+                       ENERGY_PACK_OVERRIDES, pack_wh by float type and
+                       chemistry (ENERGY_PACK_WH); self_discharge_s the battery age
+                       (battery_age_s, from the earliest SBD message, or for a repacked float
+                       the new pack's first startup, to the dive's last) gained
+                       since the previous positive dive; for the first, only its own cycle
+                       (cycle_timing total_duration_s, else the median gain)
+      storage_j        the same for the first positive dive's battery age before its cycle (storage
+                       and tests before deployment), storage_s; in ENERGY_PIE_ONLY
     For an RBR CTD (mission ctdtype, else the BIT sensor type), the CTD estimates are multiplied by
     ENERGY_CTD_RBR_FACTOR. total_j is the sum of the components. The inputs are kept as columns
-    (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s, wims_s). Returns an empty
+    (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s, wims_s,
+    battery_age_s, self_discharge_s, storage_s, battery_start_v, pack_type, pack_wh, pack_rate_per_yr). float_id (the serial) gives the float
+    type; without it the float is taken as an ALAMO. Returns an empty
     DataFrame if the float has no dives.
     """
 
@@ -552,6 +596,116 @@ def EnergyEstimates(float_aggregate_data):
         wims_s = (ENERGY_WIMS_RUN_S * w.groupby(w['dive'].astype(int)).size()).reindex(e.index).fillna(0)
     e['wims_s'] = wims_s
     e['wims_j'] = ENERGY_WIMS_W * wims_s
+
+    # Battery self-discharge, from the pack told by the voltage of the latest startup before the first
+    # dive (startups in time order, by their first SBD message). A repacked float has
+    # startups with the old pack's voltage before those with the new one: the new pack's first
+    # startup is the earliest of the latest run of startups whose voltage tells the same chemistry.
+    try:
+        alto = int(float_id) >= ENERGY_ALTO_MIN_SERIAL
+    except (TypeError, ValueError):
+        alto = False
+    try:
+        override = ENERGY_PACK_OVERRIDES.get(int(float_id))
+    except (TypeError, ValueError):
+        override = None
+    def chemistry(volt):
+        if override:
+            return override
+        for name, min_v, _ in ENERGY_PACK_CHEMISTRY:
+            if volt >= min_v:
+                return name
+        return ''
+    start_v, pack_dive, age_from_first_msg = np.nan, None, False
+    if df_eng is not None and 'bit.battery_start_v' in df_eng.columns:
+        v = df_eng[['dive', 'bit.battery_start_v']].apply(pd.to_numeric, errors='coerce').dropna()
+        v = v[(v['bit.battery_start_v'] > 5) & (v['bit.battery_start_v'] < 30)]
+        startups = v[v['dive'] < 0]
+        v = startups if len(startups) else v
+        if len(v):
+            v = v.groupby(v['dive'].astype(int))['bit.battery_start_v'].last()
+            # in time order: by each startup's first SBD message, else by dive number (startups are
+            # numbered -1, -2, ... in the order they are received, so the most negative is the latest)
+            order = pd.Series(-v.index.values.astype(float), index=v.index)
+            df_s = frame('sbd')
+            if df_s is not None:
+                ts = df_s[['dive', 'dt_epoch']].apply(pd.to_numeric, errors='coerce').dropna()
+                ts = ts[ts['dt_epoch'] > 0].groupby(ts['dive'].astype(int))['dt_epoch'].min()
+                if v.index.isin(ts.index).all():
+                    order = ts.reindex(v.index)
+                    # only the startups before the first dive (a float can be started up again later)
+                    first = ts[ts.index > 0]
+                    if len(first):
+                        before = order <= first.iloc[0]
+                        if before.any():
+                            v, order = v[before], order[before]
+                        else:
+                            age_from_first_msg = True   # no startup before the first dive
+            v = v[order.sort_values(kind='stable').index]
+            latest = v.index[-1]
+            start_v = float(v[latest])
+            pack_dive = None if age_from_first_msg else latest
+            if pack_dive is not None and (v.index < 0).all():
+                for dive in v.index[::-1]:
+                    if chemistry(v[dive]) != chemistry(start_v):
+                        break
+                    pack_dive = dive
+    pack_type, pack_wh, pack_rate = '', np.nan, np.nan
+    if np.isfinite(start_v):
+        pack_type = chemistry(start_v)
+        for name, _, rate in ENERGY_PACK_CHEMISTRY:
+            if name == pack_type:
+                pack_rate = rate
+                pack_wh = ENERGY_PACK_WH[('alto' if alto else 'alamo', name)]
+    # Battery age: time since the float's earliest received SBD message, at each dive's last message;
+    # each dive with a positive number gets the age gained since the previous one (dive 1 since the
+    # earliest message), so the dives add up to the whole time since the first message
+    battery_age_s = pd.Series(np.nan, index=e.index)
+    self_discharge_s = pd.Series(0.0, index=e.index)
+    storage_s = pd.Series(0.0, index=e.index)
+    df = frame('sbd')
+    if df is not None:
+        t = df[['dive', 'dt_epoch']].apply(pd.to_numeric, errors='coerce').dropna()
+        t = t[t['dt_epoch'] > 0]
+        if len(t):
+            t0 = t['dt_epoch'].min()
+            if pack_dive is not None and pack_dive < 0:
+                # a repacked float: from the new pack's first startup
+                t_pack = t.loc[t['dive'].astype(int) == pack_dive, 'dt_epoch']
+                if len(t_pack):
+                    t0 = t_pack.min()
+            age = (t.groupby(t['dive'].astype(int))['dt_epoch'].max() - t0).reindex(e.index)
+            age = age.where(age >= 0)            # startups of a replaced pack
+            battery_age_s = age
+            a = age[age.index > 0].dropna().sort_index().cummax()
+            self_discharge_s = a.diff().fillna(a).clip(lower=0).reindex(e.index).fillna(0)
+            # the first positive dive: its own cycle (cycle_timing total_duration_s, else the median
+            # of the other dives' gains) is self-discharge, the time before it storage
+            if len(a):
+                d1 = a.index[0]
+                cyc = np.nan
+                ct = frame('cycle_timing')
+                if ct is not None and 'total_duration_s' in ct.columns:
+                    c = ct[['dive', 'total_duration_s']].apply(pd.to_numeric, errors='coerce').dropna()
+                    c = c[(c['dive'] == d1) & (c['total_duration_s'] > 0)]
+                    cyc = float(c['total_duration_s'].iloc[-1]) if len(c) else np.nan
+                if not np.isfinite(cyc):
+                    rest = self_discharge_s[self_discharge_s.index > d1]
+                    cyc = float(rest[rest > 0].median()) if (rest > 0).any() else 0.0
+                total = float(self_discharge_s[d1])
+                storage_s[d1] = max(total - cyc, 0.0)
+                self_discharge_s[d1] = total - storage_s[d1]
+    e['battery_age_s'] = battery_age_s
+    e['self_discharge_s'] = self_discharge_s
+    e['storage_s'] = storage_s
+    e['battery_start_v'] = start_v
+    e['pack_type'] = pack_type
+    e['pack_wh'] = pack_wh
+    e['pack_rate_per_yr'] = pack_rate
+    e['self_discharge_j'] = (pack_rate * pack_wh * 3600 * self_discharge_s
+                             / ENERGY_SECONDS_PER_YEAR) if np.isfinite(pack_wh) else 0.0
+    e['storage_j'] = (pack_rate * pack_wh * 3600 * storage_s
+                      / ENERGY_SECONDS_PER_YEAR) if np.isfinite(pack_wh) else 0.0
 
     e['total_j'] = e[[c for c, _ in ENERGY_COMPONENTS]].sum(axis=1)
     e.insert(0, 'ctdtype', ctdtype)
@@ -1988,7 +2142,7 @@ def AggregateDiveData():
                 # Estimated energy use per dive (needs the cycle timings)
 
                 try:
-                    float_aggregate_data['energy'] = EnergyEstimates(float_aggregate_data)
+                    float_aggregate_data['energy'] = EnergyEstimates(float_aggregate_data, float_id)
                 except:
                     errstr = 'Failed to estimate energy use for float {}.'.format(float_id)
                     if hasattr(args, 'halt') and args.halt:
@@ -13759,6 +13913,8 @@ ENERGY_COLORS = {
     'iridium_j':      'rgb(230,85,13)',
     'gps_j':          'rgb(253,174,107)',
     'wims_j':         'rgb(117,107,177)',
+    'self_discharge_j': 'rgb(205,205,205)',
+    'storage_j':        'rgb(230,230,230)',
     'internal_res_j': 'rgb(150,150,150)',
     }
 
@@ -13786,11 +13942,12 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
         df = df[(df['dive'] > 0) & (df['total_j'] > 0)]   # dive 0 and the startup dives are left out
         if len(df) < 1:
             return figs_meta
+        bar_total = df['total_j'] - df[[c for c in ENERGY_PIE_ONLY if c in df.columns]].sum(axis=1)
         fig = go.Figure(
             layout=dict(
                 showlegend = True,
                 title = dict(text='{}: Estimated Energy Use per Cycle, Total = {:,.1f} kJ'.format(
-                    float_id, df['total_j'].sum() / 1000)),
+                    float_id, bar_total.sum() / 1000)),
                 xaxis=dict(
                     title='Dive',
                     ),
@@ -13816,7 +13973,7 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 )
             )
         for col, label in ENERGY_COMPONENTS:
-            if col not in df.columns or not (df[col] > 0).any():
+            if col in ENERGY_PIE_ONLY or col not in df.columns or not (df[col] > 0).any():
                 continue
             fig.add_trace(go.Bar(
                 x=df['dive'].values,
@@ -13832,7 +13989,7 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
         # the dive total, as its own line of the hover label: invisible markers at the top of each bar
         fig.add_trace(go.Scatter(
             x=df['dive'].values,
-            y=df['total_j'].values / 1000,
+            y=bar_total.values / 1000,
             mode='markers',
             marker=dict(size=0, opacity=0),
             hovertemplate='<b>%{y:.2f} kJ</b>',
