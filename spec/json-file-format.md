@@ -673,7 +673,9 @@ wvs  9303  483    0   0.0000    +0.00006    +0.00040    +0.00089    +0.00023    
 | Attribute | Type | Units | Contents and source |
 |---|---|---|---|
 | `slen` | int | samples | FFT length, `WVS` field 4. |
-| `fsam` | float | Hz | Sample rate, `WVS` field 5. |
+| `fsam` | float | Hz | Sample rate, `WVS` field 5. Twice the true sample rate for the every-other-bin firmware. |
+| `fbase` | int | Hz | IMU base sample rate, `WVS` field 6. -1 in files written before 2026-11-05. |
+| `fdiv` | int | | Sample rate divider plus one, `WVS` field 7; the true sample rate is `fbase` / `fdiv`. -1 in files written before 2026-11-05. |
 | `raw_freq` | list of float, `slen/2` values | Hz | `k × fsam / slen` for k = 0 … slen/2 − 1, 3 decimals. Bin 0 is the DC bin. The listing's `freq` column is not used. |
 | `raw_Szz_g`, `raw_Syy_g`, `raw_Sxx_g` | list of float | g²/Hz | Vertical and the two horizontal acceleration auto-spectra as received (`wvs` fields 5, 6, 7), 4 decimals. `NaN` for a bin not received (listing fill -999.99999). |
 | `raw_Cxy_g` | list of float | g²/Hz | Horizontal co-spectrum, field 8. |
@@ -1048,12 +1050,14 @@ These are estimates, not measurements. The constants were fitted to the WHOI SOL
 | `ctd_surface_j` | float | J | 3.3 J × `surface_samples`. |
 | `iridium_j` | float | J | 0.70 W × `iridium_s`. |
 | `gps_j` | float | J | 0.27 W × `gps_s`. |
+| `wims_j` | float | J | 0.0456 W × `wims_s` (WIMS running power at 15 V, WIMS user manual rev. 3.22, Table 3). 0 for floats without wave data. Since 2026-11-05. |
 | `internal_res_j` | float | J | Battery internal-resistance loss of the oil pump: Σ (V0 − `volt`) × `curr` × `time` over the dive's `_pump` rows. V0 is a lower bound of the no-load voltage, so this underestimates. |
 | `ascent_s` | float | s | `_cycle_timing.ascent_duration_s`; `null` if unset. |
 | `profile_scans` | float | | `surface.prof_num_raw_samples` if positive, else `ascent_s` (1 scan per second), else 0. |
 | `drift_samples`, `surface_samples` | int | | Rows of `_drift` and `_surface` for the dive. |
 | `iridium_s` | float | s | Σ over the dive's SBD sessions of (last − first message time + 10 s). Messages more than 1800 s apart start a new session. |
 | `gps_s` | float | s | Σ `_gps.ttf_sec` over the dive's fixes with ttf_sec > 0. |
+| `wims_s` | float | s | Estimated WIMS run time, per `_wave` row of the dive with `slen` > 1 and `fe_hz` > 0: 2 s + 180 s + 8 × `slen` / (2 × `fe_hz`). This is the manual's spectral-mode run time (section 6.4.1) with its `runinfo` example values `wav.ostsc` = 180 s and `wav.mxseg` = 7, because the floats do not report these (production uses 90 or 180 s and 7, 12 or 14 segments; [xmessage-format.md](xmessage-format.md) C.7). 0 without wave data. |
 | `total_j` | float | J | Sum of the component columns. |
 
 For an RBR CTD, `ctd_profile_j`, `ctd_drift_j` and `ctd_surface_j` are reduced by 80% (× 0.2, `ENERGY_CTD_RBR_FACTOR`). Energies are rounded to 0.1 J. The constants are named `ENERGY_*` in `xmtps-aggregate-json.py`.
@@ -1070,6 +1074,8 @@ One row per dive ≥ 0 with a `Wave` of `slen` ≥ 1, in read order. Values from
 | `direction_ref` | string | `"true"` or `"magnetic"` |
 | `period_peak`, `period_avg`, `period_zero` | float | s |
 | `swh` | float | m |
+| `slen` | int | samples, FFT segment length |
+| `fe_hz` | float | Hz, true accelerometer sample rate: `fbase` / `fdiv` when the per-dive file has them, else `fsam`, halved when the upper half of `raw_Szz_g` is all zero and the lower half is not (every-other-bin firmware, [xmessage-format.md](xmessage-format.md) C.3.8). Since 2026-11-05. |
 
 ### 4.19 `_wave_spectra`
 

@@ -1211,12 +1211,15 @@ class Wave:
     as received.
     """
 
-    def __init__(self, fsam: float = -1, slen: int = -1):
+    def __init__(self, fsam: float = -1, slen: int = -1, fbase: int = -1, fdiv: int = -1):
         """Initialize slen//2 frequency bins with NaN spectra and statistics.
 
         Args:
-            fsam: accelerometer sample rate, in Hz.
+            fsam: sample rate of the listed bins, in Hz (the WVS fsam, twice the true sample rate
+                for the every-other-bin firmware).
             slen: FFT length (samples per spectral segment).
+            fbase: base sample rate of the IMU (WVS fbase), in Hz; -1 if not listed.
+            fdiv: sample rate divider plus one (WVS fdiv); the true sample rate is fbase/fdiv.
 
         Attributes:
             raw_freq, freq: bin frequencies k * fsam / slen for k = 0 .. slen//2 - 1, in Hz. Bin 0 is the
@@ -1246,6 +1249,8 @@ class Wave:
         flen = slen//2
         
         self.fsam = fsam
+        self.fbase = fbase
+        self.fdiv = fdiv
         
         
        

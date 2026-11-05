@@ -357,6 +357,14 @@ ENERGY_IRIDIUM_W = 0.70            # while the Iridium modem is in a session
 ENERGY_IRIDIUM_SESSION_GAP_S = 1800 # SBD messages further apart start a new session
 ENERGY_IRIDIUM_LAST_MSG_S = 10     # added to each session span for its last message
 ENERGY_GPS_W = 0.27                # while acquiring a fix (time to fix)
+# WIMS wave sensor (WIMS user manual rev. 3.22): Table 3, typical running power at 15 V; section 6.4.1,
+# run time in spectral mode T = Tinit + wav.ostsc + (wav.mxseg + 1) * wav.slen / (2 fe). The float
+# does not report wav.ostsc or wav.mxseg (only the 0xC5 parameter dumps do), so the manual's
+# runinfo example values are used; production floats use 90 or 180 s and 7, 12 or 14 segments.
+ENERGY_WIMS_W = 0.0456             # running
+ENERGY_WIMS_INIT_S = 2.0           # Tinit
+ENERGY_WIMS_OSTSC_S = 180.0        # wav.ostsc, orientation filter settle time
+ENERGY_WIMS_MXSEG = 7              # wav.mxseg, maximum number of segments
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
     ['phase_vac'],
     ['pump_vac', 'pump_vac_avg'],
@@ -374,8 +382,34 @@ ENERGY_COMPONENTS = [              # (column, label), stacked bottom up
     ('ctd_surface_j', 'CTD-surface'),
     ('iridium_j', 'Iridium'),
     ('gps_j', 'GPS'),
+    ('wims_j', 'WIMS'),
     ('internal_res_j', 'Internal Res.'),
     ]
+
+def WaveSampleRate(wave_data):
+    """Return the true accelerometer sample rate of a FloatClasses.Wave, in Hz, or NaN.
+
+    fbase / fdiv from the WVS line when the per-dive JSON has them (list2json from 2026-11-05).
+    Otherwise the WVS fsam, halved when the spectra look like those of the every-other-bin firmware
+    (whose fsam is doubled): the upper half of raw_Szz_g all zero and the lower half not.
+    """
+
+    try:
+        fbase, fdiv = getattr(wave_data, 'fbase', -1), getattr(wave_data, 'fdiv', -1)
+        if fbase is not None and fdiv is not None and fbase > 0 and fdiv > 0:
+            return float(fbase) / float(fdiv)
+        fsam = float(wave_data.fsam)
+        if not fsam > 0:
+            return np.nan
+        szz = np.asarray(getattr(wave_data, 'raw_Szz_g', []), dtype=float)
+        n = len(szz) // 2
+        if n > 0:
+            lower, upper = szz[:n], szz[n:]
+            if np.all(upper[np.isfinite(upper)] == 0) and np.isfinite(upper).all() and np.nanmax(np.abs(lower)) > 0:
+                return fsam / 2
+        return fsam
+    except Exception:
+        return np.nan
 
 def EnergyEstimates(float_aggregate_data):
     """Return the float's estimated energy use per dive (the 'energy' aggregate), in J.
@@ -395,9 +429,12 @@ def EnergyEstimates(float_aggregate_data):
                        ENERGY_IRIDIUM_SESSION_GAP_S apart form a session, lasting from the first
                        to the last message plus ENERGY_IRIDIUM_LAST_MSG_S
       gps_j            ENERGY_GPS_W * the sum of the dive's GPS times to fix (ttf_sec)
+      wims_j           ENERGY_WIMS_W * the WIMS run time of each dive with wave data ('wave' rows):
+                       ENERGY_WIMS_INIT_S + ENERGY_WIMS_OSTSC_S
+                       + (ENERGY_WIMS_MXSEG + 1) * slen / (2 * fe_hz); 0 for floats without WIMS
     For an RBR CTD (mission ctdtype, else the BIT sensor type), the CTD estimates are multiplied by
     ENERGY_CTD_RBR_FACTOR. total_j is the sum of the components. The inputs are kept as columns
-    (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s). Returns an empty
+    (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s, wims_s). Returns an empty
     DataFrame if the float has no dives.
     """
 
@@ -497,6 +534,18 @@ def EnergyEstimates(float_aggregate_data):
         gps_s = f.groupby(f['dive'].astype(int))['ttf_sec'].sum().reindex(e.index).fillna(0)
     e['gps_s'] = gps_s
     e['gps_j'] = ENERGY_GPS_W * gps_s
+
+    # WIMS: one run per dive with wave data
+    wims_s = pd.Series(0.0, index=e.index)
+    df = frame('wave')
+    if df is not None and 'slen' in df.columns and 'fe_hz' in df.columns:
+        w = df[['dive', 'slen', 'fe_hz']].apply(pd.to_numeric, errors='coerce').dropna()
+        w = w[(w['slen'] > 1) & (w['fe_hz'] > 0)]
+        t = (ENERGY_WIMS_INIT_S + ENERGY_WIMS_OSTSC_S
+             + (ENERGY_WIMS_MXSEG + 1) * w['slen'] / (2 * w['fe_hz']))
+        wims_s = t.groupby(w['dive'].astype(int)).sum().reindex(e.index).fillna(0)
+    e['wims_s'] = wims_s
+    e['wims_j'] = ENERGY_WIMS_W * wims_s
 
     e['total_j'] = e[[c for c, _ in ENERGY_COMPONENTS]].sum(axis=1)
     e.insert(0, 'ctdtype', ctdtype)
@@ -1405,6 +1454,8 @@ def AggregateDiveData():
                                 'period_avg':   np.array([wave_data.period_avg], dtype='float'),
                                 'period_zero':  np.array([wave_data.period_zero], dtype='float'),
                                 'swh':          np.array([wave_data.swh], dtype='float'),
+                                'slen':         np.array([wave_data.slen], dtype='int'),
+                                'fe_hz':        np.array([WaveSampleRate(wave_data)], dtype='float'),
                             }
                         )
                         float_aggregate_data['wave'] = AppendRows(float_aggregate_data['wave'], df_wave)
@@ -13701,6 +13752,7 @@ ENERGY_COLORS = {
     'ctd_surface_j':  'rgb(199,233,192)',
     'iridium_j':      'rgb(230,85,13)',
     'gps_j':          'rgb(253,174,107)',
+    'wims_j':         'rgb(117,107,177)',
     'internal_res_j': 'rgb(150,150,150)',
     }
 

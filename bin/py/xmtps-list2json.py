@@ -1121,7 +1121,8 @@ def ProcessListingFile(fpath_list):
                 if re.match('^WVS ', line):
                     x = line.split()
                     
-                    dive_data.wave = Wave(slen = int(x[4]), fsam =float(x[5]))
+                    dive_data.wave = Wave(slen = int(x[4]), fsam = float(x[5]),
+                        fbase = int(x[6]) if len(x) > 6 else -1, fdiv = int(x[7]) if len(x) > 7 else -1)
                     
                     del x
                 
