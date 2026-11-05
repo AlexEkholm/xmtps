@@ -42,6 +42,18 @@ Python tools:
   `WVS` `fbase` and `fdiv` in the dive JSON (`Wave.fbase`, `Wave.fdiv`), and the `_wave`
   aggregate gains `slen` and `fe_hz` (the true sample rate; for older dive JSON, `fsam` halved
   for the every-other-bin firmware).
+- Energy estimate: CTD energies from the manufacturers' documentation, replacing the SOLO-II
+  fit (0.25 J a scan, 3.3 J a spot sample, × 0.2 for RBR). Sea-Bird SBE 41CP: 22 mA at 12 V with
+  the pump running (hardware reference 41528F), so 0.264 J a 1 Hz profile scan and 0.66 J a spot
+  sample (drift, surface), taken as the 2.5 s fast-pump start of `pumpon` since the manuals give no
+  spot-sample pump time. RBR argo3: 24 mJ a sample, profile scan or spot sample alike. 11273
+  (RBR): CTD profile 47.1 to 22.6 kJ, spot samples 4.1 to 0.15 kJ.
+- Energy estimate: new controller component (`controller_j`), a constant 30 mW (about 2 mA at
+  15 V) over each dive cycle (`self_discharge_s`), not over storage before deployment; shown as
+  "Controller" in both energy plots. The figure comes from the floats that ran out of battery:
+  usable pack energy (from short-lived floats) minus the estimate, over the lifetime of
+  long-lived ones (ALTO 22-46 mW, ALAMO about 29 mW), and matches the SOLO-II CPU's about 2 mA.
+  It adds about 2.4 kJ per daily cycle; 11273's total rises from 706 to 997 kJ.
 - Energy estimate: new battery self-discharge component (`self_discharge_j`, with
   `battery_age_s`, `self_discharge_s`, `storage_s`, `battery_start_v`, `pack_type`, `pack_wh`
   and `pack_rate_per_yr`), shown as "Self-discharge" in both energy plots:

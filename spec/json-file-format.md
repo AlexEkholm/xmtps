@@ -1036,22 +1036,23 @@ Column order in the file: `dive`, then `ascent_*`, `descent_*`, `drift_*`, `surf
 
 Estimated energy use, one row per dive found in any of `_pump`, `_sbd`, `_gps`, `_drift`, `_surface`, `_cycle_timing` or `_engineering_data` (including negative dives), sorted by dive. Written by `EnergyEstimates()` since 2026-11-04.
 
-These are estimates, not measurements. The constants were fitted to the WHOI SOLO-II energy plots on argus, which a MATLAB job draws from the SOLO-II engineering data. The fit reproduces the plots' components from the SOLO-II listing files, and their "Net" total to within 0.2% on four floats. The SOLO-II per-unit estimates (CTD, Iridium, GPS) are taken to be equivalent for ALAMO and ALTO. ALAMO reports some quantities differently, so substitutes are used: ascent duration for the CTD scan count, and the SBD message times for the Iridium session time.
+These are estimates, not measurements. The constants were fitted to the WHOI SOLO-II energy plots on argus, which a MATLAB job draws from the SOLO-II engineering data. The fit reproduces the plots' components from the SOLO-II listing files, and their "Net" total to within 0.2% on four floats. The SOLO-II per-unit estimates (Iridium, GPS) are taken to be equivalent for ALAMO and ALTO. Since 2026-11-05 the CTD energies come from the manufacturers' documentation instead: Sea-Bird SBE 41CP 22 mA at 12 V with the pump running (hardware reference 41528F), and RBR argo3 24 mJ a sample (datasheet). ALAMO reports some quantities differently, so substitutes are used: ascent duration for the CTD scan count, and the SBD message times for the Iridium session time.
 
 | Column | Type | Units | Contents |
 |---|---|---|---|
 | `dive` | int | | |
-| `ctdtype` | string | | The float's CTD type: the latest `_mission.ctdtype` that is set, else the latest `_engineering_data` `bit.sensor_type_name`; `""` if unknown (no reduction). |
+| `ctdtype` | string | | The float's CTD type: the latest `_mission.ctdtype` that is set, else the latest `_engineering_data` `bit.sensor_type_name`; `""` if unknown (taken as SBE 41CP). |
 | `pump_descent_j` | float | J | `_pump.energy` of the dive's first oil pump operation (the first descent pump). |
 | `pump_ascent_j` | float | J | `_pump.energy` of the dive's other operations. Seek pumps during descent and drift are included, because the pump records have no phase. |
 | `air_pump_j` | float | J | `surface.air_pump_current_a` × `surface.air_pump_runtime_s` × V0. V0 is the dive's highest pump voltage. |
-| `ctd_profile_j` | float | J | 0.25 J × `profile_scans`. |
-| `ctd_drift_j` | float | J | 3.3 J × `drift_samples`. |
-| `ctd_surface_j` | float | J | 3.3 J × `surface_samples`. |
+| `ctd_profile_j` | float | J | `profile_scans` × 0.264 J (SBE 41CP: 22 mA × 12 V × 1 s a scan), or × 0.024 J for an RBR CTD (24 mJ a sample). Was 0.25 J (× 0.2 for RBR) before 2026-11-05. |
+| `ctd_drift_j` | float | J | `drift_samples` × 0.66 J (SBE 41CP: 22 mA × 12 V × 2.5 s, the fast-pump start of `pumpon`; the manuals give no spot-sample pump time), or × 0.024 J for RBR. Was 3.3 J (× 0.2 for RBR) before 2026-11-05. |
+| `ctd_surface_j` | float | J | The same per `surface_samples`. |
 | `iridium_j` | float | J | 0.70 W × `iridium_s`. |
 | `gps_j` | float | J | 0.27 W × `gps_s`. |
 | `wims_j` | float | J | 0.0456 W × `wims_s` (WIMS running power at 15 V, WIMS user manual rev. 3.22, Table 3). 0 for floats without wave data. Since 2026-11-05. |
 | `internal_res_j` | float | J | Battery internal-resistance loss of the oil pump: Σ (V0 − `volt`) × `curr` × `time` over the dive's `_pump` rows. V0 is a lower bound of the no-load voltage, so this underestimates. |
+| `controller_j` | float | J | Controller quiescent drain: 0.030 W × `self_discharge_s`, the dive's cycle time (not storage). 30 mW (about 2 mA at 15 V) is estimated from the floats that ran out of battery. Since 2026-11-05. |
 | `self_discharge_j` | float | J | Battery self-discharge: `pack_rate_per_yr` × `pack_wh` × 3600 × `self_discharge_s` / (365.25 × 86400 s). One pack powers every subsystem. 0 for dives ≤ 0 and if the pack is unknown. Since 2026-11-05. |
 | `storage_j` | float | J | The same for `storage_s`: the self-discharge before deployment. Counted in `total_j` and the pie, not in the per-cycle bars. |
 | `ascent_s` | float | s | `_cycle_timing.ascent_duration_s`; `null` if unset. |

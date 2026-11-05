@@ -348,11 +348,18 @@ def AppendRows(df, df_new):
         return df_new.reindex(columns=df.columns.union(df_new.columns, sort=False)).reset_index(drop=True)
     return pd.concat([df, df_new], ignore_index=True)
 
-# Energy estimate constants, fitted to the SOLO-II energy plots (WHOI SOLO-II pages on argus, MATLAB)
-# against the SOLO-II listing files, and applied to ALAMO data
-ENERGY_CTD_J_PER_SCAN = 0.25       # continuous profile, 1 scan per second
-ENERGY_CTD_J_PER_SAMPLE = 3.3      # spot sample (drift, surface)
-ENERGY_CTD_RBR_FACTOR = 0.2        # RBR CTDs: CTD estimates reduced by 80%
+# CTD energy, from the manufacturers' documentation:
+# - Sea-Bird SBE 41CP (hardware reference 41528F, Jul 2011): 22 mA at 12 V with the pump running.
+#   A continuous profile stores one scan per second, so 0.264 J a scan. A spot sample (drift,
+#   surface) is taken as the 2.5 s fast-pump start of the command reference's 'pumpon', 0.66 J; the
+#   manuals do not give a spot sample's pump time.
+# - RBR argo3 (datasheet): 24 mJ a sample (4.5 mA at 12 V for 450 ms), profile scan or spot sample
+#   alike (no pump).
+ENERGY_CTD_SBE_J_PER_SCAN = 0.022 * 12 * 1.0     # 0.264 J
+ENERGY_CTD_SBE_J_PER_SAMPLE = 0.022 * 12 * 2.5   # 0.66 J
+ENERGY_CTD_RBR_J_PER_SAMPLE = 0.024              # 24 mJ, scan or spot sample
+# Other constants fitted to the SOLO-II energy plots (WHOI SOLO-II pages on argus, MATLAB) against
+# the SOLO-II listing files, and applied to ALAMO data
 ENERGY_IRIDIUM_W = 0.70            # while the Iridium modem is in a session
 ENERGY_IRIDIUM_SESSION_GAP_S = 1800 # SBD messages further apart start a new session
 ENERGY_IRIDIUM_LAST_MSG_S = 10     # added to each session span for its last message
@@ -362,6 +369,12 @@ ENERGY_GPS_W = 0.27                # while acquiring a fix (time to fix)
 # negligible and not counted.
 ENERGY_WIMS_W = 0.0456             # running
 ENERGY_WIMS_RUN_S = 590.0          # run time per dive with wave data
+# Controller quiescent drain: a constant 30 mW (about 2 mA at 15 V) over each dive cycle, for the
+# controller, clock and sensor standby. Estimated from the floats that ran out of battery: the
+# usable pack energy (from short-lived floats) minus the estimate, over the lifetime of long-lived
+# ones (ALTO 22-46 mW, ALAMO about 29 mW). It matches the SOLO-II CPU's about 2 mA. Not counted
+# during storage before deployment, when the float is not running.
+ENERGY_CONTROLLER_W = 0.030
 # Battery self-discharge: the pack's yearly self-discharge rate times its nominal energy, over the
 # battery age. One pack powers every subsystem. The chemistry is told from the median startup (BIT)
 # no-load voltage (Tadiran 15.0-15.6 V, Saft about 14.2 V, alkaline about 12-13.5 V), the float
@@ -416,6 +429,7 @@ ENERGY_COMPONENTS = [              # (column, label), stacked bottom up
     ('gps_j', 'GPS'),
     ('wims_j', 'WIMS'),
     ('internal_res_j', 'Internal Res.'),
+    ('controller_j', 'Controller'),
     ('self_discharge_j', 'Self-discharge'),
     ('storage_j', 'Self-discharge (storage)'),
     ]
@@ -458,10 +472,12 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
       internal_res_j   battery internal resistance loss of the oil pump: sum (V0 - V) * I * t,
                        V0 = the dive's highest pump voltage (a lower bound of the no-load voltage)
       air_pump_j       surface.air_pump_current_a * surface.air_pump_runtime_s * V0
-      ctd_profile_j    ENERGY_CTD_J_PER_SCAN per raw profile sample (surface.prof_num_raw_samples,
-                       else one per second of the ascent, 'cycle_timing' ascent_duration_s)
-      ctd_drift_j      ENERGY_CTD_J_PER_SAMPLE per drift sample ('drift' rows)
-      ctd_surface_j    ENERGY_CTD_J_PER_SAMPLE per surface time series sample ('surface' rows)
+      ctd_profile_j    the CTD's energy per scan per raw profile sample (surface.prof_num_raw_samples,
+                       else one per second of the ascent, 'cycle_timing' ascent_duration_s):
+                       ENERGY_CTD_SBE_J_PER_SCAN (SBE 41CP) or ENERGY_CTD_RBR_J_PER_SAMPLE (RBR)
+      ctd_drift_j      the CTD's energy per spot sample per drift sample ('drift' rows):
+                       ENERGY_CTD_SBE_J_PER_SAMPLE or ENERGY_CTD_RBR_J_PER_SAMPLE
+      ctd_surface_j    the same per surface time series sample ('surface' rows)
       iridium_j        ENERGY_IRIDIUM_W * the SBD sessions' durations: messages less than
                        ENERGY_IRIDIUM_SESSION_GAP_S apart form a session, lasting from the first
                        to the last message plus ENERGY_IRIDIUM_LAST_MSG_S
@@ -479,8 +495,10 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
                        (cycle_timing total_duration_s, else the median gain)
       storage_j        the same for the first positive dive's battery age before its cycle (storage
                        and tests before deployment), storage_s; in ENERGY_PIE_ONLY
-    For an RBR CTD (mission ctdtype, else the BIT sensor type), the CTD estimates are multiplied by
-    ENERGY_CTD_RBR_FACTOR. total_j is the sum of the components. The inputs are kept as columns
+      controller_j     ENERGY_CONTROLLER_W * self_discharge_s: the controller's quiescent drain
+                       over each dive's cycle (not over storage)
+    The CTD is RBR when the mission ctdtype (else the BIT sensor type) says so, else SBE 41CP.
+    total_j is the sum of the components. The inputs are kept as columns
     (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s, wims_s,
     battery_age_s, self_discharge_s, storage_s, battery_start_v, pack_type, pack_wh, pack_rate_per_yr). float_id (the serial) gives the float
     type; without it the float is taken as an ALAMO. Returns an empty
@@ -501,7 +519,10 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
     if not ctdtype and df_eng is not None and 'bit.sensor_type_name' in df_eng.columns:
         types = [t for t in df_eng.sort_values('dive')['bit.sensor_type_name'] if isinstance(t, str) and t]
         ctdtype = types[-1] if types else ''
-    ctd_factor = ENERGY_CTD_RBR_FACTOR if ctdtype.upper() == 'RBR' else 1.0
+    if ctdtype.upper() == 'RBR':
+        ctd_j_per_scan = ctd_j_per_sample = ENERGY_CTD_RBR_J_PER_SAMPLE
+    else:
+        ctd_j_per_scan, ctd_j_per_sample = ENERGY_CTD_SBE_J_PER_SCAN, ENERGY_CTD_SBE_J_PER_SAMPLE
 
     dives = set()
     for key in ('pump', 'sbd', 'gps', 'drift', 'surface', 'cycle_timing', 'engineering_data'):
@@ -556,9 +577,9 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
         df = frame(key)
         n = pd.to_numeric(df['dive'], errors='coerce').dropna().astype(int).value_counts() if df is not None else pd.Series(dtype=int)
         e[col] = n.reindex(e.index).fillna(0).astype(int)
-    e['ctd_profile_j'] = ENERGY_CTD_J_PER_SCAN * e['profile_scans'] * ctd_factor
-    e['ctd_drift_j'] = ENERGY_CTD_J_PER_SAMPLE * e['drift_samples'] * ctd_factor
-    e['ctd_surface_j'] = ENERGY_CTD_J_PER_SAMPLE * e['surface_samples'] * ctd_factor
+    e['ctd_profile_j'] = ctd_j_per_scan * e['profile_scans']
+    e['ctd_drift_j'] = ctd_j_per_sample * e['drift_samples']
+    e['ctd_surface_j'] = ctd_j_per_sample * e['surface_samples']
 
     # Iridium: SBD sessions
     iridium_s = pd.Series(0.0, index=e.index)
@@ -706,6 +727,8 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
                              / ENERGY_SECONDS_PER_YEAR) if np.isfinite(pack_wh) else 0.0
     e['storage_j'] = (pack_rate * pack_wh * 3600 * storage_s
                       / ENERGY_SECONDS_PER_YEAR) if np.isfinite(pack_wh) else 0.0
+    # Controller quiescent drain over the same per-cycle time as self-discharge (not storage)
+    e['controller_j'] = ENERGY_CONTROLLER_W * self_discharge_s
 
     e['total_j'] = e[[c for c, _ in ENERGY_COMPONENTS]].sum(axis=1)
     e.insert(0, 'ctdtype', ctdtype)
@@ -13913,6 +13936,7 @@ ENERGY_COLORS = {
     'iridium_j':      'rgb(230,85,13)',
     'gps_j':          'rgb(253,174,107)',
     'wims_j':         'rgb(117,107,177)',
+    'controller_j':   'rgb(99,99,99)',
     'self_discharge_j': 'rgb(205,205,205)',
     'storage_j':        'rgb(230,230,230)',
     'internal_res_j': 'rgb(150,150,150)',
