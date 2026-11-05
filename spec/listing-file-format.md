@@ -313,7 +313,7 @@ Format `SBT %5d %4d %-9s %5d %6d %5.1f %7s %8d %6.2f  # %s`.
 | pct | `%5.1f` | % | Share of the dive's SBD bytes. |
 | nValues | `%7s` | | For a compressed type, the number of values carried; `-` otherwise. On the `total` line, the sum over the compressed types. |
 | rawBytes | `%8d` | bytes | The size without compression (see below). Equal to `bytes` for an uncompressed type. |
-| ratio | `%6.2f` | | Compression ratio, bytes / rawBytes, as a fraction of 1. Above 1 when a short series costs more than its plain counts. |
+| ratio | `%6.2f` | | Compression ratio, bytes / rawBytes, as a fraction of 1. Above 1 when a short series costs more than its plain counts. Builds 3352 and 3353 wrote the inverse, rawBytes / bytes (above 1 for a compressed series); build 3354 changed it on purpose, and those listings keep the old meaning until the float is reprocessed. |
 | name | `# %s` | | Description of the type (comment, not meant to be parsed). |
 
 Rows are in ID order, one per type present. They are followed by `frame` (the 8-byte packet header and the 4-byte `$cc>` trailer, 12 bytes per packet), `unparsed` (bytes after the last complete blob of a packet, or a packet shorter than 8 bytes; only when there are any), and `total` (the sum of all rows, which equals the dive's SBD bytes).

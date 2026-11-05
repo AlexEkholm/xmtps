@@ -3,6 +3,44 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-05
+
+Python tools:
+
+- Energy plot (`energy_per_cycle`): the title no longer adds "(RBR CTD: CTD x0.2)" for floats with
+  an RBR CTD. The CTD estimates are still reduced as before.
+- Energy plot (`energy_per_cycle`): the dive total is on its own line at the top of the hover label
+  instead of being repeated after each component.
+- New plot `energy_by_component` ("Estimated Total Energy"), in the float page's Engineering
+  section: a pie of the float's estimated energy use by component over the same dives as
+  `energy_per_cycle`, slices labeled with the component and kJ.
+- Both energy plots count only dives with a positive dive number; dive 0 and the startup dives
+  are left out.
+- Float page: the four pump vacuum plots (`pump_vac`, `pump_vac_avg`, `pump_vac_v_time`,
+  `pump_vac_v_pres`) moved from the Hydraulic System section to the Engineering section, after
+  Case Vacuum through the Dive Cycle.
+- Case Vacuum through the Dive Cycle (`phase_vac`): dashed grey lines at 3 and 7 inHg in the
+  background, without hover.
+- GPS CNO plot (`satcom_gps_cno`): not made for floats whose GPS reports a carrier-to-noise ratio
+  of 0 in every fix the plot shows; their float page shows the All Positions map in its place.
+- Total Pump Energy and Total Pump Duration per Cycle (`pump_energy_sum`, `pump_time_sum`): the
+  bars are all grey (operations still separated by thin white lines) and there is no legend; the
+  hover label ends with a `Total:` line.
+- PNG export: images that Kaleido fails to render within a batch are now retried one at a time
+  and their render error is logged. Kaleido 1.x does not raise for them, so the retry never ran and
+  the figure was dropped with a misleading "No such file" error; now an image counts as written
+  only if its file exists and is newer than the batch.
+- SBD data pie chart (`satcom_sbd_data_type`): slices are labeled with their data size (e.g.
+  `117.0 kB`) instead of the percentage, which is still in the hover. Only dives with a positive
+  dive number count; dive 0 and the startup dives (negative numbers) are left out.
+
+Documentation:
+
+- spec/listing-file-format.md: the `SBT` ratio column was rawBytes / bytes in builds 3352 and
+  3353 and is bytes / rawBytes from build 3354; the change was intended.
+- spec/plot-and-page-files.md: the bathymetry map's hover (`2743m`, `0m` on land) and plain gray
+  land are described as the code draws them.
+
 ## 2026-11-04
 
 Decoder:

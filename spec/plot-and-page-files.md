@@ -109,7 +109,7 @@ Order of writing, all from the same Plotly figure object (`WritePlotImageFiles`)
 3. Thumbnail, from the small PNG.
 4. Full PNG, without legend.
 
-PNGs are written by Plotly's `write_image` with kaleido at scale 1, so the pixel size is the requested size. Kaleido drives a headless Chrome (production: Chrome for Testing 142, see README "Versions"). The tool starts one kaleido server for the whole run (`kaleido.start_sync_server`, with `--image-tabs` tabs, default 4) instead of one browser per image. `WritePlotImageFiles` writes the HTML at once and queues the two PNGs; after each plot group, `FlushImageQueue` renders all the group's PNGs in one `plotly.io.write_images` batch spread over the tabs, then writes the thumbnails and records the file sizes. If the batch fails, each image is retried alone, and a figure whose images can't be written is left off the float page. The small and full-size PNG use the same layout (no legend, the small margins) and differ only in size.
+PNGs are written by Plotly's `write_image` with kaleido at scale 1, so the pixel size is the requested size. Kaleido drives a headless Chrome (production: Chrome for Testing 142, see README "Versions"). The tool starts one kaleido server for the whole run (`kaleido.start_sync_server`, with `--image-tabs` tabs, default 4) instead of one browser per image. `WritePlotImageFiles` writes the HTML at once and queues the two PNGs; after each plot group, `FlushImageQueue` renders all the group's PNGs in one `plotly.io.write_images` batch spread over the tabs, then writes the thumbnails and records the file sizes. Kaleido does not report a figure that fails within the batch, so afterwards every image whose file is missing or older than the batch is retried alone (logged as a warning: "N of M images not written in one batch"); a figure whose images still can't be written is logged with Kaleido's error and left off the float page. The small and full-size PNG use the same layout (no legend, the small margins) and differ only in size.
 
 The HTML file is a complete page written by `write_html(include_plotlyjs='cdn')`:
 
@@ -171,7 +171,7 @@ Input: `profile_position`, `gps`, `iridium_position`, `sbd`. Written only if the
 | ID | Title | Size | Page | Contents |
 |---|---|---|---|---|
 | `position_globe` | Profile Positions | `fig` | top | Orthographic globe centered on the float's mean profile position. Black line "Trajectory" through the profile positions; one circle per dive in the dive colors, the latest a star. |
-| `position` | Profile Positions and Bathymetry | `fig` | top | `PositionBathymetryFigure`: plain lon/lat axes, latitude scaled by 1/cos(mid-latitude), over a region square in km (the profiles plus 0.6°). Layers: the bathymetry grid (`-b`, section 10.1) as a depth heatmap (blues at sea, gray-tan on land) whose hover gives the depth at any point ("depth 2743 m", or "land, 12 m"); a hillshade (sun at 315°, 45°, 3× vertical exaggeration) at 35% opacity; isobaths every 500 m (1000 m if deeper than 6000 m) and the coastline, unlabelled lines computed once (`ContourLines`); black track; one marker per profile in the dive colors, the latest a star, whose hover adds the grid depth there. Grids over about 600 cells a side are thinned. The PNG images leave out the color bar and the axis tick labels and titles (`static_bare`); the HTML keeps them. Not written if the bathymetry file can't be read; the page then shows `position_geo`. With `-d` the aggregator logs the time to build it and to write its files, and the time of each plot group (DEBUG). |
+| `position` | Profile Positions and Bathymetry | `fig` | top | `PositionBathymetryFigure`: plain lon/lat axes, latitude scaled by 1/cos(mid-latitude), over a region square in km (the profiles plus 0.6°). Layers: the bathymetry grid (`-b`, section 10.1) as a depth heatmap in whole metres (light to dark blue at sea, plain gray on land, where the depth is 0) whose hover gives the depth at any point (`%{z}m`: "2743m", or "0m" on land); a hillshade (sun at 315°, 45°, 3× vertical exaggeration) at 35% opacity; isobaths every 500 m (1000 m if deeper than 6000 m) and the coastline, unlabelled lines computed once (`ContourLines`); black track; one marker per profile in the dive colors, the latest a star, whose hover adds the grid depth there. Grids over about 600 cells a side are thinned. The PNG images leave out the color bar and the axis tick labels and titles (`static_bare`); the HTML keeps them. Not written if the bathymetry file can't be read; the page then shows `position_geo`. With `-d` the aggregator logs the time to build it and to write its files, and the time of each plot group (DEBUG). |
 | `position_geo` | Profile Positions (Map) | `fig` | table | The previous `position` plot (until 2026-11-04): as `position_globe`, Winkel tripel projection zoomed to the float's area. |
 | `position_all` | All Positions | `fig` | table | Every position: startup GPS (black star), GPS before descent (×), GPS beacon (star), GPS after ascent (cross), each Iridium message position, and the composite Iridium position of each dive, all in the dive colors; profile positions as large open circles. |
 | `position_gps` | GPS Positions | `fig` | Satcom | GPS fixes only: startup GPS, before descent, beacon, after ascent. |
@@ -270,18 +270,18 @@ Input: `pump` (`WritePumpPlots`); `engineering_data`, `pump` and `mission` (`Wri
 | `pump_curr` | Pump Battery Current | `fig` | Hydraulic | x: "Pump #"; y: "Current [A]". |
 | `pump_power` | Pump Power | `fig` | table | x: "Pump #"; y: "Power [W]". |
 | `pump_energy` | Pump Energy | `fig` | Hydraulic | x: "Pump #"; y: "Energy [J]". |
-| `pump_vac` | Internal Vacuum vs. Pump | `fig` | Hydraulic | x: "Pump #"; y: "Vacuum [inHg]". |
-| `pump_vac_v_pres` | Internal Vac. vs. Pump Pressure | `fig` | Hydraulic | x: "Vacuum [inHg]"; y: "Pressure [dBar]". |
-| `pump_vac_v_time` | Internal Vacuum vs. Pump Time | `fig` | Hydraulic | x: "Cumulative Pump Duration [seconds]"; y: "Vacuum [inHg]". |
-| `pump_vac_avg` | Average Internal Vacuum (Pump) | `fig2` | Hydraulic | Statistics per dive; y: "Vacuum [inHg]". |
+| `pump_vac` | Internal Vacuum vs. Pump | `fig` | Engineering | x: "Pump #"; y: "Vacuum [inHg]". |
+| `pump_vac_v_pres` | Internal Vac. vs. Pump Pressure | `fig` | Engineering | x: "Vacuum [inHg]"; y: "Pressure [dBar]". |
+| `pump_vac_v_time` | Internal Vacuum vs. Pump Time | `fig` | Engineering | x: "Cumulative Pump Duration [seconds]"; y: "Vacuum [inHg]". |
+| `pump_vac_avg` | Average Internal Vacuum (Pump) | `fig2` | Engineering | Statistics per dive; y: "Vacuum [inHg]". |
 | `pump_volt_avg` | Average Pump Battery Voltage | `fig2` | Hydraulic | Statistics per dive; y: "Voltage [V]". |
 | `pump_curr_avg` | Average Pump Battery Current | `fig2` | Hydraulic | Statistics per dive; y: "Current [A]". |
 | `pump_power_avg` | Average Pump Power | `fig2` | table | Statistics per dive; y: "Power [W]". |
-| `pump_energy_sum` | Total Pump Energy per Cycle | `figWideXS` | Hydraulic | Bars stacked by pump operation (1 = the dive's first, in listing order; Viridis, first dark), so a bar is the dive total; y: "Energy [kJ]". |
+| `pump_energy_sum` | Total Pump Energy per Cycle | `figWideXS` | Hydraulic | Bars stacked by pump operation (1 = the dive's first, in listing order), all grey with thin white lines between operations, so a bar is the dive total; no legend. The hover (`x unified`) lists each operation (`#k: … kJ at … dbar`) and then `Total: …` (an invisible `Total` marker trace at the top of each bar). y: "Energy [kJ]". |
 | `pump_time_sum` | Total Pump Duration per Cycle | `figWideXS` | Hydraulic | Bars stacked by pump operation, as `pump_energy_sum`; y: "Duration [seconds]". |
 | `pump_num_ops` | No. Pump Operations per Cycle | `figWideXS` | Hydraulic | Bars; y: "Pumps". |
 | `pump_energy_v_max_pres` | Total Pump Energy vs. Max. Pres. | `fig` | Hydraulic | One marker per dive; x: "Max. Pressure [dBar]"; y: "Energy [kJ]". |
-| `phase_vac` | Case Vacuum through the Dive Cycle | `figWide` | Engineering | Case vacuum at the start and end of descent, drift, ascent and surface; x: "Phase" (eight points, "Descent start" … "Surface end"); y: "Vacuum [inHg]"; one line per dive, the latest black. |
+| `phase_vac` | Case Vacuum through the Dive Cycle | `figWide` | Engineering | Case vacuum at the start and end of descent, drift, ascent and surface; x: "Phase" (eight points, "Descent start" … "Surface end"); y: "Vacuum [inHg]"; one line per dive, the latest black. Dashed grey lines at 3 and 7 inHg (`CASE_VAC_LIMITS_INHG`, layout shapes below the traces, no hover). |
 | `pump_first_duration` | First Pump Duration and Seek Adjustment | `figWideS` | Hydraulic | Bars "first pump" (duration of each dive's first pump record), dashed blue step "DFT (configured)" (DFT of the dive's mission phase, drawn across the bar of each dive that transmitted its mission configuration and broken at the others: the float sends it only after an upload or when `APT` = 1, and can change its first pump time itself between transmissions), and on a second y axis "Seek adjustment [seconds]" the lines "descent seek adj." (black) and "drift seek adj." (red); x: "Dive"; y: "First pump [seconds]". |
 
 ### 3.10 Air pump (`WriteAirPumpPlots`, category `air`)
@@ -299,7 +299,8 @@ Input: `energy` (the `_energy` aggregate, [json-file-format.md 4.17.1](json-file
 
 | ID | Title | Size | Page | Contents |
 |---|---|---|---|---|
-| `energy_per_cycle` | Estimated Energy Use per Cycle, Total = … kJ | `figWideS` | Engineering | Bars per dive, stacked bottom up: Pump-descent, Pump-ascent, Air pump, CTD-profile, CTD-drift, CTD-surface, Iridium, GPS, Internal Res. (colors `ENERGY_COLORS`). A component that is 0 in every dive is left out. For an RBR CTD the title adds "(RBR CTD: CTD x0.2)". The hover (`x unified`) gives each component and the dive total. x: "Dive"; y: "Energy [kJ]". |
+| `energy_per_cycle` | Estimated Energy Use per Cycle, Total = … kJ | `figWideS` | Engineering | Dives with a positive dive number only (dive 0 and the startup dives are left out). Bars per dive, stacked bottom up: Pump-descent, Pump-ascent, Air pump, CTD-profile, CTD-drift, CTD-surface, Iridium, GPS, Internal Res. (colors `ENERGY_COLORS`). A component that is 0 in every dive is left out. The hover (`x unified`) gives the dive total on its own line (an invisible `Total` marker trace at the top of each bar), then each component. x: "Dive"; y: "Energy [kJ]". |
+| `energy_by_component` | Estimated Total Energy | `fig2` | Engineering | Pie of the float total by component over the same dives as `energy_per_cycle` (colors `ENERGY_COLORS`; components that are 0 in every dive left out). Slices of at least 3% are labeled with the component and kJ; the hover also gives the percentage. The subtitle gives the total kJ, the number of dives and their range. |
 
 ### 3.11 Surface (`WriteSurfacePlots`, category `surface`)
 
@@ -321,13 +322,13 @@ Input: `sbd`, `gps`, `iridium_position`, summary. Default size `fig2`. "before d
 |---|---|---|---|---|
 | `satcom` | Satcom | `figWideXL` | Satcom | x: date (UTC); y: time of day (UTC), plotted on the dummy date 2021-02-12 with a range from 23:00 the day before to 01:00 the day after. Markers: "Iridium TX" (SBD messages with MTMSN 0, red), "Iridium TX+RX" (MTMSN > 0, i.e. a mobile-terminated message was received, blue), "GPS" (green). |
 | `satcom_gps_ttf` | GPS Time-to-fix (TTF) | `fig2` | Satcom | x: "Dive"; y: "TTF [seconds]". |
-| `satcom_gps_cno` | GPS Carrier-to-Noise (CNO) Ratio | `fig2` | Satcom | y: "CNO [dBHz]"; average with min./max. lines. |
+| `satcom_gps_cno` | GPS Carrier-to-Noise (CNO) Ratio | `fig2` | Satcom | y: "CNO [dBHz]"; average with min./max. lines. Not written when every fix it shows (`idx` 0–2) has a CNO of 0 (unset); the float page then shows `position_all` in its place. |
 | `satcom_gps_nsat` | GPS No. Satellites | `fig2` | Satcom | y: "No. Satellites". |
 | `satcom_gps_hdop` | GPS Horiz. Dilution of Precision | `fig2` | Satcom | y: "HDOP". |
 | `satcom_gps_fix_cep` | GPS Fix Uncertainty Est. | `fig2` | Satcom | y: "Uncertainty [m]". |
 | `satcom_sbd_count` | No. SBD Messages | `figWideXS` | Satcom | Bars; y: "No. Messages". |
 | `satcom_sbd_data_size` | SBD Data Size | `figWideXS` | Satcom | Bars stacked by X-message type, from `_sbd_type` (the `SBT` lines), in ID order then `frame` and `unparsed`; fixed color per type (`SBD_TYPE_COLORS`). Bytes of the dive's `SBD` messages beyond its `SBT` total are a `retransmitted` segment. A dive without `SBT` lines (listed before build 3352) is one grey `not broken down` bar of its `SBD` sizes. y: "Size [bytes]". |
-| `satcom_sbd_data_type` | SBD Data by Message Type | `fig2` | Satcom | Pie of the total SBD bytes by message type over the dives with `SBT` lines, plus a `retransmitted` slice; colors as `satcom_sbd_data_size`. Slices of at least 3% are labeled with the type and percentage. The subtitle gives the bytes, the number of dives and their range. Only written when some dive has `SBT` lines. |
+| `satcom_sbd_data_type` | SBD Data by Message Type | `fig2` | Satcom | Pie of the total SBD bytes by message type over the dives with a positive dive number and `SBT` lines (dive 0 and the startup dives are left out), plus a `retransmitted` slice; colors as `satcom_sbd_data_size`. Slices of at least 3% are labeled with the type and data size (bytes below 10 kB, kB below 10 MB, else MB); the hover also gives the percentage. The subtitle gives the bytes, the number of dives and their range. Only written when some dive has `SBT` lines. |
 | `satcom_sbd_data_size_avg` | SBD Message Average Size | `fig2` | Satcom | Statistics per dive; y: "Size [bytes]", 0–350. |
 | `satcom_iridium_fix_cep_avg` | Iridium Fix Uncertainty | `fig2` | Satcom | Statistics of the message CEPs per dive, plus "composite" markers (the dive's composite CEP); y: "Uncertainty [km]", log scale. |
 
@@ -399,10 +400,10 @@ Figures shown in each section, in order (rows separated by `/`):
 | Surface Data | `surface_pres`, `surface_pres_avg` / `surface_temp`, `surface_temp_avg` / `surface_sample_count` |
 | Ascent | `ascent`, `ascent_rate_v_pres` / `ascent_rate_v_time`, `ascent_rate_avg` / `ascent_sample_count` |
 | Descent | `descent`, `descent_rate_v_pres` / `descent_rate_v_time`, `descent_rate_avg` / `descent_sample_count` |
-| Hydraulic System | `pump_first_duration` / `pump_pres`, `pump_power_v_pres` / `pump_volt`, `pump_volt_avg` / `pump_curr`, `pump_curr_avg` / `pump_energy`, `pump_energy_v_max_pres` / `pump_num_ops` / `pump_time_sum` / `pump_energy_sum` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` |
+| Hydraulic System | `pump_first_duration` / `pump_pres`, `pump_power_v_pres` / `pump_volt`, `pump_volt_avg` / `pump_curr`, `pump_curr_avg` / `pump_energy`, `pump_energy_v_max_pres` / `pump_num_ops` / `pump_time_sum` / `pump_energy_sum` |
 | Air Pump | `air_pump_duration`, `air_pump_pres` |
-| Engineering (only if one of them is written) | `phase_vac` / `energy_per_cycle` |
-| Satcom | `satcom` / `position_gps`, `satcom_gps_cno` / `satcom_gps_hdop`, `satcom_gps_nsat` / `satcom_gps_ttf`, `satcom_gps_fix_cep` / `satcom_iridium_fix_cep_avg`, `satcom_sbd_data_size_avg` / `satcom_sbd_count` / `satcom_sbd_data_size` / `satcom_sbd_data_type` |
+| Engineering (only if one of them is written) | `phase_vac` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` / `energy_per_cycle` / `energy_by_component` |
+| Satcom | `satcom` / `position_gps`, `satcom_gps_cno` (or `position_all`) / `satcom_gps_hdop`, `satcom_gps_nsat` / `satcom_gps_ttf`, `satcom_gps_fix_cep` / `satcom_iridium_fix_cep_avg`, `satcom_sbd_data_size_avg` / `satcom_sbd_count` / `satcom_sbd_data_size` / `satcom_sbd_data_type` |
 
 The Hydraulic System section is shown only if the float has `pump` data, so a float without it shows `pump_first_duration` only in the figure table.
 
