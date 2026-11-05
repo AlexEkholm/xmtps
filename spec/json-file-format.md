@@ -1060,7 +1060,7 @@ These are estimates, not measurements. The constants were fitted to the WHOI SOL
 | `wims_s` | float | s | WIMS run time: 590 s per `_wave` row of the dive (the operators' figure for one run). The power while not sampling is negligible and not counted. 0 without wave data. |
 | `total_j` | float | J | Sum of the component columns. |
 
-For an RBR CTD, `ctd_profile_j`, `ctd_drift_j` and `ctd_surface_j` are reduced by 80% (× 0.2, `ENERGY_CTD_RBR_FACTOR`). Energies are rounded to 0.1 J. The constants are named `ENERGY_*` in `xmtps-aggregate-json.py`.
+Pump records with an unusable current (`curr` ≤ 0, ≥ 100 or missing; `PumpCurrentInvalid`) count as 0 in `pump_descent_j`, `pump_ascent_j` and `internal_res_j`, as the pump plots leave them out (since 2026-11-05); they still count as operations, so the first operation of a dive stays its descent pump. For an RBR CTD, `ctd_profile_j`, `ctd_drift_j` and `ctd_surface_j` are reduced by 80% (× 0.2, `ENERGY_CTD_RBR_FACTOR`). Energies are rounded to 0.1 J. The constants are named `ENERGY_*` in `xmtps-aggregate-json.py`.
 
 ### 4.18 `_wave`
 

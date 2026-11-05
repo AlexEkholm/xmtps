@@ -21,6 +21,9 @@ Python tools:
   `WVS` `fbase` and `fdiv` in the dive JSON (`Wave.fbase`, `Wave.fdiv`), and the `_wave`
   aggregate gains `slen` and `fe_hz` (the true sample rate; for older dive JSON, `fsam` halved
   for the every-other-bin firmware).
+- Energy estimate: pump records with an unusable current (`curr` <= 0, >= 100 or missing) are
+  left out of the pump and internal-resistance terms, as the pump plots leave them out; both now
+  use `PumpCurrentInvalid()`.
 - Energy plot (`energy_per_cycle`): the title no longer adds "(RBR CTD: CTD x0.2)" for floats with
   an RBR CTD. The CTD estimates are still reduced as before.
 - Energy plot (`energy_per_cycle`): the dive total is on its own line at the top of the hover label

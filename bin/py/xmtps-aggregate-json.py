@@ -370,6 +370,13 @@ ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one l
     ['energy_by_component'],
     ]
 ENGINEERING_PAGE_FIGS = [ id for row in ENGINEERING_PAGE_ROWS for id in row ]
+def PumpCurrentInvalid(curr):
+    """Return a boolean Series: pump records whose battery current is unusable (<= 0, >= 100 A or
+    missing). The pump plots blank curr, power and energy of these records, and EnergyEstimates
+    leaves them out, so both use the same records."""
+    curr = pd.to_numeric(curr, errors='coerce')
+    return (curr <= 0) | (curr >= 100) | curr.isna()
+
 ENERGY_COMPONENTS = [              # (column, label), stacked bottom up
     ('pump_descent_j', 'Pump-descent'),
     ('pump_ascent_j', 'Pump-ascent'),
@@ -415,6 +422,8 @@ def EnergyEstimates(float_aggregate_data):
     the SOLO-II listing files; the ALAMO quantities used in their place are estimates too:
       pump_descent_j   the dive's first oil pump operation ('pump' energy, as in the pump plots)
       pump_ascent_j    the dive's other oil pump operations
+                       (records with an unusable current, PumpCurrentInvalid, count as 0 in all
+                       pump terms, as the pump plots leave them out)
       internal_res_j   battery internal resistance loss of the oil pump: sum (V0 - V) * I * t,
                        V0 = the dive's highest pump voltage (a lower bound of the no-load voltage)
       air_pump_j       surface.air_pump_current_a * surface.air_pump_runtime_s * V0
@@ -468,6 +477,7 @@ def EnergyEstimates(float_aggregate_data):
         p = df[['dive', 'time', 'volt', 'curr', 'energy']].apply(pd.to_numeric, errors='coerce')
         p = p[p['dive'].notna()]
         p['dive'] = p['dive'].astype(int)
+        p.loc[PumpCurrentInvalid(p['curr']), ['curr', 'energy']] = np.nan   # as the pump plots
         first = p.groupby('dive').cumcount() == 0
         e['pump_descent_j'] = p[first].groupby('dive')['energy'].sum(min_count=1).reindex(e.index).fillna(0)
         e['pump_ascent_j'] = p[~first].groupby('dive')['energy'].sum(min_count=1).reindex(e.index).fillna(0)
@@ -8453,7 +8463,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 (df_dives['pres'] <= -5 )|(df_dives['pres'] >= 3000),
                 ['pres', ]] = np.nan
             df_dives.loc[
-                (df_dives['curr'] <= 0 )|(df_dives['curr'] >= 100)|df_dives['curr'].isna(),
+                PumpCurrentInvalid(df_dives['curr']),
                 ['curr', 'energy', 'power' ]] = np.nan
             
             df_dives_gb = df_dives.groupby(['dive'])
