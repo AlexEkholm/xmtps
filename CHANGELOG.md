@@ -42,6 +42,9 @@ Python tools:
   `WVS` `fbase` and `fdiv` in the dive JSON (`Wave.fbase`, `Wave.fdiv`), and the `_wave`
   aggregate gains `slen` and `fe_hz` (the true sample rate; for older dive JSON, `fsam` halved
   for the every-other-bin firmware).
+- Energy estimate: pack overrides for floats whose startup voltage misleads the pack rule: 9109
+  (Saft, read as alkaline at 13.6-13.7 V), and 9322, 9323, 11046, 11048, 11058 (Tadiran; no startup
+  voltage received before dive 1). An override now applies even without a startup voltage.
 - Profile positions and bathymetry plot (`position`): the depth colorbar has the shallowest
   depth (and land, 0 m) at the top and the deepest at the bottom. The map is drawn as negative
   depth; the colorbar labels and the hover show positive depths.

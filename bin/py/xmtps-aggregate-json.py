@@ -408,6 +408,10 @@ ENERGY_ALTO_MIN_SERIAL = 10000
 # Tadiran packs with inline diodes that lower the voltage to about 12.4-13.5 V.
 ENERGY_PACK_OVERRIDES = { serial: 'tadiran' for serial in range(11020, 11035) }
 ENERGY_PACK_OVERRIDES[11017] = 'tadiran'   # about 15.4 V at every startup but the last (13.41 V)
+ENERGY_PACK_OVERRIDES[9109] = 'saft'       # 24 x Saft LS 26500 (.meta); startup 13.6-13.7 V reads as alkaline
+# No startup voltage received before dive 1; pack from the float's batch:
+ENERGY_PACK_OVERRIDES.update({9322: 'tadiran', 9323: 'tadiran',                      # ALAMO RBR, 15.0 V
+                              11046: 'tadiran', 11048: 'tadiran', 11058: 'tadiran'})  # ALTO SBE 15.4 V
 ENERGY_SECONDS_PER_YEAR = 365.25 * 86400
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
     ['phase_vac'],
@@ -678,8 +682,9 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
                         break
                     pack_dive = dive
     pack_type, pack_wh, pack_rate = '', np.nan, np.nan
-    if np.isfinite(start_v):
-        pack_type = chemistry(start_v)
+    if np.isfinite(start_v) or override:
+        # an override also applies when no startup voltage was received
+        pack_type = override or chemistry(start_v)
         for name, _, rate in ENERGY_PACK_CHEMISTRY:
             if name == pack_type:
                 pack_rate = rate
