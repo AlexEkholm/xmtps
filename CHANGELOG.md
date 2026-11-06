@@ -37,6 +37,12 @@ Python tools:
   before depleting: ALTO 10110, 10112, 10113, 10115, 10116 and 11013 (2017-2018, read as alkaline,
   150-195 %) are Tadiran, as with the diode Tadiran ALTOs 11020-11034; ALAMO 9033 (startup
   13.77 V, read as alkaline, 113 %) is Saft.
+- Energy estimate: pack energies from public datasheets. The Tadiran TL-69xx cells are 3.9 V
+  PulsesPlus (Li-SO2Cl2) cells; ALAMO Tadiran is 24 TL-6920 C cells at 7.5 Ah x 3.9 V, 2.5 MJ
+  (was 8.5 Ah x 3.6 V, 2.6 MJ). Alkaline cells are the same size as the lithium cells: ALAMO
+  alkaline is 24 Procell C (PC1400, 8.5 Ah), 1.1 MJ (was 24 D cells, 1.9 MJ). New overrides for
+  floats that used more than an alkaline C-cell pack: 9062 is Saft; 9179, 9181 and 9207 are Tadiran
+  (behind diodes, startup 11.4-11.9 V).
 - Oil pump power and energy are computed from the battery voltage and current: power = `volt` ×
   `curr` (was `volt` × `curr_adj`, with `curr_adj` = `curr` × 12 / `volt` / 0.85). The pumps run
   from a 12 V rail made by a buck-boost converter from the batteries, but `pumpI` is the battery

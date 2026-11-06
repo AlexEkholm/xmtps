@@ -387,10 +387,13 @@ ENERGY_CONTROLLER_W = 0.035
 # type from the serial (ALAMO below ENERGY_ALTO_MIN_SERIAL, else ALTO). Alkaline packs have the
 # lithium packs' cell count in another configuration. Pack energies, from /data1/lab:
 #   ALTO Tadiran   4 x TLP-83121/D (4S x (2 TL-6930 D + HLC-1550)), 32 Ah each to 9 V: 6.7 MJ
-#   ALAMO Tadiran  24 TL-6920 C cells (3 x TLP-82121, 4S x (2 TL-6920 + HLC-1550)), about 8.5 Ah x
-#                  3.6 V each: 2.6 MJ (24 cells like the Saft ALAMOs; was 2 packs, 1.8 MJ)
-#   ALAMO Saft     24 x LS 26500, 7.7 Ah x 3.6 V = 27.7 Wh each: 2.4 MJ
-#   alkaline       Procell D, about 15 Ah x 1.5 V: 32 cells (ALTO) or 24 (ALAMO)
+#   ALAMO Tadiran  24 TL-6920 C cells (TLP-82121 packs, 4S x (2 TL-6920 + HLC-1550)), PulsesPlus
+#                  Li-SO2Cl2, 7.5 Ah x 3.9 V each (distributor data): 2.5 MJ (24 cells like the Saft
+#                  ALAMOs)
+#   ALAMO Saft     24 x LS 26500, 7.7 Ah x 3.6 V = 27.7 Wh each (datasheet): 2.4 MJ
+#   alkaline       same cell size as the lithium cells: ALTO 32 Procell D (PC1300), 15 Ah; ALAMO
+#                  24 Procell C (PC1400), 8.5 Ah at 25 mA to 0.8 V (datasheet); 1.5 V
+#                  each
 ENERGY_PACK_CHEMISTRY = [          # (chemistry, lowest startup voltage, self-discharge per year)
     ('tadiran',  14.6, 0.01),      # datasheet < 1 %/yr at 20 C
     ('saft',     13.8, 0.01),      # datasheet < 1 %/yr at 20 C
@@ -398,11 +401,11 @@ ENERGY_PACK_CHEMISTRY = [          # (chemistry, lowest startup voltage, self-di
     ]
 ENERGY_PACK_WH = {                 # (float type, chemistry): nominal pack energy, Wh
     ('alto',  'tadiran'):  6.7e6 / 3600,
-    ('alamo', 'tadiran'):  24 * 8.5 * 3.6,
+    ('alamo', 'tadiran'):  24 * 7.5 * 3.9,
     ('alto',  'saft'):     24 * 7.7 * 3.6,
     ('alamo', 'saft'):     24 * 7.7 * 3.6,
     ('alto',  'alkaline'): 32 * 15.0 * 1.5,
-    ('alamo', 'alkaline'): 24 * 15.0 * 1.5,
+    ('alamo', 'alkaline'): 24 * 8.5 * 1.5,
     }
 ENERGY_ALTO_MIN_SERIAL = 10000
 # Floats whose startup voltage does not tell their pack: serial -> chemistry. ALTO 11020-11034 have
@@ -417,6 +420,10 @@ ENERGY_PACK_OVERRIDES.update({9322: 'tadiran', 9323: 'tadiran',                 
 # before depletion (150-195 %): ALTO SBE 2017-2018, 11.2-12.9 V, like the diode Tadiran ALTOs.
 ENERGY_PACK_OVERRIDES.update({serial: 'tadiran' for serial in (10110, 10112, 10113, 10115, 10116, 11013)})
 ENERGY_PACK_OVERRIDES[9033] = 'saft'       # startup 13.77 V; used 113 % of an alkaline pack
+ENERGY_PACK_OVERRIDES[9062] = 'saft'       # startup 13.2 V, 2014-2016 batch; 138 % of an alkaline pack
+# ALAMO 9179, 9181, 9207: startup 11.4-11.9 V, but used 131-135 % of an alkaline (C-cell) pack:
+# taken as Tadiran behind diodes, like ALTO 11020-11034.
+ENERGY_PACK_OVERRIDES.update({9179: 'tadiran', 9181: 'tadiran', 9207: 'tadiran'})
 ENERGY_SECONDS_PER_YEAR = 365.25 * 86400
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
     ['phase_vac'],
