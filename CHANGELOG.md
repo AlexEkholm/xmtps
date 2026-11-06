@@ -49,8 +49,9 @@ Python tools:
   with a fixed board); a faulty board 15 mW more, over each cycle and over the storage before
   deployment (35 mW in all, as before). A board is faulty when the float's earliest SBD message is
   before 2022-07-01, except ALAMOs refitted with new boards and batteries in 2023 (9255-9257, 9289,
-  9291-9293, 9296, 9297, 9299), whose battery age counts from the refit. New `_energy` column
-  `bluetooth_fault`.
+  9291-9293, 9296, 9297, 9299), whose battery age counts from the refit; 9280 (first message 2020,
+  deployed 2024, startup voltage unchanged) is taken as refitted in December 2022. New `_energy`
+  column `bluetooth_fault`.
 - Oil pump power and energy are computed from the battery voltage and current: power = `volt` ×
   `curr` (was `volt` × `curr_adj`, with `curr_adj` = `curr` × 12 / `volt` / 0.85). The pumps run
   from a 12 V rail made by a buck-boost converter from the batteries, but `pumpI` is the battery

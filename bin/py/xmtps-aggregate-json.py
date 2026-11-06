@@ -391,6 +391,10 @@ ENERGY_BLUETOOTH_FIX_DATE = '2022-07-01'   # boards whose float's first SBD mess
 # age counts from the first SBD message on or after it, and the board is fixed.
 ENERGY_BLUETOOTH_REFIT = { serial: '2023-06-01' for serial in
                            (9255, 9256, 9257, 9289, 9291, 9292, 9293, 9296, 9297, 9299) }
+# 9280: first message 2020-09, deployed 2024-03, startup voltage unchanged (15.45 to 15.33-15.40 V);
+# with a faulty board's storage drain it would have used 144 % of its pack: taken as refitted when
+# it was started up again in December 2022.
+ENERGY_BLUETOOTH_REFIT[9280] = '2022-12-01'
 # Battery self-discharge: the pack's yearly self-discharge rate times its nominal energy, over the
 # battery age. One pack powers every subsystem. The chemistry is told from the median startup (BIT)
 # no-load voltage (Tadiran 15.0-15.6 V, Saft about 14.2 V, alkaline about 12-13.5 V), the float
