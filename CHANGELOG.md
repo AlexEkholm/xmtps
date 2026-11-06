@@ -7,6 +7,9 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- Energy estimate: pack overrides for 10111 and 11015 (Tadiran behind diodes; read as alkaline, they
+  used 120 % and 156 % of an alkaline pack, like the rest of the 2017-2018 ALTO batch) and 9032 (Saft,
+  like its 2014-2016 batch; its startup voltage reads about 10 times too high).
 - `xmtps-aggregate-json.py`: plot groups skip data they cannot use instead of failing with an
   ERROR (about 730 lines in the last full rebuild). Ascent, descent, surface, drift, displacement,
   profile position and contour plots return early, with a warning, when no rows are left after

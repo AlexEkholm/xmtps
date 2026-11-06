@@ -432,7 +432,9 @@ ENERGY_PACK_OVERRIDES.update({9322: 'tadiran', 9323: 'tadiran',                 
                               11046: 'tadiran', 11048: 'tadiran', 11058: 'tadiran'})  # ALTO SBE 15.4 V
 # Startup voltage reads as alkaline, but the floats used more than an alkaline pack's nominal energy
 # before depletion (150-195 %): ALTO SBE 2017-2018, 11.2-12.9 V, like the diode Tadiran ALTOs.
-ENERGY_PACK_OVERRIDES.update({serial: 'tadiran' for serial in (10110, 10112, 10113, 10115, 10116, 11013)})
+ENERGY_PACK_OVERRIDES.update({serial: 'tadiran' for serial in (10110, 10111, 10112, 10113, 10115, 10116,
+                                                              11013, 11015)})   # 10111: 120 %, 11015: 156 %
+ENERGY_PACK_OVERRIDES[9032] = 'saft'       # 2014; no usable startup voltage (reads about 10x); batch is Saft
 ENERGY_PACK_OVERRIDES[9033] = 'saft'       # startup 13.77 V; used 113 % of an alkaline pack
 ENERGY_PACK_OVERRIDES[9062] = 'saft'       # startup 13.2 V, 2014-2016 batch; 138 % of an alkaline pack
 # ALAMO 9179, 9181, 9207: startup 11.4-11.9 V, but used 131-135 % of an alkaline (C-cell) pack:
