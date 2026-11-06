@@ -33,6 +33,10 @@ Python tools:
   depleted 2020-2024 RBR ALAMOs now come out at 72 % of nominal (was 107 %). Only `pack_wh` and
   the self-discharge term of ALAMOs with Tadiran or alkaline packs change; their energy
   aggregates must be regenerated (`xmtps-aggregate-json.py -f`).
+- Energy estimate: pack overrides for floats that used more than their pack's nominal energy
+  before depleting: ALTO 10110, 10112, 10113, 10115, 10116 and 11013 (2017-2018, read as alkaline,
+  150-195 %) are Tadiran, as with the diode Tadiran ALTOs 11020-11034; ALAMO 9033 (startup
+  13.77 V, read as alkaline, 113 %) is Saft.
 - Oil pump power and energy are computed from the battery voltage and current: power = `volt` ×
   `curr` (was `volt` × `curr_adj`, with `curr_adj` = `curr` × 12 / `volt` / 0.85). The pumps run
   from a 12 V rail made by a buck-boost converter from the batteries, but `pumpI` is the battery

@@ -413,6 +413,10 @@ ENERGY_PACK_OVERRIDES[9109] = 'saft'       # 24 x Saft LS 26500 (.meta); startup
 # No startup voltage received before dive 1; pack from the float's batch:
 ENERGY_PACK_OVERRIDES.update({9322: 'tadiran', 9323: 'tadiran',                      # ALAMO RBR, 15.0 V
                               11046: 'tadiran', 11048: 'tadiran', 11058: 'tadiran'})  # ALTO SBE 15.4 V
+# Startup voltage reads as alkaline, but the floats used more than an alkaline pack's nominal energy
+# before depletion (150-195 %): ALTO SBE 2017-2018, 11.2-12.9 V, like the diode Tadiran ALTOs.
+ENERGY_PACK_OVERRIDES.update({serial: 'tadiran' for serial in (10110, 10112, 10113, 10115, 10116, 11013)})
+ENERGY_PACK_OVERRIDES[9033] = 'saft'       # startup 13.77 V; used 113 % of an alkaline pack
 ENERGY_SECONDS_PER_YEAR = 365.25 * 86400
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
     ['phase_vac'],
