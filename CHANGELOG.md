@@ -20,6 +20,10 @@ Decoder:
 
 Python tools:
 
+- Energy estimate: battery age at each dive's first SBD message, not its last. A float resends a
+  lost packet of an earlier dive at a later surfacing; on 11213 dive 48 resent packets of dives 40
+  and 43, which then took the controller drain and self-discharge of eight days (21 kJ) and left
+  dives 41-48 with none.
 - GPS: a fix that puts the float more than 2 m/s away from the surfacings before and after it,
   over the time submerged, is rejected (`RejectGpsSubmergedSpeed`): it stays in `_gps` with the new
   columns `valid` false and `qc_reject` "submerged_speed", and is left out of the profile positions,

@@ -808,12 +808,15 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
                 t_pack = t.loc[t['dive'].astype(int) == pack_dive, 'dt_epoch']
                 if len(t_pack):
                     t0 = max(t0, t_pack.min()) if refit else t_pack.min()
-            age = (t.groupby(t['dive'].astype(int))['dt_epoch'].max() - t0).reindex(e.index)
+            # the battery age at each dive from its first message: a float resends a lost packet of
+            # an earlier dive at a later surfacing (11213, dives 40 and 43 resent at dive 48), so a
+            # dive's last message can be days after it
+            t_first = t.groupby(t['dive'].astype(int))['dt_epoch'].min()
+            age = (t_first - t0).reindex(e.index)
             age = age.where(age >= 0)            # startups of a replaced pack
             battery_age_s = age
             # positive dives in time order (by their first message), not by number: a reset in the
             # field restarts the dive numbers
-            t_first = t.groupby(t['dive'].astype(int))['dt_epoch'].min()
             a = age[age.index > 0].dropna()
             a = a.loc[t_first.reindex(a.index).sort_values(kind='stable').index].cummax()
             self_discharge_s = a.diff().fillna(a).clip(lower=0).reindex(e.index).fillna(0)
