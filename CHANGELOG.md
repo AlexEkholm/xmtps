@@ -43,6 +43,14 @@ Python tools:
   alkaline is 24 Procell C (PC1400, 8.5 Ah), 1.1 MJ (was 24 D cells, 1.9 MJ). New overrides for
   floats that used more than an alkaline C-cell pack: 9062 is Saft; 9179, 9181 and 9207 are Tadiran
   (behind diodes, startup 11.4-11.9 V).
+- Energy estimate: the controller drain is split for the Bluetooth power fault of VOP11 and early
+  VOP12 controller boards, which leave the Bluetooth module powered (MRV, 2023: about 2 mA sleep
+  current), also in storage. Every float gets 20 mW over each cycle (from 11342, a long-lived ALTO
+  with a fixed board); a faulty board 15 mW more, over each cycle and over the storage before
+  deployment (35 mW in all, as before). A board is faulty when the float's earliest SBD message is
+  before 2022-07-01, except ALAMOs refitted with new boards and batteries in 2023 (9255-9257, 9289,
+  9291-9293, 9296, 9297, 9299), whose battery age counts from the refit. New `_energy` column
+  `bluetooth_fault`.
 - Oil pump power and energy are computed from the battery voltage and current: power = `volt` ×
   `curr` (was `volt` × `curr_adj`, with `curr_adj` = `curr` × 12 / `volt` / 0.85). The pumps run
   from a 12 V rail made by a buck-boost converter from the batteries, but `pumpI` is the battery

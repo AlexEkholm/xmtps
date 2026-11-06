@@ -374,13 +374,23 @@ ENERGY_GPS_W = 0.032 * 3.0         # 0.096 W while acquiring a fix (time to fix)
 # negligible and not counted.
 ENERGY_WIMS_W = 0.0456             # running
 ENERGY_WIMS_RUN_S = 590.0          # run time per dive with wave data
-# Controller quiescent drain: a constant 35 mW (about 2.4 mA at 15 V) over each dive cycle, for the
-# controller, clock and sensor standby; ALAMO and ALTO share the controller. Estimated from the
-# floats that ran out of battery: the usable pack energy (5.9 MJ, from the short-lived ALTOs 11491
-# and 11495) minus the per-dive terms and self-discharge, over the lifetime of the long-lived ALTOs
-# (35-38 mW in three groups). It matches the SOLO-II CPU's about 2 mA. Not counted during storage
-# before deployment, when the float is not running.
-ENERGY_CONTROLLER_W = 0.035
+# Controller quiescent drain over each dive cycle, for the controller, clock and sensor standby;
+# ALAMO and ALTO share the controller. Estimated from the floats that ran out of battery: the usable
+# pack energy (5.9 MJ, from the short-lived ALTOs 11491 and 11495) minus the per-dive terms and
+# self-discharge, over the lifetime of the long-lived ALTOs. Controller boards built before
+# ENERGY_BLUETOOTH_FIX_DATE (VOP11 and early VOP12) leave the Bluetooth module powered (MRV, 2023:
+# about 2 mA sleep current), also while the float is off in storage. The long-lived ALTOs with that
+# fault give 35 mW in all (32-38 mW in three groups); 11342, the long-lived ALTO with a fixed board,
+# about 20 mW. So 20 mW for every float, plus 15 mW for a faulty board over each cycle and over the
+# storage before deployment (from the earliest SBD message, the factory test). Not counted for a
+# fixed board during storage, when the float is not running.
+ENERGY_CONTROLLER_W = 0.020
+ENERGY_BLUETOOTH_W = 0.015
+ENERGY_BLUETOOTH_FIX_DATE = '2022-07-01'   # boards whose float's first SBD message is before: faulty
+# Floats sent back for a new controller board and new batteries: serial -> refit date. The pack's
+# age counts from the first SBD message on or after it, and the board is fixed.
+ENERGY_BLUETOOTH_REFIT = { serial: '2023-06-01' for serial in
+                           (9255, 9256, 9257, 9289, 9291, 9292, 9293, 9296, 9297, 9299) }
 # Battery self-discharge: the pack's yearly self-discharge rate times its nominal energy, over the
 # battery age. One pack powers every subsystem. The chemistry is told from the median startup (BIT)
 # no-load voltage (Tadiran 15.0-15.6 V, Saft about 14.2 V, alkaline about 12-13.5 V), the float
@@ -516,13 +526,18 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
                        since the previous positive dive; for the first, only its own cycle
                        (cycle_timing total_duration_s, else the median gain)
       storage_j        the same for the first positive dive's battery age before its cycle (storage
-                       and tests before deployment), storage_s; in ENERGY_PIE_ONLY
-      controller_j     ENERGY_CONTROLLER_W * self_discharge_s: the controller's quiescent drain
-                       over each dive's cycle (not over storage)
+                       and tests before deployment), storage_s, plus ENERGY_BLUETOOTH_W * storage_s
+                       for a faulty board; in ENERGY_PIE_ONLY
+      controller_j     (ENERGY_CONTROLLER_W, plus ENERGY_BLUETOOTH_W for a faulty board) *
+                       self_discharge_s: the controller's quiescent drain over each dive's cycle.
+                       bluetooth_fault is 1 when the float's earliest SBD message is before
+                       ENERGY_BLUETOOTH_FIX_DATE and it is not in ENERGY_BLUETOOTH_REFIT (whose
+                       battery age counts from the refit date)
     The CTD is RBR when the mission ctdtype (else the BIT sensor type) says so, else SBE 41CP.
     total_j is the sum of the components. The inputs are kept as columns
     (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s, wims_s,
-    battery_age_s, self_discharge_s, storage_s, battery_start_v, pack_type, pack_wh, pack_rate_per_yr). float_id (the serial) gives the float
+    battery_age_s, self_discharge_s, storage_s, battery_start_v, pack_type, pack_wh, pack_rate_per_yr,
+    bluetooth_fault). float_id (the serial) gives the float
     type; without it the float is taken as an ALAMO. Returns an empty
     DataFrame if the float has no dives.
     """
@@ -707,17 +722,30 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
     battery_age_s = pd.Series(np.nan, index=e.index)
     self_discharge_s = pd.Series(0.0, index=e.index)
     storage_s = pd.Series(0.0, index=e.index)
+    bluetooth_fault = False
     df = frame('sbd')
     if df is not None:
         t = df[['dive', 'dt_epoch']].apply(pd.to_numeric, errors='coerce').dropna()
         t = t[t['dt_epoch'] > 0]
         if len(t):
             t0 = t['dt_epoch'].min()
+            fix = pd.Timestamp(ENERGY_BLUETOOTH_FIX_DATE, tz='UTC').timestamp()
+            bluetooth_fault = t0 < fix
+            try:
+                refit = ENERGY_BLUETOOTH_REFIT.get(int(float_id))
+            except (TypeError, ValueError):
+                refit = None
+            if refit:
+                after = t.loc[t['dt_epoch'] >= pd.Timestamp(refit, tz='UTC').timestamp(), 'dt_epoch']
+                if len(after):
+                    # new board and new batteries: the pack's age from the first message after the refit
+                    t0 = max(t0, after.min())
+                    bluetooth_fault = False
             if pack_dive is not None and pack_dive < 0:
                 # a repacked float: from the new pack's first startup
                 t_pack = t.loc[t['dive'].astype(int) == pack_dive, 'dt_epoch']
                 if len(t_pack):
-                    t0 = t_pack.min()
+                    t0 = max(t0, t_pack.min()) if refit else t_pack.min()
             age = (t.groupby(t['dive'].astype(int))['dt_epoch'].max() - t0).reindex(e.index)
             age = age.where(age >= 0)            # startups of a replaced pack
             battery_age_s = age
@@ -748,10 +776,13 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
     e['pack_rate_per_yr'] = pack_rate
     e['self_discharge_j'] = (pack_rate * pack_wh * 3600 * self_discharge_s
                              / ENERGY_SECONDS_PER_YEAR) if np.isfinite(pack_wh) else 0.0
-    e['storage_j'] = (pack_rate * pack_wh * 3600 * storage_s
-                      / ENERGY_SECONDS_PER_YEAR) if np.isfinite(pack_wh) else 0.0
-    # Controller quiescent drain over the same per-cycle time as self-discharge (not storage)
-    e['controller_j'] = ENERGY_CONTROLLER_W * self_discharge_s
+    e['bluetooth_fault'] = int(bluetooth_fault)
+    bt_w = ENERGY_BLUETOOTH_W if bluetooth_fault else 0.0
+    # Storage: self-discharge, and a faulty board's Bluetooth drain, before the first dive's cycle
+    e['storage_j'] = ((pack_rate * pack_wh * 3600 * storage_s
+                       / ENERGY_SECONDS_PER_YEAR) if np.isfinite(pack_wh) else 0.0) + bt_w * storage_s
+    # Controller quiescent drain over the same per-cycle time as self-discharge
+    e['controller_j'] = (ENERGY_CONTROLLER_W + bt_w) * self_discharge_s
 
     e['total_j'] = e[[c for c, _ in ENERGY_COMPONENTS]].sum(axis=1)
     e.insert(0, 'ctdtype', ctdtype)
