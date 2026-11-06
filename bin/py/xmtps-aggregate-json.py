@@ -6134,6 +6134,10 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 (df_profiles['temp'] <= -5 )|(df_profiles['temp'] >= 40)|df_profiles['temp'].isna(),
                 ['temp','dens','sigma0']] = np.nan
                 
+            if len(df_profiles) < 1 or not df_profiles['temp'].notna().any():
+                logger.warning('No usable profile data for float {}'.format(float_id))
+                return figs_meta
+
             df_profiles_gb = df_profiles[['dive','pres']].groupby(['dive'])
              
             # Calculate data ranges

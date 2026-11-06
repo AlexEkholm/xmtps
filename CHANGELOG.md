@@ -26,7 +26,8 @@ Python tools:
   count (one-sample ascents without times or rate, 9031, 9032, 9035, 9036) are padded instead of
   dropping the dive's data (new helper `FitLength`); surface plots leave out the temperature
   figures when a float has no surface temperature instead of failing; wave plots are skipped when
-  no spectra are left after filtering (9046).
+  no spectra are left after filtering (9046); profile plots are skipped when no profile with
+  temperature is left (9091, 9212).
 
 ## 2026-11-05
 
