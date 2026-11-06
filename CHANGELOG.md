@@ -22,6 +22,11 @@ Python tools:
   left out with fewer than 2 wave dives (a single column drew a zero-width image: 9108, 9113, 9307).
   A failing plot group now logs the exception type and message; the surface displacement message
   no longer says "submerged displacement plotes". The drift temperature range no longer needs sigma0.
+- `xmtps-aggregate-json.py`: ascent and descent records whose arrays are shorter than their sample
+  count (one-sample ascents without times or rate, 9031, 9032, 9035, 9036) are padded instead of
+  dropping the dive's data (new helper `FitLength`); surface plots leave out the temperature
+  figures when a float has no surface temperature instead of failing; wave plots are skipped when
+  no spectra are left after filtering (9046).
 
 ## 2026-11-05
 

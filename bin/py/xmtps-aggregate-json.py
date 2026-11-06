@@ -1084,12 +1084,12 @@ def AggregateDiveData():
                         df_profile = pd.DataFrame(
                             {
                                 'dive':             np.array([dive_data.dive_num] * ascent_data.n, dtype='int'),
-                                'pres':             np.array(ascent_data.pres, dtype='float'),
-                                'dt_epoch':         np.array(ascent_data.dt_epoch, dtype='float'),
-                                'dt_ref_delta_sec': np.array(ascent_data.dt_ref_delta_sec, dtype='float'),
-                                'dt_str':           np.array(ascent_data.dt_str, dtype='str'),
-                                'phase_code':       np.array(ascent_data.phase_code, dtype='int'),
-                                'rate':             np.array(ascent_data.rate, dtype='float')*100,
+                                'pres':             np.array(FitLength(ascent_data.pres, ascent_data.n), dtype='float'),
+                                'dt_epoch':         np.array(FitLength(ascent_data.dt_epoch, ascent_data.n), dtype='float'),
+                                'dt_ref_delta_sec': np.array(FitLength(ascent_data.dt_ref_delta_sec, ascent_data.n), dtype='float'),
+                                'dt_str':           np.array(FitLength(ascent_data.dt_str, ascent_data.n, ''), dtype='str'),
+                                'phase_code':       np.array(FitLength(ascent_data.phase_code, ascent_data.n, -1), dtype='int'),
+                                'rate':             np.array(FitLength(ascent_data.rate, ascent_data.n), dtype='float')*100,
                             }
                         )
                         float_aggregate_data['ascent'] = AppendRows(float_aggregate_data['ascent'], df_profile)
@@ -1144,12 +1144,12 @@ def AggregateDiveData():
                         df_profile = pd.DataFrame(
                             {
                                 'dive':             np.array([dive_data.dive_num] * descent_data.n, dtype='int'),
-                                'pres':             np.array(descent_data.pres, dtype='float'),
-                                'dt_epoch':         np.array(descent_data.dt_epoch, dtype='float'),
-                                'dt_ref_delta_sec': np.array(descent_data.dt_ref_delta_sec, dtype='float'),
-                                'dt_str':           np.array(descent_data.dt_str, dtype='str'),
-                                'phase_code':       np.array(descent_data.phase_code, dtype='int'),
-                                'rate':             np.array(descent_data.rate, dtype='float')*100,
+                                'pres':             np.array(FitLength(descent_data.pres, descent_data.n), dtype='float'),
+                                'dt_epoch':         np.array(FitLength(descent_data.dt_epoch, descent_data.n), dtype='float'),
+                                'dt_ref_delta_sec': np.array(FitLength(descent_data.dt_ref_delta_sec, descent_data.n), dtype='float'),
+                                'dt_str':           np.array(FitLength(descent_data.dt_str, descent_data.n, ''), dtype='str'),
+                                'phase_code':       np.array(FitLength(descent_data.phase_code, descent_data.n, -1), dtype='int'),
+                                'rate':             np.array(FitLength(descent_data.rate, descent_data.n), dtype='float')*100,
                             }
                         )
                         float_aggregate_data['descent'] = AppendRows(float_aggregate_data['descent'], df_profile)
@@ -3698,6 +3698,13 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
         hoverlabel=dict(font=dict(family='Consolas, monospace', size=13)),
         margin=dict(l=10, r=10, b=20, t=50, pad=4))
     return fig
+
+def FitLength(values, n, fill=np.nan):
+    """values as a list of length n: cut, or padded with fill (a record whose arrays are shorter
+    than its sample count, such as a one-sample ascent without times or rate)."""
+    v = list(values) if values is not None else []
+    return v[:n] + [fill] * (n - len(v)) if len(v) != n else v
+
 
 def RangePercentile(values, q):
     """np.percentile of the finite values as doubles; NaN for each q when there are none (a float
@@ -10435,7 +10442,7 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                     np.max(df_dives['dt_ref_delta_sec'][~df_dives['dt_ref_delta_sec'].isna()].values)
                     ]).astype(np.double),
                 pres   = np.percentile(df_dives['pres'].values, [99, 1]).astype(np.double),
-                temp   = np.percentile(df_dives['temp'][~df_dives['temp'].isna()].values, [1, 99]).astype(np.double),
+                temp   = RangePercentile(df_dives['temp'].values, [1, 99]),
                 )
             rng['pres']   = np.round(rng['pres']   + [ 1.00,-1.00], 1)
             rng['temp']   = np.round(rng['temp']   + [-2.00, 2.00], 1) 
@@ -10772,7 +10779,9 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 surface_sample_count = 'figWideXS'
                 )
             
-            for fig in figs.keys():
+            if not np.isfinite(rng['temp']).all():
+                DropFigures(figs, [k for k in figs if 'temp' in k], 'No surface temperature', float_id)
+            for fig in list(figs.keys()):
                 
                 fig_meta = WritePlotImageFiles(
                     id_str = fig, 
@@ -12358,6 +12367,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             df_wave_spectra = pd.merge(df_wave_spectra, df_profile_positions, on=['dive'])
             
             df_wave = pd.merge(df_wave, df_profile_positions, on=['dive'])
+            if len(df_wave_spectra) < 1 or len(df_wave) < 1:
+                logger.warning('No usable wave spectra for float {}'.format(float_id))
+                return figs_meta
             
             
             # Calculate Ranges
