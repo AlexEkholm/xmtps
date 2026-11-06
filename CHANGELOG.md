@@ -20,6 +20,10 @@ Decoder:
 
 Python tools:
 
+- Energy estimate: floats whose dive numbers restarted after a reset in the field (9113, 9223, 9226,
+  9245) took the reset's startup as the pack's start, so their dives before the reset got no
+  controller drain or self-discharge. The first dive is now the earliest in time, and the dives
+  share out the battery age in time order (9113: 141 to 222 days, 0.76 to 1.01 MJ).
 - Energy estimate: new component `maple_j` (`maple_s`) for the Rockland MAPLe microstructure
   system of the Micro-ALTO floats (ALTO 11491-11496, or firmware ending in 0x33): 0.3 W over each
   dive's ascent, when it logs. No published power; 11491 and 11495, which ran out of battery,

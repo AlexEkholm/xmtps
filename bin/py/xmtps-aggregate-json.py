@@ -743,10 +743,12 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
                 ts = ts[ts['dt_epoch'] > 0].groupby(ts['dive'].astype(int))['dt_epoch'].min()
                 if v.index.isin(ts.index).all():
                     order = ts.reindex(v.index)
-                    # only the startups before the first dive (a float can be started up again later)
+                    # only the startups before the first dive (a float can be started up again later);
+                    # the earliest positive dive in time, since a reset in the field restarts the dive
+                    # numbers and its startup then precedes dive 1 but not the dives before it
                     first = ts[ts.index > 0]
                     if len(first):
-                        before = order <= first.iloc[0]
+                        before = order <= first.min()
                         if before.any():
                             v, order = v[before], order[before]
                         else:
@@ -805,7 +807,11 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
             age = (t.groupby(t['dive'].astype(int))['dt_epoch'].max() - t0).reindex(e.index)
             age = age.where(age >= 0)            # startups of a replaced pack
             battery_age_s = age
-            a = age[age.index > 0].dropna().sort_index().cummax()
+            # positive dives in time order (by their first message), not by number: a reset in the
+            # field restarts the dive numbers
+            t_first = t.groupby(t['dive'].astype(int))['dt_epoch'].min()
+            a = age[age.index > 0].dropna()
+            a = a.loc[t_first.reindex(a.index).sort_values(kind='stable').index].cummax()
             self_discharge_s = a.diff().fillna(a).clip(lower=0).reindex(e.index).fillna(0)
             # the first positive dive: its own cycle (cycle_timing total_duration_s, else the median
             # of the other dives' gains) is self-discharge, the time before it storage
