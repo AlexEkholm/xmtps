@@ -383,6 +383,14 @@ ENERGY_GPS_W = 0.032 * 3.0         # 0.096 W while acquiring a fix (time to fix)
 # negligible and not counted.
 ENERGY_WIMS_W = 0.0456             # running
 ENERGY_WIMS_RUN_S = 590.0          # run time per dive with wave data
+# Rockland Scientific MAPLe microstructure system on the Micro-ALTO floats (shear and FP07
+# micro-temperature probes; firmware product byte 0x33, ALTO 11491-11496), powered from the float's
+# pack while it logs during the ascent; its files go ashore over Iridium, in the Iridium term. No
+# published power: 11491 and 11495, which ran out of battery, bound it to at most about 0.5-0.8 W
+# while logging; taken as 0.3 W over each dive's ascent (cycle_timing ascent_duration_s).
+ENERGY_MAPLE_W = 0.3
+ENERGY_MAPLE_FLOATS = set(range(11491, 11497))
+ENERGY_MAPLE_FW_PRODUCT = '33'     # last byte of the mission fwver, e.g. 0x0A060233
 # Controller quiescent drain over each dive cycle, for the controller, clock and sensor standby;
 # ALAMO and ALTO share the controller. Estimated from the floats that ran out of battery: the usable
 # pack energy (5.9 MJ, from the short-lived ALTOs 11491 and 11495) minus the per-dive terms and
@@ -487,6 +495,7 @@ ENERGY_COMPONENTS = [              # (column, label), stacked bottom up
     ('iridium_j', 'Iridium'),
     ('gps_j', 'GPS'),
     ('wims_j', 'WIMS'),
+    ('maple_j', 'Microstructure (MAPLe)'),
     ('internal_res_j', 'Internal Res.'),
     ('controller_j', 'Controller'),
     ('self_discharge_j', 'Self-discharge'),
@@ -543,6 +552,9 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
       gps_j            ENERGY_GPS_W * the sum of the dive's GPS times to fix (ttf_sec)
       wims_j           ENERGY_WIMS_W * ENERGY_WIMS_RUN_S per WIMS run (a 'wave' row with slen > 1);
                        0 for floats without WIMS
+      maple_j          ENERGY_MAPLE_W * maple_s, maple_s the dive's ascent duration (ascent_s) for
+                       a Micro-ALTO (serial in ENERGY_MAPLE_FLOATS, or a mission fwver whose
+                       last byte is ENERGY_MAPLE_FW_PRODUCT); 0 for other floats
       self_discharge_j pack_rate_per_yr * pack_wh * 3600 * self_discharge_s / ENERGY_SECONDS_PER_YEAR;
                        the chemistry (pack_type) from the latest startup's 'engineering_data'
                        bit.battery_start_v (ENERGY_PACK_CHEMISTRY) unless the serial is in
@@ -563,7 +575,7 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
                        (whose battery age counts from the refit date)
     The CTD is RBR when the mission ctdtype (else the BIT sensor type) says so, else SBE 41CP.
     total_j is the sum of the components. The inputs are kept as columns
-    (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s, wims_s,
+    (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s, wims_s, maple_s,
     battery_age_s, self_discharge_s, storage_s, battery_start_v, pack_type, pack_wh, pack_rate_per_yr,
     bluetooth_fault). float_id (the serial) gives the float
     type; without it the float is taken as an ALAMO. Returns an empty
@@ -682,6 +694,17 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
         wims_s = (ENERGY_WIMS_RUN_S * w.groupby(w['dive'].astype(int)).size()).reindex(e.index).fillna(0)
     e['wims_s'] = wims_s
     e['wims_j'] = ENERGY_WIMS_W * wims_s
+
+    # MAPLe microstructure system (Micro-ALTO): runs during each dive's ascent
+    try:
+        maple = int(float_id) in ENERGY_MAPLE_FLOATS
+    except (TypeError, ValueError):
+        maple = False
+    dm = frame('mission')
+    if not maple and dm is not None and 'fwver' in dm.columns:
+        maple = dm['fwver'].dropna().astype(str).str.lower().str.endswith(ENERGY_MAPLE_FW_PRODUCT).any()
+    e['maple_s'] = ascent_s.fillna(0.0) if maple else 0.0
+    e['maple_j'] = ENERGY_MAPLE_W * e['maple_s']
 
     # Battery self-discharge, from the pack told by the voltage of the latest startup before the first
     # dive (startups in time order, by their first SBD message). A repacked float has
@@ -14122,6 +14145,7 @@ ENERGY_COLORS = {
     'iridium_j':      'rgb(230,85,13)',
     'gps_j':          'rgb(253,174,107)',
     'wims_j':         'rgb(117,107,177)',
+    'maple_j':        'rgb(188,128,189)',
     'controller_j':   'rgb(99,99,99)',
     'self_discharge_j': 'rgb(205,205,205)',
     'storage_j':        'rgb(230,230,230)',
