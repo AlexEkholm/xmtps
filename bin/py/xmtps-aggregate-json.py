@@ -14429,7 +14429,7 @@ def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float):
     pack = df['pack_type'].dropna().iloc[-1] if 'pack_type' in df.columns and df['pack_type'].notna().any() else ''
     pack = {'tadiran': 'Tadiran', 'saft': 'Saft'}.get(pack, pack)
     f_low, f_mid, f_high = ENERGY_USABLE_FRACTION
-    title = '{}: Estimated Remaining Cycles on the Current Mission: {:.0f} ({:.0f}–{:.0f})'.format(
+    title = '{}: Remaining Cycles: {:.0f} ({:.0f}–{:.0f})'.format(
         float_id, last['remaining_mid'], last['remaining_low'], last['remaining_high'])
     if np.isfinite(last['cycle_s']):
         t = [ last[k] * last['cycle_s'] for k in ('remaining_mid', 'remaining_low', 'remaining_high') ]
@@ -14437,9 +14437,10 @@ def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float):
             title += ', about {:.1f} years ({:.1f}–{:.1f})'.format(*[ x / ENERGY_SECONDS_PER_YEAR for x in t ])
         else:
             title += ', about {:.0f} days ({:.0f}–{:.0f})'.format(*[ x / 86400 for x in t ])
-    sub = ('Used {:.0f}% of the {}pack\'s nominal {:.2f} MJ; {:.1f} kJ and {:.1f} days a cycle (median of the last {} dives); '
-           'usable {:.0f}–{:.0f}% of nominal, controller drain ±{:.0f}%').format(
-        100 * last['used_frac'], (pack + ' ') if pack else '', last['nominal_j'] / 1e6, last['cycle_j'] / 1000,
+    # one short line: the PNG images keep only a 40 px top margin and are 780 px wide (small)
+    sub = ('Used {:.0f}% of the {:.2f} MJ {}pack; {:.1f} kJ, {:.1f} days a cycle (last {} dives); '
+           'range: usable {:.0f}–{:.0f}%, controller ±{:.0f}%').format(
+        100 * last['used_frac'], last['nominal_j'] / 1e6, (pack + ' ') if pack else '', last['cycle_j'] / 1000,
         last['cycle_s'] / 86400 if np.isfinite(last['cycle_s']) else float('nan'), ENERGY_REMAINING_RECENT_DIVES,
         100 * f_low, 100 * f_high, 100 * ENERGY_CONTROLLER_UNCERTAINTY)
     band = 'rgba(31,119,180,0.18)'
