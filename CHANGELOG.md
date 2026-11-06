@@ -7,6 +7,14 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- `xmtps-aggregate-json.py`, float pages: new plot `energy_remaining_cycles`, the cycles left if the
+  float stays on its current mission, with a range: usable energy 65-95 % (central 80 %) of the
+  pack's nominal energy, the energy and duration of a cycle the medians of the last 10 dives, and
+  the controller drain +-30 %. The pies `energy_by_component` and `satcom_sbd_data_type` are now single
+  horizontal stacked bars, drawn wide and short (new size class `figWideBar`).
+- Energy estimate: floats deployed (first positive dive) from 2024-01-01 count as having the fixed
+  controller board (no Bluetooth fault), whatever the date of their first SBD message
+  (`ENERGY_BLUETOOTH_FIXED_DEPLOYED`).
 - Energy estimate: pack overrides for 10111 and 11015 (Tadiran behind diodes; read as alkaline, they
   used 120 % and 156 % of an alkaline pack, like the rest of the 2017-2018 ALTO batch) and 9032 (Saft,
   like its 2014-2016 batch; its startup voltage reads about 10 times too high).

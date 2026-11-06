@@ -222,11 +222,20 @@ opts = dict(
         margin=dict(l=15,r=15,b=15,t=40,pad=0)
         ),
     figWideXS = dict(
-        height = 900, 
-        width  = 1600, 
-        html_height = None, 
-        html_width  = None, 
+        height = 900,
+        width  = 1600,
+        html_height = None,
+        html_width  = None,
         small_height = 215,
+        small_width  = 780,
+        margin=dict(l=15,r=15,b=15,t=40,pad=0)
+        ),
+    figWideBar = dict(             # one horizontal stacked bar of shares (ShareBarFigure)
+        height = 300,
+        width  = 1600,
+        html_height = None,
+        html_width  = None,
+        small_height = 115,
         small_width  = 780,
         margin=dict(l=15,r=15,b=15,t=40,pad=0)
         ),
@@ -387,6 +396,7 @@ ENERGY_WIMS_RUN_S = 590.0          # run time per dive with wave data
 ENERGY_CONTROLLER_W = 0.020
 ENERGY_BLUETOOTH_W = 0.015
 ENERGY_BLUETOOTH_FIX_DATE = '2022-07-01'   # boards whose float's first SBD message is before: faulty
+ENERGY_BLUETOOTH_FIXED_DEPLOYED = '2024-01-01'   # floats deployed (first positive dive) from then on: fixed
 # Floats sent back for a new controller board and new batteries: serial -> refit date. The pack's
 # age counts from the first SBD message on or after it, and the board is fixed.
 ENERGY_BLUETOOTH_REFIT = { serial: '2023-06-01' for serial in
@@ -441,12 +451,21 @@ ENERGY_PACK_OVERRIDES[9062] = 'saft'       # startup 13.2 V, 2014-2016 batch; 13
 # taken as Tadiran behind diodes, like ALTO 11020-11034.
 ENERGY_PACK_OVERRIDES.update({9179: 'tadiran', 9181: 'tadiran', 9207: 'tadiran'})
 ENERGY_SECONDS_PER_YEAR = 365.25 * 86400
+# Remaining-cycles estimate (energy_remaining_cycles): the usable share of the pack's nominal
+# energy, low / central / high, from the floats that ran out of battery (most used 65-95 % of
+# nominal); the controller drain's uncertainty (+-30 %), applied to each cycle's controller
+# energy; and the number of latest dives whose median gives the energy and duration of a cycle on
+# the current mission.
+ENERGY_USABLE_FRACTION = (0.65, 0.80, 0.95)
+ENERGY_CONTROLLER_UNCERTAINTY = 0.30
+ENERGY_REMAINING_RECENT_DIVES = 10
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
     ['phase_vac'],
     ['pump_vac', 'pump_vac_avg'],
     ['pump_vac_v_time', 'pump_vac_v_pres'],
     ['energy_per_cycle'],
     ['energy_by_component'],
+    ['energy_remaining_cycles'],
     ]
 ENGINEERING_PAGE_FIGS = [ id for row in ENGINEERING_PAGE_ROWS for id in row ]
 def PumpCurrentInvalid(curr):
@@ -471,7 +490,7 @@ ENERGY_COMPONENTS = [              # (column, label), stacked bottom up
     ('self_discharge_j', 'Self-discharge'),
     ('storage_j', 'Self-discharge (storage)'),
     ]
-ENERGY_PIE_ONLY = ('storage_j',)  # in the totals and the pie, not in the per-cycle bars
+ENERGY_PIE_ONLY = ('storage_j',)  # in the totals and energy_by_component, not in the per-cycle bars
 
 def WaveSampleRate(wave_data):
     """Return the true accelerometer sample rate of a FloatClasses.Wave, in Hz, or NaN.
@@ -537,8 +556,9 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
       controller_j     (ENERGY_CONTROLLER_W, plus ENERGY_BLUETOOTH_W for a faulty board) *
                        self_discharge_s: the controller's quiescent drain over each dive's cycle.
                        bluetooth_fault is 1 when the float's earliest SBD message is before
-                       ENERGY_BLUETOOTH_FIX_DATE and it is not in ENERGY_BLUETOOTH_REFIT (whose
-                       battery age counts from the refit date)
+                       ENERGY_BLUETOOTH_FIX_DATE, it was deployed (first positive dive) before
+                       ENERGY_BLUETOOTH_FIXED_DEPLOYED, and it is not in ENERGY_BLUETOOTH_REFIT
+                       (whose battery age counts from the refit date)
     The CTD is RBR when the mission ctdtype (else the BIT sensor type) says so, else SBE 41CP.
     total_j is the sum of the components. The inputs are kept as columns
     (ascent_s, profile_scans, drift_samples, surface_samples, iridium_s, gps_s, wims_s,
@@ -737,6 +757,10 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
             t0 = t['dt_epoch'].min()
             fix = pd.Timestamp(ENERGY_BLUETOOTH_FIX_DATE, tz='UTC').timestamp()
             bluetooth_fault = t0 < fix
+            # floats deployed (first positive dive) from ENERGY_BLUETOOTH_FIXED_DEPLOYED on have the fixed board
+            t_dep = t.loc[t['dive'] > 0, 'dt_epoch']
+            if len(t_dep) and t_dep.min() >= pd.Timestamp(ENERGY_BLUETOOTH_FIXED_DEPLOYED, tz='UTC').timestamp():
+                bluetooth_fault = False
             try:
                 refit = ENERGY_BLUETOOTH_REFIT.get(int(float_id))
             except (TypeError, ValueError):
@@ -10938,15 +10962,46 @@ def FormatDataSize(size_b):
         return '{:,.1f} kB'.format(size_b / 1000)
     return '{:,.2f} MB'.format(size_b / 1000000)
 
-def SbdDataTypePie(float_id, df_sbd_type, sbd_size_by_dive):
-    """Return a pie chart of the float's total SBD data by message type, or None without SBT data.
+def ShareBarFigure(title, labels, values, colors, text, hover_value):
+    """Return a figure of one horizontal bar stacked by part, each part's length its share (%) of
+    the sum of values, in the given order and colors. text is each part's label inside the bar
+    (left empty below 5%, always horizontal); hover_value is each part's value as hover text.
+    Drawn wide and short (size figWideBar), in place of a pie."""
+    total = float(sum(values))
+    fig = go.Figure(layout=dict(
+        showlegend=True,
+        title=dict(text=title),
+        barmode='stack',
+        bargap=0.25,
+        xaxis=dict(title='Share [%]', range=[0, 100], ticksuffix='%'),
+        uniformtext=dict(minsize=11, mode='hide'),   # hide labels that would have to shrink
+        yaxis=dict(visible=False),
+        hoverlabel=dict(font=dict(family='Consolas, monospace', size=14)),
+        legend=dict(orientation='h', yanchor='top', y=-0.45, xanchor='left', x=0, traceorder='normal'),
+        plot_bgcolor='white',
+        margin=dict(l=10, r=10, b=20, t=70, pad=4),
+        ))
+    for label, v, color, t, hv in zip(labels, values, colors, text, hover_value):
+        pct = 100 * v / total if total else 0.0
+        fig.add_trace(go.Bar(
+            x=[pct], y=[''], orientation='h', name=label,
+            text=[t if pct >= 5 else ''], textposition='inside', insidetextanchor='middle',
+            textangle=0,
+            hovertemplate='{}<br>{} ({:.1f}%)<extra></extra>'.format(label, hv, pct),
+            marker=dict(color=color, line=dict(color='rgb(255,255,255)', width=0.5)),
+            ))
+    return fig
+
+def SbdDataTypeBar(float_id, df_sbd_type, sbd_size_by_dive):
+    """Return a one-row horizontal stacked bar (ShareBarFigure) of the float's total SBD data by
+    message type, or None without SBT data.
 
     Sums the 'sbd_type' aggregate (the listing's SBT lines) over every dive with a positive dive
-    number that has them, one slice per type, colored as in the SBD data size plot
+    number that has them, one part per type, colored as in the SBD data size plot
     (SBD_TYPE_COLORS). sbd_size_by_dive is the sum of the SBD message sizes per dive; where it
-    exceeds a dive's SBT total, the difference is added as a 'retransmitted' slice. Dive 0, the
+    exceeds a dive's SBT total, the difference is added as a 'retransmitted' part. Dive 0, the
     startup dives (negative numbers) and dives without SBT lines are left out; the title gives
-    the number of dives and their range. Slices of at least 3% are labeled with the type and data
+    the number of dives and their range. Parts of at least 3% are labeled with the type and data
     size (FormatDataSize), so the small image (without legend) can be read.
     """
 
@@ -10974,31 +11029,13 @@ def SbdDataTypePie(float_id, df_sbd_type, sbd_size_by_dive):
         short.append('retx')
 
     total = sum(values)
-    text = [ '{}<br>{}'.format(s, FormatDataSize(v)) if total and v / total >= 0.03 else ''
-             for s, v in zip(short, values) ]
+    text = [ '{}<br>{}'.format(s, FormatDataSize(v)) for s, v in zip(short, values) ]
     dives = sbt_total.index
-    return go.Figure(
-        data=[go.Pie(
-            labels=labels,
-            values=values,
-            text=text,
-            textinfo='text',
-            textposition='inside',
-            hovertemplate='%{label}<br>%{value:,.0f} bytes (%{percent})<extra></extra>',
-            marker=dict(colors=colors, line=dict(color='rgb(255,255,255)', width=0.5)),
-            sort=False,
-            direction='clockwise',
-            )],
-        layout=dict(
-            showlegend=True,
-            title=dict(text='{}: SBD Data by Message Type<br><sup>{:,.0f} bytes in {} dives ({}–{})</sup>'.format(
-                float_id, total, len(dives), int(dives.min()), int(dives.max()))),
-            hoverlabel=dict(font=dict(family='Consolas, monospace', size=14)),
-            legend=dict(title='Message type'),
-            plot_bgcolor='white',
-            margin=dict(l=10,r=10,b=20,t=70,pad=4),
-            ),
-        )
+    return ShareBarFigure(
+        '{}: SBD Data by Message Type<br><sup>{:,.0f} bytes in {} dives ({}–{})</sup>'.format(
+            float_id, total, len(dives), int(dives.min()), int(dives.max())),
+        labels, values, colors, text,
+        [ '{:,.0f} bytes'.format(v) for v in values ])
 
 def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
     """Write the Iridium and GPS plots for one float; return their figure metadata.
@@ -11008,8 +11045,8 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
 
     Plots the 'sbd', 'sbd_type', 'gps', 'iridium_position' and 'summary' data as satcom, satcom_gps_ttf,
     satcom_gps_cno, satcom_gps_nsat, satcom_gps_hdop, satcom_gps_fix_cep, satcom_sbd_count,
-    satcom_sbd_data_size (stacked by message type), satcom_sbd_data_type (pie of the total by
-    message type; only with SBT data), satcom_sbd_data_size_avg and satcom_iridium_fix_cep_avg
+    satcom_sbd_data_size (stacked by message type), satcom_sbd_data_type (one-row stacked bar of
+    the total by message type; only with SBT data), satcom_sbd_data_size_avg and satcom_iridium_fix_cep_avg
     (category 'satcom').
 
     Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no 'sbd'
@@ -11942,11 +11979,12 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             for trace in SbdDataSizeTraces(float_aggregate_data.get('sbd_type'), df_sbd_gb_sum['size_b']):
                 figs['satcom_sbd_data_size'].add_trace(trace)
 
-            # add pie -- total SBD data by message type
+            # add one-row stacked bar -- total SBD data by message type
 
-            pie = SbdDataTypePie(float_id, float_aggregate_data.get('sbd_type'), df_sbd_gb_sum['size_b'])
-            if pie is not None:
-                figs['satcom_sbd_data_type'] = pie
+            bar = SbdDataTypeBar(float_id, float_aggregate_data.get('sbd_type'), df_sbd_gb_sum['size_b'])
+            if bar is not None:
+                figs['satcom_sbd_data_type'] = bar
+
                 
             # figs['satcom_sbd_data_size_avg'].add_trace(go.Scatter(
                 # x=df_sbd_gb_mean.index.values,
@@ -12267,6 +12305,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 satcom           = 'figWideXL',
                 satcom_sbd_count = 'figWideXS',
                 satcom_sbd_data_size = 'figWideXS',
+                satcom_sbd_data_type = 'figWideBar',
                 )
 
             if no_cno:
@@ -14087,6 +14126,97 @@ ENERGY_COLORS = {
     'internal_res_j': 'rgb(150,150,150)',
     }
 
+def RemainingCycles(df, cycle_j):
+    """Return a DataFrame, one row per dive of df (the 'energy' aggregate's positive dives, sorted
+    by dive), of the cycles left on the current mission after that dive: remaining_mid,
+    remaining_low, remaining_high, with used_frac (energy used so far, storage included, over the
+    nominal pack energy), cycle_j (median energy per cycle over the last
+    ENERGY_REMAINING_RECENT_DIVES dives) and cycle_s (their median cycle duration). cycle_j is each
+    dive's energy without storage. None when the pack energy is unknown."""
+    pack_wh = pd.to_numeric(df['pack_wh'], errors='coerce') if 'pack_wh' in df.columns else pd.Series(dtype=float)
+    pack_wh = pack_wh[pack_wh > 0]
+    if len(pack_wh) < 1:
+        return None
+    nominal = float(pack_wh.iloc[-1]) * 3600
+    d = df.sort_values('dive')
+    n = ENERGY_REMAINING_RECENT_DIVES
+    m = min(3, n)                                    # dives needed before a first estimate
+    e_mid = cycle_j.loc[d.index].rolling(n, min_periods=m).median()
+    ctrl = (d['controller_j'] if 'controller_j' in d.columns else 0 * e_mid).rolling(n, min_periods=m).median()
+    e_low = (e_mid - ENERGY_CONTROLLER_UNCERTAINTY * ctrl).clip(lower=1.0)
+    e_high = e_mid + ENERGY_CONTROLLER_UNCERTAINTY * ctrl
+    used = d['total_j'].cumsum()
+    f_low, f_mid, f_high = ENERGY_USABLE_FRACTION
+    cyc_s = d['self_discharge_s'].where(d['self_discharge_s'] > 0) if 'self_discharge_s' in d.columns \
+        else pd.Series(np.nan, index=d.index)
+    return pd.DataFrame({
+        'dive':           d['dive'].values,
+        'remaining_mid':  ((f_mid * nominal - used) / e_mid).clip(lower=0).values,
+        'remaining_low':  ((f_low * nominal - used) / e_high).clip(lower=0).values,
+        'remaining_high': ((f_high * nominal - used) / e_low).clip(lower=0).values,
+        'used_frac':      (used / nominal).values,
+        'cycle_j':        e_mid.values,
+        'cycle_s':        cyc_s.rolling(n, min_periods=1).median().values,
+        'nominal_j':      nominal,
+        })
+
+def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float):
+    """Write energy_remaining_cycles (see WriteEnergyPlots) from the 'energy' aggregate's positive
+    dives df and their energy without storage cycle_j; return its figure metadata, or None when the
+    pack energy is unknown."""
+    r = RemainingCycles(df, cycle_j)
+    if r is None:
+        return None
+    r = r[np.isfinite(r['remaining_mid'])]
+    if len(r) < 1:
+        return None
+    last = r.iloc[-1]
+    pack = df['pack_type'].dropna().iloc[-1] if 'pack_type' in df.columns and df['pack_type'].notna().any() else ''
+    pack = {'tadiran': 'Tadiran', 'saft': 'Saft'}.get(pack, pack)
+    f_low, f_mid, f_high = ENERGY_USABLE_FRACTION
+    title = '{}: Estimated Remaining Cycles on the Current Mission: {:.0f} ({:.0f}–{:.0f})'.format(
+        float_id, last['remaining_mid'], last['remaining_low'], last['remaining_high'])
+    if np.isfinite(last['cycle_s']):
+        t = [ last[k] * last['cycle_s'] for k in ('remaining_mid', 'remaining_low', 'remaining_high') ]
+        if t[0] >= ENERGY_SECONDS_PER_YEAR:
+            title += ', about {:.1f} years ({:.1f}–{:.1f})'.format(*[ x / ENERGY_SECONDS_PER_YEAR for x in t ])
+        else:
+            title += ', about {:.0f} days ({:.0f}–{:.0f})'.format(*[ x / 86400 for x in t ])
+    sub = ('Used {:.0f}% of the {}pack\'s nominal {:.2f} MJ; {:.1f} kJ and {:.1f} days a cycle (median of the last {} dives); '
+           'usable {:.0f}–{:.0f}% of nominal, controller drain ±{:.0f}%').format(
+        100 * last['used_frac'], (pack + ' ') if pack else '', last['nominal_j'] / 1e6, last['cycle_j'] / 1000,
+        last['cycle_s'] / 86400 if np.isfinite(last['cycle_s']) else float('nan'), ENERGY_REMAINING_RECENT_DIVES,
+        100 * f_low, 100 * f_high, 100 * ENERGY_CONTROLLER_UNCERTAINTY)
+    band = 'rgba(31,119,180,0.18)'
+    fig = go.Figure(layout=dict(
+        showlegend=True,
+        title=dict(text='{}<br><sup>{}</sup>'.format(title, sub)),
+        xaxis=dict(title='Dive'),
+        yaxis=dict(title='Remaining cycles', rangemode='tozero'),
+        hovermode='x unified',
+        hoverlabel=dict(font=dict(family='Consolas, monospace', size=12)),
+        plot_bgcolor='white',
+        margin=dict(l=10, r=10, b=20, t=70, pad=4),
+        ))
+    fig.add_trace(go.Scatter(x=r['dive'], y=r['remaining_high'], mode='lines', line=dict(width=0),
+                             name='High', hovertemplate='%{y:.0f}', showlegend=False))
+    fig.add_trace(go.Scatter(x=r['dive'], y=r['remaining_low'], mode='lines', line=dict(width=0),
+                             fill='tonexty', fillcolor=band, name='Range',
+                             hovertemplate='%{y:.0f}'))
+    fig.add_trace(go.Scatter(x=r['dive'], y=r['remaining_mid'], mode='lines',
+                             line=dict(color='rgb(31,119,180)', width=2), name='Estimate',
+                             hovertemplate='<b>%{y:.0f}</b>'))
+    return WritePlotImageFiles(
+        id_str = 'energy_remaining_cycles',
+        figure = fig,
+        float_id = float_id,
+        dpath_float = dpath_float,
+        category = 'energy',
+        size = 'figWideS',
+        ts_pos = [1.00, -0.06],
+        showlegend = True,
+        )
+
 def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
     """Write the estimated energy use plot for one float; return its figure metadata.
 
@@ -14094,8 +14224,15 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
     dpath_float. Plots the 'energy' aggregate (EnergyEstimates), category 'energy', as
     energy_per_cycle: bars per dive stacked by component in ENERGY_COMPONENTS order, in kJ, with
     the dive total on its own line of the hover label and each component below it; the title
-    gives the float total. And as energy_by_component: a pie of the float total by component over
-    the same dives, slices of at least 3% labeled with the component and kJ.
+    gives the float total. And as energy_by_component: a one-row horizontal stacked bar
+    (ShareBarFigure) of the float total by component over the same dives, parts of at least 3%
+    labeled with the component and kJ. And as
+    energy_remaining_cycles: after each dive, the cycles left if the float stays on its current
+    mission, (usable energy - energy used so far, storage included) / energy per cycle, with the
+    usable energy ENERGY_USABLE_FRACTION of the pack's nominal energy (pack_wh) and the energy per
+    cycle the median of the last ENERGY_REMAINING_RECENT_DIVES dives; the range takes the low
+    usable share with the controller energy +ENERGY_CONTROLLER_UNCERTAINTY and the high share with
+    it -ENERGY_CONTROLLER_UNCERTAINTY. Written only when the pack is known.
 
     Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no
     'energy' data. A failure is logged and swallowed unless --halt-on-error (-H) is given.
@@ -14179,43 +14316,31 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
         if fig_meta is not None:
             figs_meta.append(fig_meta)
 
-        # pie of the float total by component, over the same dives
+        # one-row stacked bar of the float total by component, over the same dives
         parts = [ (label, df[col].sum() / 1000, ENERGY_COLORS.get(col)) for col, label in ENERGY_COMPONENTS
                   if col in df.columns and df[col].sum() > 0 ]
         total = sum(v for _, v, _ in parts)
-        fig = go.Figure(
-            data=[go.Pie(
-                labels=[ p[0] for p in parts ],
-                values=[ p[1] for p in parts ],
-                text=[ '{}<br>{:,.1f} kJ'.format(l, v) if total and v / total >= 0.03 else ''
-                       for l, v, _ in parts ],
-                textinfo='text',
-                textposition='inside',
-                hovertemplate='%{label}<br>%{value:,.1f} kJ (%{percent})<extra></extra>',
-                marker=dict(colors=[ p[2] for p in parts ], line=dict(color='rgb(255,255,255)', width=0.5)),
-                sort=False,
-                direction='clockwise',
-                )],
-            layout=dict(
-                showlegend=True,
-                title=dict(text='{}: Estimated Total Energy<br><sup>{:,.1f} kJ in {} dives ({}–{})</sup>'.format(
-                    float_id, total, len(df), int(df['dive'].min()), int(df['dive'].max()))),
-                hoverlabel=dict(font=dict(family='Consolas, monospace', size=14)),
-                legend=dict(title='Component'),
-                plot_bgcolor='white',
-                margin=dict(l=10,r=10,b=20,t=70,pad=4),
-                ),
-            )
+        fig = ShareBarFigure(
+            '{}: Estimated Total Energy<br><sup>{:,.1f} kJ in {} dives ({}–{})</sup>'.format(
+                float_id, total, len(df), int(df['dive'].min()), int(df['dive'].max())),
+            [ p[0] for p in parts ], [ p[1] for p in parts ], [ p[2] for p in parts ],
+            [ '{}<br>{:,.1f} kJ'.format(l, v) for l, v, _ in parts ],
+            [ '{:,.1f} kJ'.format(v) for _, v, _ in parts ])
         fig_meta = WritePlotImageFiles(
             id_str = 'energy_by_component',
             figure = fig,
             float_id = float_id,
             dpath_float = dpath_float,
             category = 'energy',
-            size = 'fig2',
+            size = 'figWideBar',
             ts_pos = [1.00, -0.06],
             showlegend = True,
             )
+        if fig_meta is not None:
+            figs_meta.append(fig_meta)
+
+        # cycles left on the current mission, after each dive
+        fig_meta = WriteRemainingCyclesPlot(float_id, df, bar_total, dpath_float)
         if fig_meta is not None:
             figs_meta.append(fig_meta)
 
