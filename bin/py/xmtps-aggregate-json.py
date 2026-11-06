@@ -433,7 +433,9 @@ ENERGY_PACK_WH = {                 # (float type, chemistry): nominal pack energ
     }
 ENERGY_ALTO_MIN_SERIAL = 10000
 # Floats whose startup voltage does not tell their pack: serial -> chemistry. ALTO 11020-11034 have
-# Tadiran packs with inline diodes that lower the voltage to about 12.4-13.5 V.
+# ordinary Tadiran packs on VOP11 controller boards, whose power input passes through a diode; the
+# float measures the battery after it, about 12.4-13.5 V (MRV 2018: VOP12 boards have "more
+# efficient DC-DC conversion (no diode)"). No inline diodes were added to the packs.
 ENERGY_PACK_OVERRIDES = { serial: 'tadiran' for serial in range(11020, 11035) }
 ENERGY_PACK_OVERRIDES[11017] = 'tadiran'   # about 15.4 V at every startup but the last (13.41 V)
 ENERGY_PACK_OVERRIDES[9109] = 'saft'       # 24 x Saft LS 26500 (.meta); startup 13.6-13.7 V reads as alkaline
@@ -441,14 +443,14 @@ ENERGY_PACK_OVERRIDES[9109] = 'saft'       # 24 x Saft LS 26500 (.meta); startup
 ENERGY_PACK_OVERRIDES.update({9322: 'tadiran', 9323: 'tadiran',                      # ALAMO RBR, 15.0 V
                               11046: 'tadiran', 11048: 'tadiran', 11058: 'tadiran'})  # ALTO SBE 15.4 V
 # Startup voltage reads as alkaline, but the floats used more than an alkaline pack's nominal energy
-# before depletion (150-195 %): ALTO SBE 2017-2018, 11.2-12.9 V, like the diode Tadiran ALTOs.
+# before depletion (150-195 %): ALTO SBE 2017-2018, 11.2-12.9 V, Tadiran on VOP11 boards like 11020-11034.
 ENERGY_PACK_OVERRIDES.update({serial: 'tadiran' for serial in (10110, 10111, 10112, 10113, 10115, 10116,
                                                               11013, 11015)})   # 10111: 120 %, 11015: 156 %
 ENERGY_PACK_OVERRIDES[9032] = 'saft'       # 2014; no usable startup voltage (reads about 10x); batch is Saft
 ENERGY_PACK_OVERRIDES[9033] = 'saft'       # startup 13.77 V; used 113 % of an alkaline pack
 ENERGY_PACK_OVERRIDES[9062] = 'saft'       # startup 13.2 V, 2014-2016 batch; 138 % of an alkaline pack
 # ALAMO 9179, 9181, 9207: startup 11.4-11.9 V, but used 131-135 % of an alkaline (C-cell) pack:
-# taken as Tadiran behind diodes, like ALTO 11020-11034.
+# taken as Tadiran read through a VOP11 board's diode, like ALTO 11020-11034.
 ENERGY_PACK_OVERRIDES.update({9179: 'tadiran', 9181: 'tadiran', 9207: 'tadiran'})
 ENERGY_SECONDS_PER_YEAR = 365.25 * 86400
 # Remaining-cycles estimate (energy_remaining_cycles): the usable share of the pack's nominal

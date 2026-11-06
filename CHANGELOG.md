@@ -7,6 +7,10 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- `xmtps-aggregate-json.py`, `spec/json-file-format.md`: the low startup voltages of ALTO 11020-11034,
+  the 2017-2018 SBE ALTOs and ALAMO 9179, 9181 and 9207 are put down to the diode on their VOP11
+  controller boards (MRV, 2018), not to inline diodes in the packs; wording only, no change in
+  the energy estimate.
 - `xmtps-aggregate-json.py`, float pages: new plot `energy_remaining_cycles`, the cycles left if the
   float stays on its current mission, with a range: usable energy 65-95 % (central 80 %) of the
   pack's nominal energy, the energy and duration of a cycle the medians of the last 10 dives, and
