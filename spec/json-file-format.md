@@ -376,7 +376,7 @@ cep_km = 0.00666
        + 0.001666  * (25 - snr_avg)    if snr_avg < 25
 ```
 
-A fix is "valid" (`Position.is_valid`) when its time is in range, |lat| ≤ 90, |lon| ≤ 180 and `cep_km` > 0.
+A fix is "valid" (`Position.is_valid`) when its time is in range, |lat| ≤ 90, |lon| ≤ 180, `cep_km` > 0 and it has no `qc_reject` reason. `xmtps-aggregate-json.py` sets `qc_reject` = `"submerged_speed"` in memory on the fixes it rejects for their submerged speed (section 4.9); the dive JSON files never hold it.
 
 ### 3.12 `Sbd`
 
@@ -905,7 +905,7 @@ One row per pump run. Columns `dive`, `pres` (dBar), `time` (s), `volt` (V), `cu
 
 ### 4.9 `_gps`
 
-One row per valid GPS fix (`Position.is_valid`) of every dive, including negative dives. Sorted by `dt_epoch`.
+One row per valid GPS fix (`Position.is_valid`) of every dive, including negative dives, and per fix rejected for its submerged speed (below), with `valid` false. Sorted by `dt_epoch`.
 
 | Column | Type | Units |
 |---|---|---|
@@ -919,6 +919,14 @@ One row per valid GPS fix (`Position.is_valid`) of every dive, including negativ
 | `nsat` | int | |
 | `snr_min`, `snr_avg`, `snr_max` | int (`null` for 255) | |
 | `hdop` | float | |
+| `valid` | bool | `false` for a fix rejected for its submerged speed (since 2026-11-06) |
+| `qc_reject` | string | Why: `"submerged_speed"`, or `""` for a valid fix |
+
+**Submerged-speed rejection** (`RejectGpsSubmergedSpeed`, since 2026-11-06). A fix is rejected when it puts the float more than 2 m/s (`GPS_MAX_SUBMERGED_SPEED_MPS`) away from the surfacings before and after it. This runs before any other aggregate is built, and a rejected fix is left out of the profile positions, the displacements, the position plots and the summary's startup, deployment and latest fix. Its time to fix still counts in the GPS energy (`_energy`), since the receiver ran.
+
+The valid fixes of the dives ≥ 0 are grouped by surfacing: `idx` 1 of dive N belongs to the surfacing that ended dive N − 1; `idx` 0, 2 and 3 to the one that ended dive N; other `idx` values (5, built-in test) are not checked. For each fix the speed to the previous and to the next surfacing with fixes is the geodesic distance to the median latitude and longitude of that surfacing's fixes over the time to its nearest fix. A fix is a candidate when every speed it has (only one at the first and last surfacing) is over the limit. The candidate over the limit on more sides, then with the larger smaller speed, is rejected, and the speeds are computed again without it, until no candidate is left; so one bad fix does not also reject the good fixes next to it. The speed is over the time between surfacings, so a float that cycled on deck during a ship transit also has its fixes rejected. Each rejection is logged (INFO) with both speeds.
+
+Production on 2026-11-06: 100 fixes on 21 floats, 60 of them on 10110, 10114 and 11013, which cycled on a ship in May 2018.
 
 ### 4.10 `_sbd`
 
@@ -1034,11 +1042,11 @@ Production 9303: 495 rows for 484 deployed dives plus startup sessions.
 
 ### 4.16 `_displacement_submerged`, `_displacement_surface`
 
-One row per dive number from 1 to the highest dive number, including numbers with no dive file. For each dive N, using the dive's GPS fixes as stored (including invalid ones):
+One row per dive number from 1 to the highest dive number, including numbers with no dive file. For each dive N, using the dive's valid GPS fixes (since 2026-11-06; before, invalid ones too):
 
-- gps1 = the last fix of dive N with `idx` 1 (start of dive N);
-- gps2 = the last fix of dive N with `idx` 2 (end of dive N);
-- gps3 = the first fix of dive N + 1 with `idx` 1 (start of dive N + 1).
+- gps1 = the last valid fix of dive N with `idx` 1 (start of dive N);
+- gps2 = the last valid fix of dive N with `idx` 2 (end of dive N);
+- gps3 = the first valid fix of dive N + 1 with `idx` 1 (start of dive N + 1).
 
 `_displacement_submerged` is the vector gps1 → gps2 if both exist and gps2 is later. `_displacement_surface` is gps2 → gps3 if both exist and gps3 is later.
 

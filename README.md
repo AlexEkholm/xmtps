@@ -714,7 +714,7 @@ Read one with `pandas.read_json(path, orient="split")`.
 | `_drift` | drift sample | `pres`, `temp`, `saln`, `dens`, `sigma0`, `dt_epoch`, `dt_ref_delta_sec`, `dt_str` |
 | `_surface` | surface sample | `dt_epoch`, `dt_str`, `pres`, `temp`, `dt_ref_delta_sec`, `pres_corr` (the dive's valid pressure correction, else NaN) |
 | `_pump` | pump action | `pres`, `time`, `volt`, `curr`, `vac`, `power`, `energy` |
-| `_gps` | GPS fix | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `idx`, `ttf_sec`, `nsat`, `snr_min`, `snr_avg`, `snr_max`, `hdop` |
+| `_gps` | GPS fix | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `idx`, `ttf_sec`, `nsat`, `snr_min`, `snr_avg`, `snr_max`, `hdop`, `valid` (`false` for a fix that puts the float more than 2 m/s from the surfacings before and after it; left out of positions, displacements and the summary), `qc_reject` |
 | `_sbd` | SBD message | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `size_b`, `momsn`, `mtmsn`, `pid` |
 | `_iridium_position` | dive | Iridium position composited from the dive's messages (CEP⁻²-weighted): time (with its range `dt_min_*`/`dt_max_*`), `lat`, `lon`, `cep_km` (GPS-calibrated: `sqrt(1 / sum(CEP^-2) + 1.55^2)`), `num_pos` |
 | `_profile_position` | dive | Position assigned to the profile: time, `lat`, `lon`, `cep_km`, `src` (`gps`; `iridium`, the composite, for a dive without a GPS fix when its `cep_km` is at most 2 km; or `none`) |

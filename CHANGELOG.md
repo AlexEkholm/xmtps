@@ -20,6 +20,12 @@ Decoder:
 
 Python tools:
 
+- GPS: a fix that puts the float more than 2 m/s away from the surfacings before and after it,
+  over the time submerged, is rejected (`RejectGpsSubmergedSpeed`): it stays in `_gps` with the new
+  columns `valid` false and `qc_reject` "submerged_speed", and is left out of the profile positions,
+  displacements, position plots and summary fixes. One bad fix is rejected at a time, so the good
+  fixes around it stay. Rejects 100 fixes on 21 floats, 60 of them on 10110, 10114 and 11013, which
+  cycled on a ship in May 2018. The displacements now skip invalid fixes instead of giving NaN.
 - Energy estimate: floats whose dive numbers restarted after a reset in the field (9113, 9223, 9226,
   9245) took the reset's startup as the pack's start, so their dives before the reset got no
   controller drain or self-discharge. The first dive is now the earliest in time, and the dives

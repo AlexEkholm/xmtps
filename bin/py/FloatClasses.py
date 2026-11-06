@@ -285,10 +285,13 @@ class Position(DateTime):
     def is_valid(self):
         """Return True if the time is valid, lat/lon are in range and cep_km is positive.
 
-        A position with an unknown (NaN) or sentinel (e.g. -9) cep_km is therefore invalid.
+        A position with an unknown (NaN) or sentinel (e.g. -9) cep_km is therefore invalid, and so
+        is one with a qc_reject reason set (e.g. 'submerged_speed', set by
+        xmtps-aggregate-json.py's RejectGpsSubmergedSpeed; not stored in the dive JSON files).
         """
-    
-        return DateTime.is_valid(self) and (self.lat >= -90) and (self.lat <= 90) and (self.lon >= -180) and (self.lon <= 180) and (self.cep_km > 0)
+
+        return DateTime.is_valid(self) and (self.lat >= -90) and (self.lat <= 90) and (self.lon >= -180) and (self.lon <= 180) and (self.cep_km > 0) \
+            and not getattr(self, 'qc_reject', '')
    
 class PositionVector:
     """The displacement from one position to a later one: distance, bearing and speed."""

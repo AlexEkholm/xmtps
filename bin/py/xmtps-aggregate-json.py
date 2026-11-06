@@ -71,6 +71,7 @@ from yattag import Doc
 
 # local
 from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
+from geographiclib.geodesic import Geodesic
 from PageStatus import WriteStatusFooter
 
 # Set library options
@@ -88,6 +89,9 @@ CPOS_SPAN_SECONDS = 3600
 # Largest (GPS-calibrated) composite Iridium CEP used for a dive's profile position when the dive
 # has no GPS fix; 2 km gives a position to about half of the deployed dives without one
 CPOS_MAX_CEP_KM = 2.0
+# A GPS fix that puts the float more than this far from the surfacings before and after it, over
+# the time submerged between them, is rejected (RejectGpsSubmergedSpeed)
+GPS_MAX_SUBMERGED_SPEED_MPS = 2.0
 
 JSON_VERSION = "0.11"
 
@@ -853,6 +857,89 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
     e[cols] = e[cols].round(1)
     return e
 
+def GpsSurfacing(dive_num, idx):
+    """Return the surfacing a GPS fix was taken at: the dive it ends, or None for no surfacing.
+
+    A fix with idx 1 (start of dive N) is taken at the surfacing that ended dive N - 1; idx 0, 2
+    and 3 (after the diagnostic dive, end of dive, after an abort) at the one that ended dive N.
+    Built-in test fixes (idx 5) and fixes of negative (pre-deployment) dives get None.
+    """
+    if dive_num < 0:
+        return None
+    if idx == 1:
+        return dive_num - 1
+    if idx in (0, 2, 3):
+        return dive_num
+    return None
+
+def ValidGps(df):
+    """Return the rows of a 'gps' aggregate DataFrame whose fix is valid (column 'valid', which
+    is False for the fixes RejectGpsSubmergedSpeed rejected); all rows if there is no such column."""
+    if 'valid' not in df.columns:
+        return df
+    return df[df['valid'].astype(bool)]
+
+def RejectGpsSubmergedSpeed(float_data, float_id):
+    """Mark the GPS fixes that imply a submerged speed over GPS_MAX_SUBMERGED_SPEED_MPS invalid.
+
+    Groups the valid fixes of the deployed dives by surfacing (GpsSurfacing) and, for each fix,
+    takes the apparent speed to the previous and to the next surfacing that has fixes: the
+    distance to the median position of that surfacing's fixes over the time to its nearest fix,
+    so across one dive. A fix is a candidate when every one of those speeds (one at the first and
+    last surfacing) is over the limit. The candidate over the limit on the most sides, then with
+    the largest smaller speed, is rejected (its qc_reject set, so Position.is_valid is False),
+    and the speeds are computed again without it, until no candidate is left. A bad fix in
+    surfacing k so drags only its own speeds over the limit, not those of the fixes around it.
+
+    The rejected fixes stay in the 'gps' aggregate (<id>_gps.json) with valid False and qc_reject
+    'submerged_speed'. Returns a DataFrame of them (dive, dt_epoch, dt_str, lat, lon, cep_km, idx,
+    speed_prev_mps, speed_next_mps), empty if none; each is also logged.
+    """
+    fixes = []
+    for dive in float_data.dives:
+        for g in getattr(dive, 'gps', None) or []:
+            s = GpsSurfacing(dive.dive_num, g.idx)
+            if s is not None and g.is_valid():
+                fixes.append((s, dive.dive_num, g))
+    rows = []
+    while len(fixes) > 2:
+        surf = {}
+        for s, _, g in fixes:
+            surf.setdefault(s, []).append(g)
+        keys = sorted(surf)
+        ref = { s: (float(np.median([ g.lat for g in surf[s] ])),
+                    float(np.median([ g.lon for g in surf[s] ])),
+                    min(g.dt_epoch for g in surf[s]), max(g.dt_epoch for g in surf[s])) for s in keys }
+        pos = { s: i for i, s in enumerate(keys) }
+        best = None
+        for s, dive_num, g in fixes:
+            v = [np.nan, np.nan]     # speed from the previous surfacing, to the next one
+            for k, j in enumerate((pos[s] - 1, pos[s] + 1)):
+                if j < 0 or j >= len(keys):
+                    continue
+                lat, lon, t0, t1 = ref[keys[j]]
+                dt = (g.dt_epoch - t1) if k == 0 else (t0 - g.dt_epoch)
+                if dt > 0:
+                    v[k] = Geodesic.WGS84.Inverse(g.lat, g.lon, lat, lon)['s12'] / dt
+            vv = [ x for x in v if np.isfinite(x) ]
+            if len(vv) < 1 or min(vv) <= GPS_MAX_SUBMERGED_SPEED_MPS:
+                continue
+            key = (len(vv), min(vv))
+            if best is None or key > best[0]:
+                best = (key, dive_num, g, v)
+        if best is None:
+            break
+        _, dive_num, g, v = best
+        g.qc_reject = 'submerged_speed'
+        fixes = [ f for f in fixes if f[2] is not g ]
+        rows.append(dict(dive = dive_num, dt_epoch = g.dt_epoch, dt_str = g.dt_str, lat = g.lat, lon = g.lon,
+                         cep_km = g.cep_km, idx = g.idx,
+                         speed_prev_mps = round(v[0], 3), speed_next_mps = round(v[1], 3)))
+        logger.info('Float {}: GPS fix of dive {} at {} ({:.5f}, {:.5f}) rejected, submerged speed {:.2f} / {:.2f} m/s'.format(
+            float_id, dive_num, g.dt_str, g.lat, g.lon, v[0], v[1]))
+    return pd.DataFrame(rows, columns = [ 'dive', 'dt_epoch', 'dt_str', 'lat', 'lon', 'cep_km', 'idx',
+                                          'speed_prev_mps', 'speed_next_mps' ])
+
 def AggregateDiveData():
     """Aggregate the dives of each float in float_map into float_aggregate_map.
 
@@ -888,10 +975,19 @@ def AggregateDiveData():
             
             logger.info('Aggregating data for float {:04d}...'.format(float_id))
             
-            try: 
-            
+            try:
+
                 float_data = float_map[float_id]
-                
+
+                # Reject GPS fixes with an impossible submerged speed, before any fix is used
+                try:
+                    RejectGpsSubmergedSpeed(float_data, float_id)
+                except Exception as exc:
+                    errstr = 'Failed to check GPS submerged speeds for float {}'.format(float_id)
+                    if hasattr(args, 'halt') and args.halt:
+                        raise Exception(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
+
                 float_aggregate_data = {
                     'id':       float_data.id,
                     'ascent':   
@@ -955,7 +1051,9 @@ def AggregateDiveData():
                                                  'snr_min', 
                                                  'snr_avg', 
                                                  'snr_max', 
-                                                 'hdop',  ]) ,
+                                                 'hdop',
+                                                 'valid',
+                                                 'qc_reject',  ]) ,
                     'iridium_position': 
                         pd.DataFrame(columns = [ 'dive', 
                                                  'dt_epoch', 
@@ -1389,7 +1487,8 @@ def AggregateDiveData():
                     logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
                 # Aggregate gps data:
-                
+
+
                 logger.debug('Aggregating GPS data for float {:04d}...'.format(float_id))
                 for dive_data in float_data.dives: 
                     
@@ -1402,9 +1501,17 @@ def AggregateDiveData():
                         gps_data = dive_data.gps
                         for gps_fix in gps_data:
                             
-                            # Ignore invalid GPS fixes
-                            
-                            if not gps_fix.is_valid():
+                            # Ignore invalid GPS fixes, except those rejected for their submerged
+                            # speed (RejectGpsSubmergedSpeed), which are kept with valid False
+
+                            qc_reject = getattr(gps_fix, 'qc_reject', '')
+                            if qc_reject:
+                                gps_fix.qc_reject = ''
+                                ok = gps_fix.is_valid()
+                                gps_fix.qc_reject = qc_reject
+                                if not ok:
+                                    continue
+                            elif not gps_fix.is_valid():
                                 continue
                             
                             # Generate dataframe entry
@@ -1424,9 +1531,13 @@ def AggregateDiveData():
                                     'snr_avg':  np.array([gps_fix.snr_avg], dtype='int'),
                                     'snr_max':  np.array([gps_fix.snr_max], dtype='int'),
                                     'hdop':     np.array([gps_fix.hdop], dtype='float'),
+                                    'valid':    np.array([not qc_reject], dtype='bool'),
+                                    'qc_reject': np.array([qc_reject], dtype='str'),
                                 }
                             )
                             float_aggregate_data['gps'] = AppendRows(float_aggregate_data['gps'], df_gps)
+                            if qc_reject:
+                                continue        # not a summary fix
                             
                             
                             # TODO Get summary data
@@ -1869,6 +1980,7 @@ def AggregateDiveData():
                         try: 
                         
                             df_dive_gps = float_aggregate_data['gps'][ (float_aggregate_data['gps']['dive'] == dive_num)
+                                                                         & float_aggregate_data['gps']['valid'].astype(bool)
                                                                          & ((float_aggregate_data['gps']['idx'] == 0) 
                                                                             | (float_aggregate_data['gps']['idx'] == 2))
                                                                          & (float_aggregate_data['gps']['dt_epoch'] > 0) ]
@@ -1891,6 +2003,7 @@ def AggregateDiveData():
                                 continue
                             
                             df_dive_gps = float_aggregate_data['gps'][ (float_aggregate_data['gps']['dive'] == (dive_num + 1))
+                                                                         & float_aggregate_data['gps']['valid'].astype(bool)
                                                                          & (float_aggregate_data['gps']['idx'] == 1)
                                                                          & (float_aggregate_data['gps']['dt_epoch'] > 0) ]
                             
@@ -2067,7 +2180,9 @@ def AggregateDiveData():
                         if dive in float_dives_gps.keys():
                             
                             for gps_data in float_dives_gps[dive]:
-                            
+
+                                if not gps_data.is_valid():     # e.g. rejected for its submerged speed
+                                    continue
                                 if gps_data.idx == 1:
                                     
                                     gps1 = gps_data
@@ -2081,8 +2196,8 @@ def AggregateDiveData():
                         if dive + 1 in float_dives_gps.keys():
                         
                             for gps_data in float_dives_gps[dive + 1]:
-                            
-                                if gps_data.idx == 1:
+
+                                if gps_data.idx == 1 and gps_data.is_valid():
                                     
                                     gps3 = gps_data
                                     break
@@ -3878,7 +3993,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
             
             # 
             
-            df_gps = float_aggregate_data['gps']
+            df_gps = ValidGps(float_aggregate_data['gps'])
             df_gps_pre = df_gps[df_gps['dive'] < 0]
             df_iridium = float_aggregate_data['iridium_position']
             df_sbd = float_aggregate_data['sbd']
@@ -5630,7 +5745,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
             df_descent = float_aggregate_data['descent']
             df_surface = float_aggregate_data['surface']
             df_drift = float_aggregate_data['drift']
-            df_gps =  float_aggregate_data['gps']
+            df_gps = ValidGps(float_aggregate_data['gps'])
             df_sbd = float_aggregate_data['sbd']
            
             df_ascent.loc[
@@ -11158,7 +11273,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             # Preprocess data
             
             df_sbd = float_aggregate_data['sbd']
-            df_gps = float_aggregate_data['gps']
+            df_gps = ValidGps(float_aggregate_data['gps'])
             df_iri = float_aggregate_data['iridium_position']
             
             # df_sbd = df_sbd[df_sbd['dive'] >= 0]
