@@ -59,6 +59,7 @@ from PIL import Image
 # import plotly.express as px
 import plotly.colors
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import plotly.io as pio
 # import pygmt
 # import pprint
@@ -852,7 +853,9 @@ def AggregateDiveData():
     For each float, concatenates the per-dive data into pandas DataFrames, one per key: 'ascent',
     'descent', 'drift', 'profile', 'pump', 'surface', 'gps', 'sbd', 'sbd_type' (the SBT lines;
     empty for dives listed before build 3352), 'engineering', and 'wave' and
-    'wave_spectra' (both removed when either is empty). 'mission', 'engineering_data' (all
+    'wave_spectra' (both removed when either is empty), and 'microstructure' and
+    'microstructure_bands' (MAPLe spectra records and bands of micro-ALTO floats; only when some
+    dive has them). 'mission', 'engineering_data' (all
     engineering values, one row per dive, columns no dive reports dropped) and
     'engineering_errors' are added only when some dive JSON has those fields. It then derives
     'profile_position' (the dive's first GPS fix with idx 0 or 2, else the next dive's fix with
@@ -1807,6 +1810,42 @@ def AggregateDiveData():
                 
                     float_aggregate_data.pop('wave', None)
                     float_aggregate_data.pop('wave_spectra', None)
+
+                # Aggregate microstructure (MAPLe) data of micro-ALTO floats: one row per spectra record
+                # of each channel, and the band definitions of each channel and dive
+
+                rows_ms, rows_ms_bands = [], []
+                for dive_data in float_data.dives:
+                    dive_num = dive_data.dive_num
+                    ms = getattr(dive_data, 'microstructure', None)
+                    if dive_num < 0 or ms is None:
+                        continue
+                    try:
+                        for c in ms.channels:
+                            n_band = len(c.band_freq)
+                            for r in range(len(c.spec)):
+                                spec = list(c.spec[r])[:n_band] + [np.nan] * max(0, n_band - len(c.spec[r]))
+                                row = {
+                                    'dive': dive_num, 'ch': c.ch, 'name': c.name, 'ridx': r,
+                                    'dt_epoch': c.spec_dt_epoch[r] if r < len(c.spec_dt_epoch) else np.nan,
+                                    'pres': c.spec_pres[r] if r < len(c.spec_pres) else np.nan,
+                                    'sigvar': c.sigvar[r] if r < len(c.sigvar) else np.nan,
+                                    }
+                                row.update({'S{}'.format(b): spec[b] for b in range(n_band)})
+                                rows_ms.append(row)
+                            for b in range(n_band):
+                                rows_ms_bands.append({
+                                    'dive': dive_num, 'ch': c.ch, 'name': c.name, 'band': b,
+                                    'freq': c.band_freq[b], 'f_lo': c.band_f_lo[b], 'f_hi': c.band_f_hi[b],
+                                    })
+                    except Exception as exc:
+                        errstr = 'Failed to aggregate microstructure data for float {}, dive {}'.format(float_id, dive_num)
+                        if hasattr(args, 'halt') and args.halt:
+                            raise Exception(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
+                if rows_ms:
+                    float_aggregate_data['microstructure'] = pd.DataFrame(rows_ms).astype({'dive': 'int', 'ch': 'int', 'ridx': 'int'})
+                    float_aggregate_data['microstructure_bands'] = pd.DataFrame(rows_ms_bands)
                     
                            
                 # Listing fill values become NaN before anything is derived or plotted
@@ -2714,7 +2753,8 @@ def WriteAggregateJsonFiles():
 
             # Write mission parameter, engineering value and engineering error files:
 
-            for key in ('mission', 'engineering_data', 'engineering_errors', 'energy'):
+            for key in ('mission', 'engineering_data', 'engineering_errors', 'energy', 'microstructure',
+                        'microstructure_bands'):
                 if key in float_aggregate_data:
                     fpath = os.path.join(dpath_float, '{}_{}.json'.format(float_id, key))
                     fpath = re.sub('\\\\', '/', fpath)
@@ -3005,6 +3045,10 @@ def WriteHtmlFile(float_id, runtime_s=None):
                         with tag('a', href='#wave'):
                             text('Wave Data')
                         doc.stag('br') 
+                    if 'microstructure' in float_aggregate_data:
+                        with tag('a', href='#microstructure'):
+                            text('Microstructure Data')
+                        doc.stag('br')
                     with tag('a', href='#drift'):
                         text('Drift Data')
                     doc.stag('br') 
@@ -3148,6 +3192,25 @@ def WriteHtmlFile(float_id, runtime_s=None):
                                             # src=fig_meta['fpath_img_small'] if fig_meta['size_img_small'] < fig_meta['size_svg_small'] else fig_meta['fpath_svg_small'])
                                             src=fig_meta['fpath_img_small'])
                                     count = count + 1
+
+                        # Microstructure data plots (micro-ALTO floats)
+
+                        if 'microstructure' in float_aggregate_data:
+
+                            with tag('h2', id='microstructure'):
+                                text('Microstructure Data')
+
+                            for id in ['microstructure_profile', 'microstructure_shear_spectra']:
+                                if id in figs_meta_dict:
+                                    fig_meta = figs_meta_dict[id]
+                                    with tag('a', href=fig_meta['fpath_html']):
+                                        doc.stag(
+                                            'img',
+                                            alt=fig_meta['title'],
+                                            klass=fig_meta['size'],
+                                            title=fig_meta['title'],
+                                            src=fig_meta['fpath_img_small'])
+                                    doc.stag('br')
 
                         # Drift plots
 
@@ -14134,6 +14197,172 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
 
     return figs_meta
 
+def WriteMicrostructurePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
+    """Write the microstructure plots of a micro-ALTO float; return their figure metadata.
+
+    Takes the shared plot-group parameters; uses float_id, float_aggregate_data and dpath_float.
+
+    Plots the latest dive with 'microstructure' data (the MAPLe board's band-averaged spectra,
+    one row per record of each channel, with 'microstructure_bands'):
+
+    - microstructure_profile: the signal variance of each channel against pressure (log scale),
+      and one pressure-by-frequency image of log10 of the band-averaged spectrum per channel.
+    - microstructure_shear_spectra: the shear channels' band-averaged spectra on log-log axes, one
+      line per record, coloured by pressure (left out without a shear channel).
+
+    Values are in counts, as the MAPLe board sends them (category 'microstructure'). Returns the
+    list of figure metadata dicts from WritePlotImageFiles, empty without microstructure data
+    (logged at debug level only). A failure is logged and swallowed unless --halt-on-error (-H)
+    is given.
+    """
+
+    figs_meta = []
+
+    if 'microstructure' not in float_aggregate_data or len(float_aggregate_data['microstructure']) < 1:
+        logger.debug('No microstructure data for float {}'.format(float_id))
+        return figs_meta
+
+    try:
+
+        df = float_aggregate_data['microstructure']
+        df_bands = float_aggregate_data['microstructure_bands']
+
+        # Latest dive with at least one finite spectrum value
+        s_cols = [c for c in df.columns if re.fullmatch(r'S\d+', c)]
+        usable = df[np.isfinite(df[s_cols].astype(float)).any(axis=1) & np.isfinite(df['pres'].astype(float))]
+        if len(usable) < 1:
+            logger.warning('No usable microstructure spectra for float {}'.format(float_id))
+            return figs_meta
+        dive = int(usable['dive'].max())
+        df = df[df['dive'] == dive]
+        df_bands = df_bands[df_bands['dive'] == dive]
+        channels = df[['ch', 'name']].drop_duplicates().sort_values(['ch', 'name'])['name'].tolist()
+
+        ink, muted, grid = 'rgb(31,35,40)', 'rgb(89,99,110)', 'rgb(230,232,235)'
+        series = ['rgb(42,111,219)', 'rgb(217,130,43)']     # channel colours, fixed order
+        hoverlabel = dict(font=dict(family='Consolas, monospace', size=14))
+
+        def channel(name):
+            d = df[df['name'] == name].sort_values('ridx')
+            b = df_bands[df_bands['name'] == name].sort_values('band')
+            freq = b['freq'].astype(float).values
+            spec = d[['S{}'.format(i) for i in range(len(freq))]].astype(float).values
+            return d, freq, spec
+
+        t0 = df['dt_epoch'].astype(float).min()
+        t1 = df['dt_epoch'].astype(float).max()
+        when = ''
+        if np.isfinite(t0) and np.isfinite(t1):
+            when = ', {} to {} UTC'.format(
+                datetime.datetime.fromtimestamp(t0, datetime.timezone.utc).strftime('%Y-%m-%d %H:%M'),
+                datetime.datetime.fromtimestamp(t1, datetime.timezone.utc).strftime('%H:%M'))
+
+        figs = dict()
+
+        # Signal variance and spectra images against pressure
+
+        fig = make_subplots(
+            rows=1, cols=1 + len(channels), shared_yaxes=True, horizontal_spacing=0.05,
+            column_widths=[0.3] + [0.7 / len(channels)] * len(channels))
+        for i, name in enumerate(channels):
+            d, freq, spec = channel(name)
+            pres = d['pres'].astype(float).values
+            var = d['sigvar'].astype(float).values
+            color = series[i % len(series)]
+            fig.add_trace(go.Scatter(
+                x=var, y=pres, mode='lines+markers', name=name,
+                line=dict(color=color, width=2), marker=dict(size=5, color=color),
+                hovertemplate='%{y:.1f} dBar<br>%{x:.3g} counts<sup>2</sup><extra>' + name + '</extra>'),
+                row=1, col=1)
+            # Channel label in the panel's lower right corner (the PNG images have no legend)
+            fig.add_annotation(x=0.98, y=0.02 + 0.04 * i, xref='x domain', yref='y domain', text=name,
+                               showarrow=False, xanchor='right', yanchor='bottom',
+                               font=dict(color=color, size=14))
+            with np.errstate(divide='ignore', invalid='ignore'):
+                z = np.log10(np.where(spec > 0, spec, np.nan))
+            fig.add_trace(go.Heatmap(
+                x=freq, y=pres, z=np.round(z, 3), colorscale='amp', zmin=1, zmax=8,
+                showscale=(i == len(channels) - 1),
+                colorbar=dict(title=dict(text='log<sub>10</sub> S [counts<sup>2</sup> Hz<sup>-1</sup>]', side='right'),
+                              thickness=15, len=0.9),
+                hovertemplate='%{y:.1f} dBar, %{x:.1f} Hz<br>log<sub>10</sub> S = %{z:.2f}<extra>' + name + '</extra>'),
+                row=1, col=2 + i)
+            fig.update_xaxes(type='log', title_text='{} spectrum: frequency [Hz]'.format(name), row=1, col=2 + i)
+        # Variance axis over the plausible variances, 10 to 1e11 counts^2 (a failing probe can send
+        # 1e-6 or 1e12; shear near the surface reaches about 1e10)
+        var_all = df['sigvar'].astype(float).values
+        var_all = var_all[np.isfinite(var_all) & (var_all >= 10) & (var_all <= 1e11)]
+        var_range = None
+        if len(var_all) > 1:
+            var_range = [np.log10(var_all.min()) - 0.2, np.log10(var_all.max()) + 0.2]
+        fig.update_xaxes(type='log', title_text='Signal variance [counts<sup>2</sup>]', range=var_range, row=1, col=1)
+        fig.update_yaxes(autorange='reversed', title_text='Pressure [dBar]', row=1, col=1)
+        fig.update_xaxes(gridcolor=grid, linecolor=muted)
+        fig.update_yaxes(gridcolor=grid, linecolor=muted)
+        fig.update_layout(
+            title=dict(text='{}: Microstructure, Dive {}{}'.format(float_id, dive, when)),
+            showlegend=True, legend=dict(title='Channel'), hoverlabel=hoverlabel,
+            plot_bgcolor='white', font=dict(color=ink), margin=dict(l=10, r=10, b=20, t=80, pad=4))
+        figs['microstructure_profile'] = fig
+
+        # Shear spectra on log-log axes, coloured by pressure
+
+        shear = [c for c in channels if c.startswith('shear')]
+        if shear:
+            pmax = max(1.0, np.nanmax(df[df['name'].isin(shear)]['pres'].astype(float).values))
+            scale = 'Blues'
+            fig = make_subplots(rows=1, cols=len(shear), shared_yaxes=True, horizontal_spacing=0.05)
+            for i, name in enumerate(shear):
+                d, freq, spec = channel(name)
+                for p, s in zip(d['pres'].astype(float).values, spec):
+                    if not np.isfinite(p) or not np.isfinite(s).any():
+                        continue
+                    color = plotly.colors.sample_colorscale(scale, [0.25 + 0.75 * min(p / pmax, 1)])[0]
+                    fig.add_trace(go.Scatter(
+                        x=freq, y=s, mode='lines', line=dict(color=color, width=1.5), showlegend=False,
+                        hovertemplate='%{x:.2f} Hz<br>%{y:.3g} counts<sup>2</sup> Hz<sup>-1</sup><extra>'
+                                      + '{} {:.0f} dBar'.format(name, p) + '</extra>'),
+                        row=1, col=1 + i)
+                fig.update_xaxes(type='log', title_text='{} spectra: frequency [Hz]'.format(name), row=1, col=1 + i)
+            fig.add_trace(go.Scatter(   # colour bar of the pressure
+                x=[None], y=[None], mode='markers', showlegend=False, hoverinfo='skip',
+                marker=dict(colorscale=[[x, plotly.colors.sample_colorscale(scale, [0.25 + 0.75 * x])[0]]
+                                        for x in np.linspace(0, 1, 5)],
+                            cmin=0, cmax=pmax, color=[0], showscale=True,
+                            colorbar=dict(title=dict(text='Pressure [dBar]', side='right'), thickness=15, len=0.9))),
+                row=1, col=len(shear))
+            fig.update_yaxes(type='log')     # every panel: shared axes don't share the axis type
+            fig.update_yaxes(title_text='Spectrum [counts<sup>2</sup> Hz<sup>-1</sup>]', row=1, col=1)
+            fig.update_xaxes(gridcolor=grid, linecolor=muted)
+            fig.update_yaxes(gridcolor=grid, linecolor=muted)
+            fig.update_layout(
+                title=dict(text='{}: Shear Spectra, Dive {}{}'.format(float_id, dive, when)),
+                showlegend=False, hoverlabel=hoverlabel, plot_bgcolor='white', font=dict(color=ink),
+                margin=dict(l=10, r=10, b=20, t=80, pad=4))
+            figs['microstructure_shear_spectra'] = fig
+
+        for name, fig in figs.items():
+            fig_meta = WritePlotImageFiles(
+                id_str=name,
+                figure=fig,
+                float_id=float_id,
+                dpath_float=dpath_float,
+                category='microstructure',
+                size='figWideL',
+                ts_pos=[1.00, -0.06],
+                showlegend=True,
+                )
+            if fig_meta is not None:
+                figs_meta.append(fig_meta)
+
+    except Exception as exc:
+        errstr = 'Failed to generate microstructure plots for float {}'.format(float_id)
+        if hasattr(args, 'halt') and args.halt:
+            raise Exception(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
+
+    return figs_meta
+
 # Colors of the energy plot components, in ENERGY_COMPONENTS order
 ENERGY_COLORS = {
     'pump_descent_j': 'rgb(158,202,225)',
@@ -14396,6 +14625,7 @@ PLOT_WRITERS = [
     WriteSurfacePlots,
     WriteSatcomPlots,
     WriteWavePlots,
+    WriteMicrostructurePlots,
     WriteEnergyPlots,
     ]
 

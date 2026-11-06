@@ -358,6 +358,15 @@ Input: `wave`, `wave_spectra`, `profile_position`. Written only for floats with 
 
 Wave directions are toward, clockwise from true north when the IGRF declination is available (section 10.3).
 
+### 3.13.1 Microstructure (`WriteMicrostructurePlots`, category `microstructure`)
+
+Input: `microstructure`, `microstructure_bands` (the MAPLe band-averaged spectra of micro-ALTO floats, [json-file-format.md](json-file-format.md) 4.20). Written only for floats with microstructure data (11491-11495). Both figures show the latest dive with a finite spectrum value and a pressure, named in the title with its record times (UTC). Values are in counts, as the MAPLe board sends them: nothing is converted to shear, temperature gradient or dissipation. Records rejected while the pump ran are gaps.
+
+| ID | Title | Size | Page | Contents |
+|---|---|---|---|---|
+| `microstructure_profile` | Microstructure, Dive N, start to end UTC | `figWideL` | Microstructure | Left: "Signal variance [counts²]" (log x) against "Pressure [dBar]" (reversed), one line per channel (blue: channel 0, orange: channel 1); the x range covers the variances from 10 to 10¹¹ counts² (a failing probe can send 10⁻⁶ or 10¹²), padded by 0.2 decades; channel names in the panel's lower right corner. Then one heatmap per channel: x "&lt;channel&gt; spectrum: frequency [Hz]" (log, band centres), y pressure, color log₁₀ of the band-averaged spectrum [counts² Hz⁻¹], scale `amp` from 1 to 8, one color bar. |
+| `microstructure_shear_spectra` | Shear Spectra, Dive N, start to end UTC | `figWideL` | Microstructure | One panel per shear channel (`shear`, `shear1`, `shear2`; left out without one): band-averaged spectra on log-log axes, x "&lt;channel&gt; spectra: frequency [Hz]", y "Spectrum [counts² Hz⁻¹]", one line per record colored by pressure (`Blues`, light = shallow), with a pressure color bar. |
+
 ## 4. Float page: `<plots>/<serial>/index.html`
 
 Written by `WriteHtmlFile` in `bin/py/xmtps-aggregate-json.py` after the float's plots, from the in-memory figure metadata. The page is regenerated on every run that processes the float; the figure metadata is not saved anywhere else.
@@ -373,6 +382,7 @@ Structure:
     small images (top group)
     <h2 id="prof">Profile Data</h2> ...
     <h2 id="wave">Wave Data</h2> ...            (only with wave data)
+    <h2 id="microstructure">Microstructure Data</h2> ...   (only with microstructure data)
     <h2 id="drift">Drift Data</h2> ...
     <h2 id="surf">Surface Data</h2> ...
     <h2 id="ascent">Ascent</h2> ...
@@ -387,7 +397,7 @@ Structure:
 ```
 
 - **Head.** The title is the serial number. Inline CSS only; no external stylesheet or script; no `<meta charset>`.
-- **Navigation.** A fixed pane (125 px) with links to Top, Profile Data, Wave Data (with wave data), Drift Data, Surface Data, Ascent, Descent, Hydraulic System, Air Pump (with air pump figures), Satcom, Figure Files, and "Back" to the absolute URL `/alamo/`.
+- **Navigation.** A fixed pane (125 px) with links to Top, Profile Data, Wave Data (with wave data), Microstructure Data (with microstructure data), Drift Data, Surface Data, Ascent, Descent, Hydraulic System, Air Pump (with air pump figures), Satcom, Figure Files, and "Back" to the absolute URL `/alamo/`.
 - **Images.** Each shown figure is `<a href="<serial>_<id>.html"><img class="<size class>" src="<serial>_<id>_small.png" title="<title>" alt="<title>"></a>`. Images of class `fig`/`fig2` have `max-width: 50%` (two per row); wide classes `max-width: 100%`. The content column is at most 805 px wide (`figWide` small width + 25). A `<br>` ends each row.
 - **Missing data.** A section without data shows "No profile data.", "No drift data.", "No surface data.", "No ascent data.", "No descent data." or "No hydraulic system data.".
 
@@ -398,6 +408,7 @@ Figures shown in each section, in order (rows separated by `/`):
 | top (no heading) | `position_globe`, `position` / `displacement_submerged_velocity`, `displacement_surface_velocity` / `trajectory` / `cycle_timing` |
 | Profile Data | `profile_temp`, `profile_saln` / `profile_ts`, `profile_sigma0` / `profile_contour_temp` / `profile_contour_saln` / `profile_contour_sigma0` / `profile_num_bins` |
 | Wave Data | `wave_mwm` / `wave_swh` / `wave_period` / `wave_spectra_disp_Szz` / `wave_waterfall_disp_Szz` / `wave_direction_mean` |
+| Microstructure Data | `microstructure_profile` / `microstructure_shear_spectra` |
 | Drift Data | `drift_pres`, `drift_pres_avg` / `drift_temp`, `drift_temp_avg` / `drift_saln`, `drift_saln_avg` / `drift_dens`, `drift_dens_avg` / `drift_sample_count` |
 | Surface Data | `surface_pres`, `surface_pres_avg` / `surface_temp`, `surface_temp_avg` / `surface_sample_count` |
 | Ascent | `ascent`, `ascent_rate_v_pres` / `ascent_rate_v_time`, `ascent_rate_avg` / `ascent_sample_count` |

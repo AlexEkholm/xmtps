@@ -835,6 +835,7 @@ Each file is one pandas DataFrame written with `DataFrame.to_json(path, orient='
 | `_engineering_errors` | some dive has an `errors` entry | error line |
 | `_energy` | always when the float has a dive (written since 2026-11-04) | dive |
 | `_wave`, `_wave_spectra` | some dive ≥ 0 has a `Wave` with `slen` ≥ 1 (both are left out if either is empty) | dive, frequency bin |
+| `_microstructure`, `_microstructure_bands` | some dive ≥ 0 has a `microstructure` member with spectra records (micro-ALTO floats; since 2026-11-06) | spectra record of a channel; band of a channel |
 
 An existing file that is no longer produced (for example `_wave` after the last wave dive is removed) is not deleted.
 
@@ -1134,6 +1135,12 @@ One row per dive ≥ 0 with a `Wave` of `slen` ≥ 1, in read order. Values from
 ### 4.19 `_wave_spectra`
 
 One row per frequency bin of each `_wave` dive (245 per dive), sorted by `dive` then `freq`. Columns: `dive` (int); `freq` (Hz); `Szz_g`, `Syy_g`, `Sxx_g`, `Cxy_g`, `Qzx_g`, `Qzy_g` (interpolated acceleration spectra, g²/Hz); `Szz`, `Syy`, `Sxx`, `Cxy`, `Qzx`, `Qzy` (displacement spectra, m²/Hz); `a0`, `a1`, `a2`, `b1`, `b2`, `r1`, `r2` (float); `theta1`, `theta2` (int, deg). A spectrum whose length differs from `freq` (older records without directional spectra) is left `null` (since 2026-11-06). The `raw_*` spectra, `wavenumber` and `moment` are not aggregated.
+
+### 4.20 `_microstructure`, `_microstructure_bands`
+
+`_microstructure`: one row per spectra record of each MAPLe channel of each dive ≥ 0 (3.16), in dive and channel order. Columns: `dive`, `ch`, `ridx` (int); `name` (channel name); `dt_epoch` (record middle, s since epoch); `pres` (dBar, interpolated from the ascent); `sigvar` (counts²); `S0` … `S<n-1>` (band-averaged spectrum of each band, counts²/Hz; `null` for records rejected while the pump ran).
+
+`_microstructure_bands`: one row per band of each channel and dive: `dive`, `ch`, `band` (int); `name`; `freq`, `f_lo`, `f_hi` (band centre and edges, Hz). Column `S<band>` of `_microstructure` is that band.
 
 ## 5. Float summary: `<serial>_summary.json`
 

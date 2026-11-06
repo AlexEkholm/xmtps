@@ -24,6 +24,12 @@ Python tools:
   system of the Micro-ALTO floats (ALTO 11491-11496, or firmware ending in 0x33): 0.3 W over each
   dive's ascent, when it logs. No published power; 11491 and 11495, which ran out of battery,
   bound it to at most about 0.5-0.8 W. Adds about 0.3-0.4 MJ to each of those two floats.
+- `xmtps-aggregate-json.py`: micro-ALTO float pages get a "Microstructure Data" section with two
+  plots of the latest dive with MAPLe spectra: `microstructure_profile` (signal variance against
+  pressure, and a pressure-by-frequency image of each channel's band-averaged spectrum) and
+  `microstructure_shear_spectra` (the shear spectra on log-log axes, one line per record, colored
+  by pressure). Values are in counts. New aggregate files `_microstructure` and
+  `_microstructure_bands`.
 - `xmtps-list2json.py` reads the microstructure lines into a new per-dive `microstructure` member
   (`FloatClasses.Microstructure`, `MicrostructureChannel`): files, channel setup, bands, record
   times and pressures (interpolated from the ascent), signal means, shear masks, spectra and motor
