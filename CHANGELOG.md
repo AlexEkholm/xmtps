@@ -3,6 +3,23 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-06
+
+Python tools:
+
+- `xmtps-aggregate-json.py`: plot groups skip data they cannot use instead of failing with an
+  ERROR (about 730 lines in the last full rebuild). Ascent, descent, surface, drift, displacement,
+  profile position and contour plots return early, with a warning, when no rows are left after
+  filtering; contours need at least 2 usable profiles (one profile left the grids 1-D). Floats
+  without salinity (the early ALAMOs had RBR temperature and pressure sensors only) now get their
+  temperature profile, drift and contour plots; the salinity, density, sigma0 and T-S figures are
+  left out (new helpers `RangePercentile`, `DropFigures`). Wave aggregation keeps a missing mean
+  wave direction (`mwd` `NaN`) and leaves spectrum arrays whose length differs from the frequencies
+  empty (`NaN`), instead of dropping the dive's wave data (9108, 9237); the wave waterfalls are
+  left out with fewer than 2 wave dives (a single column drew a zero-width image: 9108, 9113, 9307).
+  A failing plot group now logs the exception type and message; the surface displacement message
+  no longer says "submerged displacement plotes". The drift temperature range no longer needs sigma0.
+
 ## 2026-11-05
 
 Decoder:

@@ -1116,13 +1116,13 @@ def AggregateDiveData():
                             if dive_num == dives[-1] and len(ascent_data.pres) > 1:
                                 float_aggregate_data['summary']['latest']['depth'] = np.nanmax([np.nanmax(ascent_data.pres), float_aggregate_data['summary']['latest']['depth']])
                   
-                    except:
+                    except Exception as exc:
                         
                         errstr = 'Failed to aggregate ascent data for float {}, dive {}'.format(float_id, dive_num)
                         
                         if hasattr(args, 'halt') and args.halt:
                             raise Exception(errstr)
-                        logger.error(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                             
                 # Aggregate descent data
                     
@@ -1173,13 +1173,13 @@ def AggregateDiveData():
                             if dive_num == dives[-1] and len(descent_data.pres) > 1:
                                 float_aggregate_data['summary']['latest']['depth'] = np.nanmax([np.nanmax(descent_data.pres), float_aggregate_data['summary']['latest']['depth']])
                         
-                    except:
+                    except Exception as exc:
                         
                         errstr = 'Failed to aggregate descent data for float {}, dive {}'.format(float_id, dive_num)
                         
                         if hasattr(args, 'halt') and args.halt:
                             raise Exception(errstr)
-                        logger.error(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
                 # Aggregate drift data
                 
@@ -1235,13 +1235,13 @@ def AggregateDiveData():
                             if dive_num == dives[-1] and len(drift_data.pres) > 1:
                                 float_aggregate_data['summary']['latest']['depth'] = np.nanmax([np.nanmax(drift_data.pres), float_aggregate_data['summary']['latest']['depth']])
                             
-                    except:
+                    except Exception as exc:
                         
                         errstr = 'Failed to aggregate drift data for float {}, dive {}'.format(float_id, dive_num)
                         
                         if hasattr(args, 'halt') and args.halt:
                             raise Exception(errstr)
-                        logger.error(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 
                 # Aggregate engineering data
                 
@@ -1270,12 +1270,12 @@ def AggregateDiveData():
                     
                     float_aggregate_data['engineering'] = df_eng
 
-                except:
+                except Exception as exc:
                     errstr = 'Failed to aggregate engineering data for float {}, dive {}'.format(float_id, dive_num)
 
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
                 # Aggregate mission parameters and all engineering values (one row per dive), and
                 # the engineering error codes. Dive JSON written before these fields existed has
@@ -1321,12 +1321,12 @@ def AggregateDiveData():
                     if rows_err:
                         float_aggregate_data['engineering_errors'] = pd.DataFrame(rows_err)
 
-                except:
+                except Exception as exc:
                     errstr = 'Failed to aggregate mission and engineering values for float {}'.format(float_id)
 
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
                 # Aggregate gps data:
                 
@@ -1384,13 +1384,13 @@ def AggregateDiveData():
                             # Get latest GPS fix
                             if dive_num >= 0 and gps_fix.dt_epoch > float_aggregate_data['summary']['latest']['gps'].dt_epoch:
                                 float_aggregate_data['summary']['latest']['gps'] = gps_fix
-                    except:
+                    except Exception as exc:
                         
                         errstr = 'Failed to aggregate gps data for float {}, dive {}'.format(float_id, dive_num)
                         
                         if hasattr(args, 'halt') and args.halt:
                             raise Exception(errstr)
-                        logger.error(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 
                 float_aggregate_data['gps'] = float_aggregate_data['gps'].sort_values('dt_epoch', ignore_index=True)
                 
@@ -1461,13 +1461,13 @@ def AggregateDiveData():
                             if dive_num == dives[-1] and len(profile_data.pres) > 1:
                                 float_aggregate_data['summary']['latest']['depth'] = np.nanmax([depth, float_aggregate_data['summary']['latest']['depth']])
                     
-                    except:
+                    except Exception as exc:
                         
                         errstr = 'Failed to aggregate profile data for float {}, dive {}'.format(float_id, dive_num)
                         
                         if hasattr(args, 'halt') and args.halt:
                             raise Exception(errstr)
-                        logger.error(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                     
                 float_aggregate_data['profile'].sort_values('dive', ignore_index=True)
                 
@@ -1500,13 +1500,13 @@ def AggregateDiveData():
                         )
                         float_aggregate_data['pump'] = AppendRows(float_aggregate_data['pump'], df_pump)
                     
-                    except:
+                    except Exception as exc:
                         
                         errstr = 'Failed to aggregate pump data for float {}, dive {}'.format(float_id, dive_num)
                         
                         if hasattr(args, 'halt') and args.halt:
                             raise Exception(errstr)
-                        logger.error(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 
                 # Aggregate SBD data
                 
@@ -1597,13 +1597,13 @@ def AggregateDiveData():
                             # )
                             # float_aggregate_data['sbd'] = pd.concat([float_aggregate_data['sbd'], df_sbd], ignore_index=True)
                 
-                    except:
+                    except Exception as exc:
                         
                         errstr = 'Failed to aggregate SBD data for float {}, dive {}'.format(float_id, dive_num)
                         
                         if hasattr(args, 'halt') and args.halt:
                             raise Exception(errstr)
-                        logger.error(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                         
                 # Aggregate surface data
                 
@@ -1654,13 +1654,13 @@ def AggregateDiveData():
                         )
                         float_aggregate_data['surface'] = AppendRows(float_aggregate_data['surface'], df_profile)
                         
-                    except:
+                    except Exception as exc:
                         
                         errstr = 'Failed to aggregate surface data for float {}, dive {}'.format(float_id, dive_num)
                         
                         if hasattr(args, 'halt') and args.halt:
                             raise Exception(errstr)
-                        logger.error(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                            
                 # TODO Aggregate wave data
                 
@@ -1688,7 +1688,7 @@ def AggregateDiveData():
                         df_wave = pd.DataFrame(
                             {
                                 'dive':         np.array([dive_num], dtype='int'),
-                                'mwd':          np.array([wave_data.mwd], dtype='int'),
+                                'mwd':          np.array([wave_data.mwd], dtype='int' if np.isfinite(wave_data.mwd) else 'float'),
                                 'declination':  np.array([getattr(wave_data, 'declination', np.nan)], dtype='float'),
                                 'direction_ref': np.array([getattr(wave_data, 'direction_ref', 'magnetic')], dtype='str'),
                                 'period_peak':  np.array([wave_data.period_peak], dtype='float'),
@@ -1701,43 +1701,53 @@ def AggregateDiveData():
                         )
                         float_aggregate_data['wave'] = AppendRows(float_aggregate_data['wave'], df_wave)
                         
+                        n_freq = len(wave_data.freq)
+                        def spectrum(name, dtype='float'):
+                            v = np.asarray(getattr(wave_data, name, []), dtype='float')
+                            if len(v) != n_freq:
+                                logger.debug('Wave {} of float {}, dive {}: {} values for {} frequencies'.format(
+                                    name, float_id, dive_num, len(v), n_freq))
+                                v = np.full(n_freq, np.nan)
+                            if dtype == 'int' and np.isfinite(v).all():
+                                return v.astype('int')
+                            return v
                         df_wave_spectra = pd.DataFrame(
                             {
-                                'dive':     np.array([dive_num]*len(wave_data.freq), dtype='int'),
+                                'dive':     np.array([dive_num]*n_freq, dtype='int'),
                                 'freq':     np.array(wave_data.freq, dtype='float'),
-                                'Szz_g':    np.array(wave_data.Szz_g, dtype='float'),
-                                'Syy_g':    np.array(wave_data.Syy_g, dtype='float'),
-                                'Sxx_g':    np.array(wave_data.Sxx_g, dtype='float'),
-                                'Cxy_g':    np.array(wave_data.Cxy_g, dtype='float'),
-                                'Qzx_g':    np.array(wave_data.Qzx_g, dtype='float'),
-                                'Qzy_g':    np.array(wave_data.Qzy_g, dtype='float'),
-                                'Szz':      np.array(wave_data.Szz, dtype='float'),
-                                'Syy':      np.array(wave_data.Syy, dtype='float'),
-                                'Sxx':      np.array(wave_data.Sxx, dtype='float'),
-                                'Cxy':      np.array(wave_data.Cxy, dtype='float'),
-                                'Qzx':      np.array(wave_data.Qzx, dtype='float'),
-                                'Qzy':      np.array(wave_data.Qzy, dtype='float'),
-                                'a0':       np.array(wave_data.a0, dtype='float'),
-                                'a1':       np.array(wave_data.a1, dtype='float'),
-                                'a2':       np.array(wave_data.a2, dtype='float'),
-                                'b1':       np.array(wave_data.b1, dtype='float'),
-                                'b2':       np.array(wave_data.b2, dtype='float'),
-                                'r1':       np.array(wave_data.r1, dtype='float'),
-                                'r2':       np.array(wave_data.r2, dtype='float'),
-                                'theta1':   np.array(wave_data.theta1, dtype='int'),
-                                'theta2':   np.array(wave_data.theta2, dtype='int'),
+                                'Szz_g':    spectrum('Szz_g'),
+                                'Syy_g':    spectrum('Syy_g'),
+                                'Sxx_g':    spectrum('Sxx_g'),
+                                'Cxy_g':    spectrum('Cxy_g'),
+                                'Qzx_g':    spectrum('Qzx_g'),
+                                'Qzy_g':    spectrum('Qzy_g'),
+                                'Szz':      spectrum('Szz'),
+                                'Syy':      spectrum('Syy'),
+                                'Sxx':      spectrum('Sxx'),
+                                'Cxy':      spectrum('Cxy'),
+                                'Qzx':      spectrum('Qzx'),
+                                'Qzy':      spectrum('Qzy'),
+                                'a0':       spectrum('a0'),
+                                'a1':       spectrum('a1'),
+                                'a2':       spectrum('a2'),
+                                'b1':       spectrum('b1'),
+                                'b2':       spectrum('b2'),
+                                'r1':       spectrum('r1'),
+                                'r2':       spectrum('r2'),
+                                'theta1':   spectrum('theta1', 'int'),
+                                'theta2':   spectrum('theta2', 'int'),
                             }
                         )
                         float_aggregate_data['wave_spectra'] = AppendRows(float_aggregate_data['wave_spectra'], df_wave_spectra)
                         
                     
-                    except:
+                    except Exception as exc:
                     
                         errstr = 'Failed to aggregate wave data for float {}, dive {}'.format(float_id, dive_num)
                         
                         if hasattr(args, 'halt') and args.halt:
                             raise Exception(errstr)
-                        logger.error(errstr)
+                        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 
                 float_aggregate_data['wave_spectra'] = float_aggregate_data['wave_spectra'].sort_values(['dive', 'freq'], ignore_index=True)
 
@@ -1803,19 +1813,19 @@ def AggregateDiveData():
                                 
                                 float_aggregate_data['profile_position'] = AppendRows(float_aggregate_data['profile_position'], df_dive_pos)
                         
-                        except:
+                        except Exception as exc:
                             
                             errstr = 'Failed to get profile position for float {}, dive {}'.format(float_id, dive_num)
                             if hasattr(args, 'halt') and args.halt:
                                 raise Exception(errstr)
-                            logger.error(errstr)
-                except:
+                            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
+                except Exception as exc:
                         
                     errstr = 'Failed to get profile positions for float {}'.format(float_id)
                     
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                     
                 
                 # Post Process - Get date/times for profiles with no GPS
@@ -1930,13 +1940,13 @@ def AggregateDiveData():
                 
                     float_aggregate_data['iridium_position'] = float_aggregate_data['iridium_position'].sort_values('dt_epoch', ignore_index=True)
                
-                except: 
+                except Exception as exc:
                 
                     errstr = 'Failed to generate composite Iridium Positions for float {}.'.format(float_id)
                     
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                     
                 # Post Process - Generate submerged and suface displacements
                 
@@ -2064,13 +2074,13 @@ def AggregateDiveData():
                         float_aggregate_data['displacement_submerged'] = AppendRows(float_aggregate_data['displacement_submerged'], df_displacement_submerged)
                         float_aggregate_data['displacement_surface'] = AppendRows(float_aggregate_data['displacement_surface'], df_displacement_surface)
 
-                except: 
+                except Exception as exc:
                 
                     errstr = 'Failed to generate displacements for float {}.'.format(float_id)
                     
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 
                 # Post process - Generate Cycle Timings
                 
@@ -2212,23 +2222,23 @@ def AggregateDiveData():
                             previous_surface_duration = surface_duration
                 
                 
-                except: 
+                except Exception as exc:
                 
                     errstr = 'Failed to generate cycle timings for float {}.'.format(float_id)
 
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
                 # Estimated energy use per dive (needs the cycle timings)
 
                 try:
                     float_aggregate_data['energy'] = EnergyEstimates(float_aggregate_data, float_id)
-                except:
+                except Exception as exc:
                     errstr = 'Failed to estimate energy use for float {}.'.format(float_id)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
 
                 # TODO Post Process - Get summary data
@@ -2257,12 +2267,12 @@ def AggregateDiveData():
     
                 float_aggregate_map[float_id] = float_aggregate_data
                     
-            except:
+            except Exception as exc:
                 
                 errstr = 'Failed to aggregate data for float {}'.format(float_id)
                 if hasattr(args, 'halt') and args.halt:
                     raise Exception(errstr)
-                logger.error(errstr)
+                logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
         
     except:
         raise Exception('Failed to aggregate dive data.')    
@@ -2377,12 +2387,12 @@ def ProcessDirectory(dpath):
                         process_files = True
                         break
             
-            except:
+            except Exception as exc:
                 errstr = 'Failed to process lastprocessed file: ' + fpath_lproc
                 
                 if hasattr(args, 'halt') and args.halt:
                     raise Exception(errstr)
-                logger.error(errstr)
+                logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 
                 process_files = True
                     
@@ -2402,20 +2412,20 @@ def ProcessDirectory(dpath):
                 if new_lproc is not None and new_lproc > lproc:
                     lproc = new_lproc
 
-            except:
+            except Exception as exc:
             
                 errstr = 'Failed to process file: ' + file
                 
                 if hasattr(args, 'halt') and args.halt:
                     raise Exception(errstr)
-                logger.error(errstr)
+                logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
             
         # Queue the lastprocessed file; it is written once the aggregate and plot files have been
         # written, so a failed or interrupted run is retried on the next run.
         if lproc > 0:
             lastprocessed_pending.append((fpath_lproc, lproc))
         
-    except:
+    except Exception as exc:
         
         # raise Exception('Failed to process directory: '  + dpath)
         
@@ -2423,7 +2433,7 @@ def ProcessDirectory(dpath):
         
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
-        logger.error(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
         
     logger.debug('Processed directory: ' + dpath + ' ')
 
@@ -2440,13 +2450,13 @@ def WriteLastProcessedFiles():
         try:
             with open(fpath_lproc, 'w', encoding='utf-8') as file:
                 file.write(str(lproc))
-        except:
+        except Exception as exc:
 
             errstr = 'Failed write lastprocessed file: ' + fpath_lproc
 
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
 def ProcessJsonListingFile(fpath):
     """Read one per-dive JSON file and add its Dive object to float_map.
@@ -2539,13 +2549,13 @@ def ProcessJsonListingFile(fpath):
         
         return os.path.getmtime(fpath)
         
-    except:
+    except Exception as exc:
             
         errstr = 'Failed to proces file: ' + fpath
         
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
-        logger.error(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
         
     return None 
         
@@ -2819,12 +2829,12 @@ def WriteAggregateJsonFiles():
                         file.write(dive_json)
                         
                     
-                except:
+                except Exception as exc:
                    
                     errstr = 'Failed to write summary file: ' + fpath
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
  
     except:
         raise Exception('Failed to write aggregate JSON files.')
@@ -3470,11 +3480,11 @@ def WriteHtmlFile(float_id, runtime_s=None):
             #     ))
             fout.write(doc.getvalue())
     
-    except:
+    except Exception as exc:
         errstr = 'Failed to write HTML file: ' + fpath_html
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
-        logger.error(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
 def ContourLines(x, y, z, level):
     """Return the lines where z crosses level, as a list of (xs, ys) arrays (marching squares).
@@ -3687,6 +3697,25 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
         margin=dict(l=10, r=10, b=20, t=50, pad=4))
     return fig
 
+def RangePercentile(values, q):
+    """np.percentile of the finite values as doubles; NaN for each q when there are none (a float
+    without that sensor, such as the early temperature-only ALAMOs without salinity)."""
+    v = np.asarray(values, dtype=np.double)
+    v = v[np.isfinite(v)]
+    if v.size < 1:
+        return np.full(len(q), np.nan)
+    return np.percentile(v, q).astype(np.double)
+
+
+def DropFigures(figs, keys, reason, float_id):
+    """Remove the figures in keys from figs (dict of figures), logging why."""
+    gone = [k for k in keys if k in figs]
+    for k in gone:
+        del figs[k]
+    if gone:
+        logger.info('{} for float {}: skipping {}'.format(reason, float_id, ', '.join(gone)))
+
+
 def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
     """Write the geographic position plots for one float; return their figure metadata.
 
@@ -3728,7 +3757,8 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
             df_sbd = float_aggregate_data['sbd']
                                     
             if len(df_profiles) < 1:
-                logger.warning('No position data for float {}'.format(float_id))
+                logger.warning('No profile positions after deployment for float {}'.format(float_id))
+                return figs_meta
             
             # Calculate map ranges
             
@@ -4371,11 +4401,11 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                         name = '',
                         ))
                         
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to profile position plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
             
             # Add markers to figure -- profile positions
             
@@ -4464,11 +4494,11 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                         
                     i=i+1
                     
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to profile position plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
             
             
 
@@ -4729,11 +4759,11 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
 
                     i=i+1
                 
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to profile position plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
             
             # The original geo plot is kept as position_geo; 'position' is the plot over
             # bathymetry (PositionBathymetryFigure), when the bathymetry file can be read
@@ -4802,11 +4832,11 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
             if 'rng' in locals(): del rng
             gc.collect()
             
-        except: 
+        except Exception as exc:
             errstr = 'Failed to profile position plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -4849,6 +4879,9 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
                 ['speed_mps', 'dist_m']] = np.nan
             
             df_dives = df_dives[(~df_dives['dist_m'].isna()) & (~df_dives['speed_mps'].isna())]
+            if len(df_dives) < 1:
+                logger.warning('No usable submerged displacement data for float {}'.format(float_id))
+                return figs_meta
             
             # Calculate data ranges
             
@@ -5082,11 +5115,11 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
                     del dt2
                     
                 
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to submerged displacement plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 i=i+1
                 
                 
@@ -5110,11 +5143,11 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
                 if fig_meta is not None:
                     figs_meta.append(fig_meta)
         
-        except: 
-            errstr = 'Failed to submerged displacement plotes for float {}'.format(float_id)
+        except Exception as exc:
+            errstr = 'Failed to generate submerged displacement plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -5157,6 +5190,9 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
                 ['speed_mps', 'dist_m']] = np.nan
             
             df_dives = df_dives[(~df_dives['dist_m'].isna()) & (~df_dives['speed_mps'].isna())]
+            if len(df_dives) < 1:
+                logger.warning('No usable surface displacement data for float {}'.format(float_id))
+                return figs_meta
             
             # Calculate data ranges
             
@@ -5388,11 +5424,11 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
                     del dt2
 
                 
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to surface displacement plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 i=i+1
                 
                 
@@ -5416,11 +5452,11 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
                 if fig_meta is not None:
                     figs_meta.append(fig_meta)
         
-        except: 
-            errstr = 'Failed to submerged displacement plotes for float {}'.format(float_id)
+        except Exception as exc:
+            errstr = 'Failed to generate surface displacement plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -5836,11 +5872,11 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
             if 'rng' in locals(): del rng
             gc.collect()
                     
-        except: 
+        except Exception as exc:
             errstr = 'Failed to generate trajectory plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -6036,11 +6072,11 @@ def WriteCycleTimingPlots(float_id, float_aggregate_data, dpath_float, dives, ma
             
           
             
-        except: 
+        except Exception as exc:
             errstr = 'Failed to cycle plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -6094,10 +6130,10 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             # Calculate data ranges
             
             rng = dict(
-                dens   = np.percentile(df_profiles['dens'][~df_profiles['dens'].isna()].values, [1, 99]).astype(np.double),
+                dens   = RangePercentile(df_profiles['dens'].values, [1, 99]),
                 pres   = np.array([np.max(df_profiles['pres'][~df_profiles['pres'].isna()].values), 0 ]).astype(np.double),
-                saln   = np.percentile(df_profiles['saln'][~df_profiles['saln'].isna()].values, [1, 99]).astype(np.double),
-                sigma0 = np.percentile(df_profiles['sigma0'][~df_profiles['sigma0'].isna()].values, [1, 99]).astype(np.double),
+                saln   = RangePercentile(df_profiles['saln'].values, [1, 99]),
+                sigma0 = RangePercentile(df_profiles['sigma0'].values, [1, 99]),
                 temp   = np.percentile(df_profiles['temp'][~df_profiles['temp'].isna()].values, [1, 99]).astype(np.double),
                 )
             rng['dens']   = np.round(rng['dens']   + [-1.00, 1.00], 1)
@@ -6400,11 +6436,11 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         name='{}'.format(dive),
                         ))
                         
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to profile plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 i=i+1
                 
             figs['profile_num_bins'].add_trace(go.Bar(
@@ -6431,7 +6467,9 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 profile_num_bins = 'figWideXS'
                 )
             
-            for fig in figs.keys():
+            if not np.isfinite(rng['saln']).all():
+                DropFigures(figs, ['profile_saln', 'profile_dens', 'profile_sigma0', 'profile_ts'], 'No salinity', float_id)
+            for fig in list(figs.keys()):
                 
                 # Append meta
                 
@@ -6463,11 +6501,11 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             if 'rng' in locals(): del rng
             gc.collect()
             
-        except: 
+        except Exception as exc:
             errstr = 'Failed to generate profile plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -6519,6 +6557,9 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             df_profile_positions = df_profile_positions[df_profile_positions['dive'] > 0]
             
             df_profiles = df_profiles.drop_duplicates(subset=['dive','pres'], ignore_index=True)
+            if len(df_profiles) < 1 or len(df_profile_positions) < 1:
+                logger.warning('No usable profile data for contour plots of float {}'.format(float_id))
+                return figs_meta
             
             # Calculate data ranges
             
@@ -6543,16 +6584,16 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             
             # df_profiles = df_profiles[df_profiles['pres']<rng['pres'][0]]
             
-            rng['dens'] = np.percentile(df_profiles['dens'][~df_profiles['dens'].isna()].values, [1, 99]).astype(np.double)
+            rng['dens'] = RangePercentile(df_profiles['dens'].values, [1, 99])
             rng['dens'] = np.round(rng['dens'] + [ -0.05, 0.05 ], 1)
             
-            rng['saln'] = np.percentile(df_profiles['saln'][~df_profiles['saln'].isna()].values, [5, 98]).astype(np.double)
+            rng['saln'] = RangePercentile(df_profiles['saln'].values, [5, 98])
             rng['saln'] = np.round(rng['saln'] + [ -0.55, 0.15 ], 1)
 
-            rng['sigma0'] = np.percentile(df_profiles['sigma0'][~df_profiles['sigma0'].isna()].values, [1, 99]).astype(np.double)
+            rng['sigma0'] = RangePercentile(df_profiles['sigma0'].values, [1, 99])
             rng['sigma0'] = np.round(rng['sigma0'] + [ -0.05, 0.05 ], 1)
 
-            rng['temp'] = np.percentile(df_profiles['temp'][~df_profiles['temp'].isna()].values, [1, 99]).astype(np.double)
+            rng['temp'] = RangePercentile(df_profiles['temp'].values, [1, 99])
             rng['temp'] = np.round(rng['temp'] + [ -1.25, 1.25 ], 1)
             
             rng['time'] = np.array([
@@ -6654,11 +6695,15 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                     bounds_error=False)(grid_pres)
                 
                 regrid_dive = np.vstack([regrid_dive, np.array([dive_num] * len(grid_pres))])
-                regrid_dens = np.vstack([regrid_dens, profile_regrid_dens]) if regrid_dens.size else profile_regrid_dens
-                regrid_saln = np.vstack([regrid_saln, profile_regrid_saln]) if regrid_saln.size else profile_regrid_saln
-                regrid_sigma0 = np.vstack([regrid_sigma0, profile_regrid_sigma0]) if regrid_sigma0.size else profile_regrid_sigma0
-                regrid_temp = np.vstack([regrid_temp, profile_regrid_temp]) if regrid_temp.size else profile_regrid_temp
+                regrid_dens = np.vstack([regrid_dens, profile_regrid_dens])
+                regrid_saln = np.vstack([regrid_saln, profile_regrid_saln])
+                regrid_sigma0 = np.vstack([regrid_sigma0, profile_regrid_sigma0])
+                regrid_temp = np.vstack([regrid_temp, profile_regrid_temp])
          
+            if len(grid_time) < 2:
+                logger.warning('Fewer than 2 usable profiles for contour plots of float {}'.format(float_id))
+                return figs_meta
+
             # Reshape regridded data
             
             regrid_dive = np.transpose(regrid_dive)
@@ -6960,7 +7005,9 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 
             # Write plot files
             
-            for fig in figs.keys():
+            if not np.isfinite(rng['saln']).all():
+                DropFigures(figs, ['profile_contour_saln', 'profile_contour_dens', 'profile_contour_sigma0'], 'No salinity', float_id)
+            for fig in list(figs.keys()):
                 
                 fig_meta = WritePlotImageFiles(
                     id_str = fig, 
@@ -7000,13 +7047,13 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             if 'rng' in locals(): del rng
             gc.collect()
             
-        except:
+        except Exception as exc:
             
             errmsg = 'Failed to generate profile contour plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errmsg)
             else:
-                logger.error(errmsg)
+                logger.error('{} ({}: {})'.format(errmsg, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -7047,6 +7094,10 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
 
             
             
+            if len(df_dives) < 1:
+                logger.warning('No usable ascent data for float {}'.format(float_id))
+                return figs_meta
+
             df_dives_gb =  df_dives[df_dives['phase_code'] == 13][["dive","pres","rate"]].groupby(['dive'])
             df_dives_gb_min = df_dives_gb.min()
             df_dives_gb_max = df_dives_gb.max()
@@ -7342,11 +7393,11 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         name='{}'.format(dive),
                         mode='lines'
                         ))
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to ascent plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 i=i+1
                 
             # Add traces to average figures
@@ -7457,11 +7508,11 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             if 'rng' in locals(): del rng
             gc.collect()                
           
-        except: 
+        except Exception as exc:
             errstr = 'Failed to generate ascent plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -7501,6 +7552,10 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             df_dives = df_dives[~df_dives['pres'].isna()]
             df_dives = df_dives[~df_dives['dt_ref_delta_sec'].isna()]
             
+            if len(df_dives) < 1:
+                logger.warning('No usable descent data for float {}'.format(float_id))
+                return figs_meta
+
             df_dives_gb = df_dives[["dive","pres","rate"]].groupby(['dive'])
             df_dives_gb_min = df_dives_gb.min()
             df_dives_gb_max = df_dives_gb.max()
@@ -7791,11 +7846,11 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         name='{}'.format(dive),
                         mode='lines'
                         ))
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to ascent plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 i=i+1
             
             # Add traces to average figures
@@ -7907,11 +7962,11 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             if 'rng' in locals(): del rng
             gc.collect()   
 
-        except: 
+        except Exception as exc:
             errstr = 'Failed to generate descent plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -7961,6 +8016,9 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                 ['temp','dens','sigma0']] = np.nan
             
             df_dives = df_dives[~df_dives['pres'].isna()]
+            if len(df_dives) < 1 or not df_dives['dt_ref_delta_sec'].notna().any():
+                logger.warning('No usable drift data for float {}'.format(float_id))
+                return figs_meta
             
             df_dives_gb = df_dives[["dive","pres","temp","saln","dens","sigma0"]].groupby(['dive'])
             df_dives_gb_min = df_dives_gb.min()
@@ -7971,16 +8029,16 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
             # Calculate data ranges
             
             rng = dict(
-                dens   = np.percentile(df_dives['dens'][~df_dives['dens'].isna()].values, [99, 1]).astype(np.double),
+                dens   = RangePercentile(df_dives['dens'].values, [99, 1]),
                 dt_ref_delta_min = np.array([
                     0,
                     np.max(df_dives['dt_ref_delta_sec'][~df_dives['dt_ref_delta_sec'].isna()].values)/60
                     ]).astype(np.double),
                 # pres   = np.array([np.nanmax(df_dives['pres'].values), 0 ]),
                 pres   = np.percentile(df_dives['pres'].values, [100, 0]).astype(np.double),
-                saln   = np.percentile(df_dives['saln'][~df_dives['saln'].isna()].values, [2, 98]).astype(np.double),
-                sigma0 = np.percentile(df_dives['sigma0'][~df_dives['sigma0'].isna()].values, [99, 1]).astype(np.double),
-                temp   = np.percentile(df_dives['temp'][~df_dives['sigma0'].isna()].values, [1, 99]).astype(np.double),
+                saln   = RangePercentile(df_dives['saln'].values, [2, 98]),
+                sigma0 = RangePercentile(df_dives['sigma0'].values, [99, 1]),
+                temp   = RangePercentile(df_dives['temp'].values, [1, 99]),
                 )
             rng['dt_ref_delta_min']   = np.round(rng['dt_ref_delta_min']   + [ 0, 2], 0)
             rng['dens']   = np.round(rng['dens']   + [ 1.00,-1.00], 1)
@@ -8445,11 +8503,11 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                         mode='lines'
                         ))
                         
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to ascent plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 i=i+1
                 
             # Add traces to average figures
@@ -8575,7 +8633,9 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                 drift_temp_avg = 'fig2',
                 )
             
-            for fig in figs.keys():
+            if not np.isfinite(rng['saln']).all():
+                DropFigures(figs, [k for k in figs if re.match(r'drift_(saln|dens|sigma0)', k)], 'No salinity', float_id)
+            for fig in list(figs.keys()):
                 
                 fig_meta = WritePlotImageFiles(
                     id_str = fig, 
@@ -8605,11 +8665,11 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
             if 'rng' in locals(): del rng
             gc.collect()     
             
-        except: 
+        except Exception as exc:
             errstr = 'Failed to generate drift plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -9639,11 +9699,11 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         mode='markers',
                         ))
                     
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to pump plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 
                 i=i+1
                 
@@ -9804,11 +9864,11 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             if 'rng' in locals(): del rng
             gc.collect()   
             
-        except: 
+        except Exception as exc:
             errstr = 'Failed generate pump plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -9994,11 +10054,11 @@ def WriteAirPumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
         if 'df_cfg' in locals(): del df_cfg
         gc.collect()
 
-    except:
+    except Exception as exc:
         errstr = 'Failed to generate air pump plots for float {}'.format(float_id)
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
-        logger.error(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
     return figs_meta
 
@@ -10272,11 +10332,11 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                 figs['pump_first_duration'] = fig
                 fig_size['pump_first_duration'] = 'figWideS'
 
-        except:
+        except Exception as exc:
             errstr = 'Failed to generate first pump duration plot for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
         # Write plot files
 
@@ -10301,11 +10361,11 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
         if 'df_vac' in locals(): del df_vac
         gc.collect()
 
-    except:
+    except Exception as exc:
         errstr = 'Failed to generate engineering plots for float {}'.format(float_id)
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
-        logger.error(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
     return figs_meta
 
@@ -10355,6 +10415,10 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             df_dives = df_dives[~df_dives['dt_ref_delta_sec'].isna()]
             df_dives = df_dives[df_dives['dt_ref_delta_sec'] < 30000]
             
+            if len(df_dives) < 1:
+                logger.warning('No usable surface data for float {}'.format(float_id))
+                return figs_meta
+
             df_dives_gb = df_dives[["dive","pres","temp"]].groupby(['dive'])
             df_dives_gb_min = df_dives_gb.min()
             df_dives_gb_max = df_dives_gb.max()
@@ -10584,11 +10648,11 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         mode='lines'
                         ))
                         
-                except: 
+                except Exception as exc:
                     errstr = 'Failed to add traces to surface pump plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                     
                 i=i+1
                 
@@ -10736,11 +10800,11 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             if 'rng' in locals(): del rng
             gc.collect()
             
-        except: 
+        except Exception as exc:
             errstr = 'Failed to generate surface plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -12217,11 +12281,11 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             if 'idx' in locals(): del idx
             gc.collect()
         
-        except: 
+        except Exception as exc:
             errstr = 'Failed to generate satcom plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
     
     return figs_meta
 
@@ -13385,11 +13449,11 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         # opacity=0.7,
                         ))
                 
-                except:
+                except Exception as exc:
                     errstr = 'Failed to add traces to mean wave direction plot for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                     
                 i = i+1
                 
@@ -13930,11 +13994,11 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             ),
                         )
                 
-                except:
+                except Exception as exc:
                     errstr = 'Failed to add traces to wave spectra plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
-                    logger.error(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 
                 i = i+1
                 
@@ -13963,7 +14027,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 wave_waterfall_disp_Szz_linear='figWideXL',
                 )
             
-            for fig in figs.keys():
+            if df_wave_spectra['dive'].nunique() < 2:
+                DropFigures(figs, [k for k in figs if k.startswith('wave_waterfall_')], 'Fewer than 2 wave dives', float_id)
+            for fig in list(figs.keys()):
                 
                 fig_meta = WritePlotImageFiles(
                     id_str = fig, 
@@ -13978,11 +14044,11 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 if fig_meta is not None:
                     figs_meta.append(fig_meta)
         
-        except: 
+        except Exception as exc:
             errstr = 'Failed to generate wave plots for float {}'.format(float_id)
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
     return figs_meta
 
@@ -14135,11 +14201,11 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
         if fig_meta is not None:
             figs_meta.append(fig_meta)
 
-    except:
+    except Exception as exc:
         errstr = 'Failed to generate energy plots for float {}'.format(float_id)
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
-        logger.error(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
     return figs_meta
 
@@ -14274,18 +14340,18 @@ def WritePlotFiles():
                     
 
                   
-            except:
+            except Exception as exc:
                 errstr = 'Failed to write plot files for float {}'.format(float_id)
                 if hasattr(args, 'halt') and args.halt:
                     raise Exception(errstr)
-                logger.error(errstr)
+                logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
            
-    except:
+    except Exception as exc:
         
         errstr = 'Failed to write plot files'
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
-        logger.error(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
 def WritePlotImageFiles(
         id_str, 
@@ -14392,11 +14458,11 @@ def WritePlotImageFiles(
                         )
                     )
             # figs[fig].write_html(fig_meta['fpath_html'])
-        except:
+        except Exception as exc:
             errstr = 'Failed to write file: ' + fig_meta['fpath_html']
             if hasattr(args, 'halt') and args.halt:
                 raise Exception(errstr)
-            logger.error(errstr)
+            logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
             return None
                 
 
@@ -14426,14 +14492,14 @@ def WritePlotImageFiles(
 
         return fig_meta
 
-    except:
+    except Exception as exc:
         errstr = 'Failed to write plot image files for float {}: {}'.format(
             float_id,
             id_str
             )
         if hasattr(args, 'halt') and args.halt:
             raise Exception(errstr)
-        logger.error(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
         return None
 
 def FlushImageQueue():

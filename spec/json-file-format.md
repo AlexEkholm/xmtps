@@ -1080,7 +1080,7 @@ One row per dive ≥ 0 with a `Wave` of `slen` ≥ 1, in read order. Values from
 | Column | Type | Units |
 |---|---|---|
 | `dive` | int | |
-| `mwd` | int | deg, toward, [0, 360); 0 when rejected |
+| `mwd` | int | deg, toward, [0, 360); 0 when rejected; `null` when the dive's value is `NaN` (since 2026-11-06) |
 | `declination` | float | deg, east positive; `null` if not applied |
 | `direction_ref` | string | `"true"` or `"magnetic"` |
 | `period_peak`, `period_avg`, `period_zero` | float | s |
@@ -1090,7 +1090,7 @@ One row per dive ≥ 0 with a `Wave` of `slen` ≥ 1, in read order. Values from
 
 ### 4.19 `_wave_spectra`
 
-One row per frequency bin of each `_wave` dive (245 per dive), sorted by `dive` then `freq`. Columns: `dive` (int); `freq` (Hz); `Szz_g`, `Syy_g`, `Sxx_g`, `Cxy_g`, `Qzx_g`, `Qzy_g` (interpolated acceleration spectra, g²/Hz); `Szz`, `Syy`, `Sxx`, `Cxy`, `Qzx`, `Qzy` (displacement spectra, m²/Hz); `a0`, `a1`, `a2`, `b1`, `b2`, `r1`, `r2` (float); `theta1`, `theta2` (int, deg). The `raw_*` spectra, `wavenumber` and `moment` are not aggregated.
+One row per frequency bin of each `_wave` dive (245 per dive), sorted by `dive` then `freq`. Columns: `dive` (int); `freq` (Hz); `Szz_g`, `Syy_g`, `Sxx_g`, `Cxy_g`, `Qzx_g`, `Qzy_g` (interpolated acceleration spectra, g²/Hz); `Szz`, `Syy`, `Sxx`, `Cxy`, `Qzx`, `Qzy` (displacement spectra, m²/Hz); `a0`, `a1`, `a2`, `b1`, `b2`, `r1`, `r2` (float); `theta1`, `theta2` (int, deg). A spectrum whose length differs from `freq` (older records without directional spectra) is left `null` (since 2026-11-06). The `raw_*` spectra, `wavenumber` and `moment` are not aggregated.
 
 ## 5. Float summary: `<serial>_summary.json`
 
