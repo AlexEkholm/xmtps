@@ -465,7 +465,6 @@ ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one l
     ['pump_vac_v_time', 'pump_vac_v_pres'],
     ['energy_per_cycle'],
     ['energy_by_component'],
-    ['energy_cumulative'],
     ['energy_remaining_cycles'],
     ]
 ENGINEERING_PAGE_FIGS = [ id for row in ENGINEERING_PAGE_ROWS for id in row ]
@@ -3374,7 +3373,6 @@ def WriteHtmlFile(float_id, runtime_s=None):
                             'satcom_sbd_count', '', 
                             'satcom_sbd_data_size', '',
                             'satcom_sbd_data_type', '',
-                            'satcom_sbd_data_cumulative', '',
                             ]:
                             
                             if (len(id) == 0) and (count > 0) :
@@ -10994,72 +10992,6 @@ def ShareBarFigure(title, labels, values, colors, text, hover_value):
             ))
     return fig
 
-def CumulativeAreaFigure(title, ytitle, dives, series, scale, unit, decimals):
-    """Return a stacked area figure of each part's running total over the dives. series is a
-    list of (label, per-dive values as a Series indexed by dive, color), stacked bottom up in that
-    order; values are divided by scale and shown in unit with the given number of decimals. Dives
-    without a value add 0. The hover gives the dive total on its own line, then each part."""
-    dives = np.sort(np.asarray(dives))
-    fig = go.Figure(layout=dict(
-        showlegend=True,
-        title=dict(text=title),
-        xaxis=dict(title='Dive'),
-        yaxis=dict(title=ytitle, rangemode='tozero'),
-        hovermode='x unified',
-        hoverlabel=dict(font=dict(family='Consolas, monospace', size=12)),
-        legend=dict(traceorder='reversed'),
-        plot_bgcolor='white',
-        margin=dict(l=10, r=10, b=20, t=50, pad=4),
-        ))
-    total = np.zeros(len(dives))
-    fmt = '%{y:,.' + str(decimals) + 'f} ' + unit
-    for label, values, color in series:
-        cum = values.groupby(level=0).sum().reindex(dives).fillna(0).cumsum().values / scale
-        if not (cum > 0).any():
-            continue
-        total = total + cum
-        fig.add_trace(go.Scatter(
-            x=dives, y=cum, mode='lines', stackgroup='one', name=label,
-            line=dict(width=0.5, color=color), fillcolor=color,
-            hovertemplate='{}: '.format(label) + fmt + '<extra></extra>',
-            ))
-    fig.add_trace(go.Scatter(
-        x=dives, y=total, mode='markers', marker=dict(size=0, opacity=0), showlegend=False,
-        name='Total', hovertemplate='<b>Total: ' + fmt + '</b><extra></extra>',
-        ))
-    return fig
-
-def SbdDataCumulative(float_id, df_sbd_type, sbd_size_by_dive):
-    """Return a stacked area figure (CumulativeAreaFigure) of the float's SBD data accumulated
-    over the dives with a positive dive number, by message type as in the SBD data size plot
-    (types in ID order, then 'frame' and 'unparsed'; 'retransmitted' where a dive's SBD total
-    exceeds its SBT total; 'not broken down' for dives without SBT lines), in kB. None without
-    SBD data."""
-    total = sbd_size_by_dive.astype(float)
-    total = total[total.index > 0]
-    if len(total) < 1:
-        return None
-    series = []
-    sbt_total = pd.Series(dtype=float)
-    if df_sbd_type is not None and len(df_sbd_type) > 0:
-        df = df_sbd_type[df_sbd_type['dive'] > 0]
-        sbt_total = df.groupby('dive')['size_b'].sum()
-        order = sorted(df['ids'].unique(), key=lambda s: (s in ('frame', 'unparsed'), s == 'unparsed', s))
-        fallback = iter(['rgb(255,127,0)', 'rgb(106,61,154)', 'rgb(177,89,40)', 'rgb(51,160,44)'] * 10)
-        for ids in order:
-            d = df[df['ids'] == ids]
-            label = 'frame (packet header and trailer)' if ids == 'frame' else ids if ids == 'unparsed' \
-                else '{} {}'.format(ids, d['name'].iloc[0])
-            series.append((label, d.groupby('dive')['size_b'].sum().astype(float),
-                           SBD_TYPE_COLORS.get(ids) or next(fallback)))
-    broken = total.index.isin(sbt_total.index)
-    retx = (total[broken] - sbt_total.reindex(total[broken].index)).clip(lower=0)
-    series.append(('retransmitted', retx, 'rgb(252,187,161)'))
-    series.append(('not broken down', total[~broken], 'rgb(150,150,150)'))
-    return CumulativeAreaFigure(
-        '{}: Accumulated SBD Data by Message Type, Total = {}'.format(float_id, FormatDataSize(total.sum())),
-        'Data [kB]', total.index.values, series, 1000.0, 'kB', 1)
-
 def SbdDataTypeBar(float_id, df_sbd_type, sbd_size_by_dive):
     """Return a one-row horizontal stacked bar (ShareBarFigure) of the float's total SBD data by
     message type, or None without SBT data.
@@ -12053,11 +11985,6 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             if bar is not None:
                 figs['satcom_sbd_data_type'] = bar
 
-            # add stacked area -- SBD data accumulated over the dives, by message type
-
-            area = SbdDataCumulative(float_id, float_aggregate_data.get('sbd_type'), df_sbd_gb_sum['size_b'])
-            if area is not None:
-                figs['satcom_sbd_data_cumulative'] = area
                 
             # figs['satcom_sbd_data_size_avg'].add_trace(go.Scatter(
                 # x=df_sbd_gb_mean.index.values,
@@ -12379,7 +12306,6 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 satcom_sbd_count = 'figWideXS',
                 satcom_sbd_data_size = 'figWideXS',
                 satcom_sbd_data_type = 'figWideBar',
-                satcom_sbd_data_cumulative = 'figWideS',
                 )
 
             if no_cno:
@@ -14407,25 +14333,6 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             dpath_float = dpath_float,
             category = 'energy',
             size = 'figWideBar',
-            ts_pos = [1.00, -0.06],
-            showlegend = True,
-            )
-        if fig_meta is not None:
-            figs_meta.append(fig_meta)
-
-        # energy accumulated over the dives, by component (storage included, as in the total)
-        series = [ (label, df.set_index('dive')[col].astype(float), ENERGY_COLORS.get(col))
-                   for col, label in ENERGY_COMPONENTS if col in df.columns ]
-        fig = CumulativeAreaFigure(
-            '{}: Accumulated Estimated Energy by Component, Total = {:,.1f} kJ'.format(float_id, total),
-            'Energy [kJ]', df['dive'].values, series, 1000.0, 'kJ', 1)
-        fig_meta = WritePlotImageFiles(
-            id_str = 'energy_cumulative',
-            figure = fig,
-            float_id = float_id,
-            dpath_float = dpath_float,
-            category = 'energy',
-            size = 'figWideS',
             ts_pos = [1.00, -0.06],
             showlegend = True,
             )
