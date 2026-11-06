@@ -387,9 +387,10 @@ ENERGY_CONTROLLER_W = 0.035
 # type from the serial (ALAMO below ENERGY_ALTO_MIN_SERIAL, else ALTO). Alkaline packs have the
 # lithium packs' cell count in another configuration. Pack energies, from /data1/lab:
 #   ALTO Tadiran   4 x TLP-83121/D (4S x (2 TL-6930 D + HLC-1550)), 32 Ah each to 9 V: 6.7 MJ
-#   ALAMO Tadiran  2 x TLP-82121 (4S x (2 TL-6920 C + HLC-1550)), about 0.9 MJ each: 1.8 MJ
+#   ALAMO Tadiran  24 TL-6920 C cells (3 x TLP-82121, 4S x (2 TL-6920 + HLC-1550)), about 8.5 Ah x
+#                  3.6 V each: 2.6 MJ (24 cells like the Saft ALAMOs; was 2 packs, 1.8 MJ)
 #   ALAMO Saft     24 x LS 26500, 7.7 Ah x 3.6 V = 27.7 Wh each: 2.4 MJ
-#   alkaline       Procell D, about 15 Ah x 1.5 V: 32 cells (ALTO) or 16 (ALAMO)
+#   alkaline       Procell D, about 15 Ah x 1.5 V: 32 cells (ALTO) or 24 (ALAMO)
 ENERGY_PACK_CHEMISTRY = [          # (chemistry, lowest startup voltage, self-discharge per year)
     ('tadiran',  14.6, 0.01),      # datasheet < 1 %/yr at 20 C
     ('saft',     13.8, 0.01),      # datasheet < 1 %/yr at 20 C
@@ -397,11 +398,11 @@ ENERGY_PACK_CHEMISTRY = [          # (chemistry, lowest startup voltage, self-di
     ]
 ENERGY_PACK_WH = {                 # (float type, chemistry): nominal pack energy, Wh
     ('alto',  'tadiran'):  6.7e6 / 3600,
-    ('alamo', 'tadiran'):  1.8e6 / 3600,
+    ('alamo', 'tadiran'):  24 * 8.5 * 3.6,
     ('alto',  'saft'):     24 * 7.7 * 3.6,
     ('alamo', 'saft'):     24 * 7.7 * 3.6,
     ('alto',  'alkaline'): 32 * 15.0 * 1.5,
-    ('alamo', 'alkaline'): 16 * 15.0 * 1.5,
+    ('alamo', 'alkaline'): 24 * 15.0 * 1.5,
     }
 ENERGY_ALTO_MIN_SERIAL = 10000
 # Floats whose startup voltage does not tell their pack: serial -> chemistry. ALTO 11020-11034 have

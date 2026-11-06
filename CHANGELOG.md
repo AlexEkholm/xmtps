@@ -28,6 +28,11 @@ Decoder:
 
 Python tools:
 
+- Energy estimate: ALAMO packs are taken as 24 cells, like the 24-cell Saft ALAMOs (was 16): Tadiran
+  24 TL-6920 C cells, 734 Wh / 2.6 MJ (was 1.8 MJ); alkaline 24 D cells, 540 Wh / 1.9 MJ. The
+  depleted 2020-2024 RBR ALAMOs now come out at 72 % of nominal (was 107 %). Only `pack_wh` and
+  the self-discharge term of ALAMOs with Tadiran or alkaline packs change; their energy
+  aggregates must be regenerated (`xmtps-aggregate-json.py -f`).
 - Oil pump power and energy are computed from the battery voltage and current: power = `volt` ×
   `curr` (was `volt` × `curr_adj`, with `curr_adj` = `curr` × 12 / `volt` / 0.85). The pumps run
   from a 12 V rail made by a buck-boost converter from the batteries, but `pumpI` is the battery
