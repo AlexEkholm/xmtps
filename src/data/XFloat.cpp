@@ -2864,9 +2864,21 @@ void XFloatDiveData::DecodeXMsgData(
 
               break;
 
-            case XMSG_TYPE_ID_TEST:
+            case XMSG_TYPE_ID_GUEST_FILE:    // 0xF1
 
-              // Ignore test messages, if any.
+              try {
+
+                // Decode a guest file fragment (MAPLe microstructure files of micro-ALTO floats).
+                linf() << "Decoding guest file fragment message...";
+                if(!xmsg_maple_)
+                  xmsg_maple_ = std::make_shared<XMaple>(id_dive(), id_instrument(), xdata);
+                else
+                  xmsg_maple_->DecodeXMsgData(xdata);
+
+                set_listing_file_updated(false);
+
+              } CATCH_BLOCK("Failed to decode guest file fragment (0xF1) message!")
+
               break;
 
             default:
@@ -3443,6 +3455,16 @@ string XFloatDiveData::GenerateListingString() const {
         os << endl;
 
       }CATCH_NOTHROW("Failed to generate listing entry for WIMS parameter message!")
+
+    // Print the microstructure (MAPLe) files rebuilt from guest file fragment messages.
+    if(xmsg_maple_)
+
+      try {
+
+        XMSG_HEADER2("Microstructure Data (MAPLe, 0xF1)");
+        os << xmsg_maple_->GenerateListingString() << endl;
+
+      }CATCH_NOTHROW("Failed to generate listing entry for microstructure (MAPLe) data!")
 
     // Print mission configuration message(s).
     try {

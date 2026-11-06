@@ -2,7 +2,7 @@
 
 This document specifies the intermediate listing files `lis<serial>-<dive>.txt`. The XMTPS telemetry decoder (stage 3) writes one per float and dive cycle: a plain-text record of everything decoded from that dive's SBD messages. People read them, and `bin/py/xmtps-list2json.py` parses them into the per-dive JSON files that the plots and web pages are built from.
 
-Status: written on 2026-10-30 from the source tree (version 1.0, after build 3336) and checked against the production listings on argus (`/data1/alamo/data/list`, 86,109 files; the newest written by build 1.0.3332b). Where this document says "the code", it means the source tree. Production listings come from many builds (section 15); the code and the production files disagree in a few places (section 17).
+Status: written on 2026-10-30 from the source tree (version 1.0, after build 3336) and checked against the production listings on argus (`/data1/alamo/data/list`, 86,109 files; the newest written by build 1.0.3332b). Where this document says "the code", it means the source tree. Production listings come from many builds (section 16); the code and the production files disagree in a few places (section 18).
 
 ## Contents
 
@@ -18,11 +18,12 @@ Status: written on 2026-10-30 from the source tree (version 1.0, after build 333
 10. [Command echo-back: `CMD`](#10-command-echo-back-cmd)
 11. [Extended records: `XFF`](#11-extended-records-xff)
 12. [WIMS configuration parameters: `WIP`](#12-wims-configuration-parameters-wip)
-13. [Mission configuration: `MIS`, `m`, `mis`](#13-mission-configuration-mis-m-mis)
-14. [SBD hex dump: `SHX`, `shx`](#14-sbd-hex-dump-shx-shx)
-15. [Older listings in production](#15-older-listings-in-production)
-16. [How `xmtps-list2json.py` reads a listing](#16-how-xmtps-list2jsonpy-reads-a-listing)
-17. [Open questions / discrepancies](#17-open-questions--discrepancies)
+13. [Microstructure data: `MSF`, `MSC`, `MSB`, `msm`, `msv`, `MSX`](#13-microstructure-data-msf-msc-msb-msm-msv-msx)
+14. [Mission configuration: `MIS`, `m`, `mis`](#14-mission-configuration-mis-m-mis)
+15. [SBD hex dump: `SHX`, `shx`](#15-sbd-hex-dump-shx-shx)
+16. [Older listings in production](#16-older-listings-in-production)
+17. [How `xmtps-list2json.py` reads a listing](#17-how-xmtps-list2jsonpy-reads-a-listing)
+18. [Open questions / discrepancies](#18-open-questions--discrepancies)
 
 Related specifications: [xmessage-format.md](xmessage-format.md) (the binary meaning of every decoded field; its section numbers, such as A.2 or B.6, are cited throughout), [iridium-mail-format.md](iridium-mail-format.md) (the e-mail fields on `SBD` lines), [raw-file-format.md](raw-file-format.md) and [sbd-file-format.md](sbd-file-format.md) (the same messages as files), [phy-file-format.md](phy-file-format.md) (the other per-dive file stage 3 writes), [configuration-file-format.md](configuration-file-format.md) (`dir.lis`, `gen.lis`, `poc.lis`), [float-metadata-format.md](float-metadata-format.md) (DAC and WMO IDs), [json-file-format.md](json-file-format.md) (what the parser makes of a listing) and [database-schema.md](database-schema.md) (the stored messages a listing is rebuilt from).
 
@@ -30,7 +31,7 @@ Related specifications: [xmessage-format.md](xmessage-format.md) (the binary mea
 
 - Writer: `XFloatDiveData::WriteListingFile()` and `XFloatDiveData::GenerateListingString()` in `src/data/XFloat.cpp`. Each section's lines come from the `GenerateListingString()` (and similar) members of the message classes in `src/data/xmsg/`, `src/data/XFloatMailMessage.h` and `XFloatDiveData::GeneratePressureCorrectionListingString()` in `src/data/XFloatDiveData.cpp`.
 - Caller: `XFloatTelemetryDecoderService::ProcessDiveData()` in `src/stage3_TelemetryDecoderThread.h`.
-- Reader: `ProcessListingFile()` in `bin/py/xmtps-list2json.py` (section 16). It writes `<output>/<serial>/dives/<serial>_<dive>.json` ([json-file-format.md](json-file-format.md)). `PreviousValidFix()` in the same script also reads the `GPS` lines of earlier listings of the same float.
+- Reader: `ProcessListingFile()` in `bin/py/xmtps-list2json.py` (section 17). It writes `<output>/<serial>/dives/<serial>_<dive>.json` ([json-file-format.md](json-file-format.md)). `PreviousValidFix()` in the same script also reads the `GPS` lines of earlier listings of the same float.
 - One listing holds one dive cycle of one float. It has every decoded message of the dive: SBD session metadata, GPS fixes, the Argo summary, the time series and profiles in physical units, engineering messages, mission configuration, command echoes, and a hex dump of each SBD message.
 - The format is line-oriented and column-aligned. It is meant to be read by people and split on whitespace by programs. It is not a self-describing table format: the comment lines above each group of data lines name the columns.
 
@@ -60,16 +61,16 @@ Related specifications: [xmessage-format.md](xmessage-format.md) (the binary mea
   - the dive's "listing file updated" flag is set. Every `Assign…()` member that adds a message to the dive clears the flag (`src/data/XFloatDiveData.h`, `src/data/XFloat.cpp`), and a successful write sets it.
 - The whole file is regenerated from the dive's in-memory state and written with `std::ofstream`, which truncates the existing file. The listing therefore always reflects all messages received so far, not just the latest one.
 - The write is not atomic: a reader that opens the file while it is being written can see a truncated file [inferred from the code; no temporary file or rename is used].
-- Reprocessing (`-r`, `-R`, `-A`; see [configuration-file-format.md](configuration-file-format.md)) rebuilds the dive from the stored messages in the database and rewrites the listing in the format of the running build. Listings of floats that are not reprocessed keep the format of the build that last wrote them (section 15).
+- Reprocessing (`-r`, `-R`, `-A`; see [configuration-file-format.md](configuration-file-format.md)) rebuilds the dive from the stored messages in the database and rewrites the listing in the format of the running build. Listings of floats that are not reprocessed keep the format of the build that last wrote them (section 16).
 - Errors while writing are caught and logged (`Failed to write listing file!`). A section that fails to generate is logged and left out (`CATCH_NOTHROW`), and the rest of the file is still written.
 
 ### 2.3 Encoding and size
 
-- Encoding: ASCII. Lines end in LF (`std::endl`). There is no byte-order mark. Binary bytes from SBD messages appear only as hex (section 14) or as `\xNN` escapes (sections 10 and 11).
+- Encoding: ASCII. Lines end in LF (`std::endl`). There is no byte-order mark. Binary bytes from SBD messages appear only as hex (section 15) or as `\xNN` escapes (sections 10 and 11).
 - Exceptions:
   - The `mis` group headers of the 2.0.62 to 4.6.61 mission configuration layouts contain the unit `(°/sec/FSR)` in UTF-8 (`src/data/xmsg/XMfaMissionCfg.cpp`).
-  - Surface engineering (0xEA) version 0x10 writes its error count as a raw byte, often NUL (section 9.7, section 17).
-  - Listings from builds before 2015 also have UTF-8 box-drawing characters in a splash banner (section 15).
+  - Surface engineering (0xEA) version 0x10 writes its error count as a raw byte, often NUL (section 9.7, section 18).
+  - Listings from builds before 2015 also have UTF-8 box-drawing characters in a splash banner (section 16).
 - The file usually ends with a blank line (the last line of the hex dump section is followed by an empty line).
 - Size in production: median 104 KB, largest 2.9 MB; 528 of 86,109 files exceed 400 KB. The example `example/listing/lis9303-0440.txt` is 123 KB and 1,403 lines, most of them the profile, wave spectra and hex dump.
 
@@ -83,7 +84,7 @@ Related specifications: [xmessage-format.md](xmessage-format.md) (the binary mea
 | Data | First character a letter | A tag, then whitespace-separated fields. |
 | Blank | Empty line | Ends a top-level section. |
 
-- On a data line, a `#` starts a trailing comment: a phase-code name, a sensor-type name, or a parameter description. The comment is for people. The parser uses it in only two places: the position of `#` locates the phase code on `f`/`r` lines, and the BIT `sensorTypeName` is taken from it (section 16).
+- On a data line, a `#` starts a trailing comment: a phase-code name, a sensor-type name, or a parameter description. The comment is for people. The parser uses it in only two places: the position of `#` locates the phase code on `f`/`r` lines, and the BIT `sensorTypeName` is taken from it (section 17).
 - `XFF` and `CMD` lines can contain `#` and `;` inside their text field (for example a CTD reply). Only the first `#` of a line is significant for the parser, and those tags are not parsed.
 
 ### 3.2 Tags
@@ -140,12 +141,13 @@ The column headers are exact text. Units are in parentheses in headers and in sq
 | 2 | `Iridium Short-Burst Data (SBD) Message(s)` | `SBD Data by Message Type` (after the `SBD` lines; build 3352 and later) | the dive has at least one mail message | `SBD`, `SBT` |
 | 3 | `Position Data` | `Acoustic Position` (if any 0xCA blob), `GPS` (if any GPS fix) | the dive has a GPS fix or a mail message (`HasPositionData()`) | `APS`, `GPS` |
 | 4 | `Dive Data` | `Argo Data`, `Pressure Correction`, `Fall Time-Series Data`, `Drift Data`, `Profile Data (Binned) - Sensor Columns`, `Profile Data (Binned)`, `Profile Data (Unbinned)`, `Valve Data`, `Pump Data`, `Rise Time-Series Data`, `Surface Time-Series Data`, `Surface Time-Series Data - Derived Fields`, `Ocean Surface Wave-Field Data` | drift data, a complete binned or unbinned profile, fall or rise data, surface data, or wave data (`HasDiveData()`) | `A`, `PRC`, `F`/`f`, `D`/`d`, `PRD`/`prd`, `PRO`/`pro`, `PRU`/`pru`, `VLV`/`vlv`, `PMP`/`pmp`, `R`/`r`, `SFC`/`sfc`, `SFD`, `WVS`/`wvs`/`wvm` |
-| 5 | `Engineering Data` | `Engineering (Abort)`, `(BIT failed)`, `(BIT passed)`, `(Descent)`, `(Diagnostic Dive)`, `(Park/Drift)`, `(Ascent)`, `(Ice)`, `(Standard Dive)`, `(Surface)` | any engineering message except ice (`HasEngineeringData()`; section 17) | `E05`, `E06`, `E07`, `E08`, `E09`, `E0C`, `e0c`, `E0A`, `e0A` |
+| 5 | `Engineering Data` | `Engineering (Abort)`, `(BIT failed)`, `(BIT passed)`, `(Descent)`, `(Diagnostic Dive)`, `(Park/Drift)`, `(Ascent)`, `(Ice)`, `(Standard Dive)`, `(Surface)` | any engineering message except ice (`HasEngineeringData()`; section 18) | `E05`, `E06`, `E07`, `E08`, `E09`, `E0C`, `e0c`, `E0A`, `e0A` |
 | 6 | `Ground Station Upload Command Echo-Back Messages` | — | at least one 0xDE blob | `CMD` |
 | 7 | `Extended Record Messages (0xFF)` | — | at least one 0xFF blob (build 3321 and later) | `XFF` |
 | 8 | `WIMS Configuration Parameters (0xC5)` | — | at least one 0xC5 blob (build 3336 and later) | `WIP` |
-| 9 | `Mission Configuration` | `# --- <group> ---` sub-groups | always | `MIS`, `m`, `mis` |
-| 10 | `SBD Message Hex Data` | — | the dive has at least one mail message | `SHX`, `shx` |
+| 9 | `Microstructure Data (MAPLe, 0xF1)` | `# --- <Name> ---` sub-groups | at least one 0xF1 blob (micro-ALTO floats; section 13) | `MSF`, `MSC`, `MSB`, `msm`, `msv`, `MSX` |
+| 10 | `Mission Configuration` | `# --- <group> ---` sub-groups | always | `MIS`, `m`, `mis` |
+| 11 | `SBD Message Hex Data` | — | the dive has at least one mail message | `SHX`, `shx` |
 
 Within section 4, each subsection is printed only when its data exists:
 
@@ -163,7 +165,7 @@ Within section 4, each subsection is printed only when its data exists:
 | Surface Time-Series Data and its Derived Fields | any surface message (0x8n) |
 | Ocean Surface Wave-Field Data | a wave message with a non-zero segment length (`HasWaveData()`) |
 
-Section 4 needs one of the data types in its condition. An Argo message, valve or pump data, or an incomplete profile alone does not make the section appear: until other data arrives, those messages are decoded but not listed (section 17).
+Section 4 needs one of the data types in its condition. An Argo message, valve or pump data, or an incomplete profile alone does not make the section appear: until other data arrives, those messages are decoded but not listed (section 18).
 
 Each top-level section ends with a blank line. Inside section 5 the subsections follow the fixed order above; the SOLO-II subsections `Engineering (Abort)`, `(Diagnostic Dive)` and `(Standard Dive)` print only their banners (section 9.9).
 
@@ -848,7 +850,7 @@ E05 11700  -12    2     11    0x00000000    0x73746F70          0.16          0.
 | 12 | Oil Pump | errors (hex), duration (s) |
 | 13 | (unnamed rule) | currAvg, currMax, 12VCurrMax (A), batMax (V), powerMax (W) |
 
-Column names repeat between sub-groups (`errors`, `open`, `currAvg`), so a reader must track the latest `# --- <Name> ---` heading; the unnamed rules continue the previous group. Parser: header-based (section 16.3), with keys such as `Air Pump/currAvg`.
+Column names repeat between sub-groups (`errors`, `open`, `currAvg`), so a reader must track the latest `# --- <Name> ---` heading; the unnamed rules continue the previous group. Parser: header-based (section 17.3), with keys such as `Air Pump/currAvg`.
 
 ### 9.3 `E07`: descent (0xE7)
 
@@ -912,7 +914,7 @@ E0C 09213    8    2            0.16               0             -10
 e0c 11700    1    0 2026-09-30T12:23:48Z      0x00000615
 ```
 
-`%15.3d` on a floating-point value prints three significant digits, so the salinity fill `-9.999` appears as `-10` ([B.7.4](xmessage-format.md#b74-decoding-notes-and-listing-e0c-e0c)). An ice message alone does not make the Engineering Data section appear (section 17).
+`%15.3d` on a floating-point value prints three significant digits, so the salinity fill `-9.999` appears as `-10` ([B.7.4](xmessage-format.md#b74-decoding-notes-and-listing-e0c-e0c)). An ice message alone does not make the Engineering Data section appear (section 18).
 
 ### 9.7 `E0A`, `e0A`: surface (0xEA)
 
@@ -942,7 +944,7 @@ e0A 09303  483    0 2026-10-19T14:15:58Z      0x00000114
 
 Version differences, in short (details in B.6.8):
 
-- 0x10: a single `midx` 0 line with engVer, start-of-surface, CTD-status (`0x%08X`), nSBD, nAtmpt, vac, sysV, sysI, nErr; then `e0A` lines with `0000-00-00T00:00:00Z` times. The `nErr` column is printed from a `uint8_t`, so boost::format writes the raw byte (NUL for 0) instead of a number (section 17).
+- 0x10: a single `midx` 0 line with engVer, start-of-surface, CTD-status (`0x%08X`), nSBD, nAtmpt, vac, sysV, sysI, nErr; then `e0A` lines with `0000-00-00T00:00:00Z` times. The `nErr` column is printed from a `uint8_t`, so boost::format writes the raw byte (NUL for 0) instead of a number (section 18).
 - 0x11: `midx` 0–3 as above (`midx` 1 uses `%20` widths), then the error count on an `e0A` line at `midx` 4.
 - 0x12: adds Surface Pressure at `midx` 4; error count on an `e0A` line at `midx` 5.
 - 0x13: adds first/last sample, meta and clock (`midx` 5–8); error count on an `E0A` line at `midx` 9.
@@ -951,7 +953,7 @@ Version differences, in short (details in B.6.8):
 
 ### 9.8 Engineering parser notes
 
-`xmtps-list2json.py` parses every `E0x`/`e0x` line through the latest engineering header and units line (section 16.3). It does not depend on positions, so new columns are kept (in `engineering.extra`) without code changes. Lines whose field count does not match the header are dropped with a debug message.
+`xmtps-list2json.py` parses every `E0x`/`e0x` line through the latest engineering header and units line (section 17.3). It does not depend on positions, so new columns are kept (in `engineering.extra`) without code changes. Lines whose field count does not match the header are dropped with a debug message.
 
 ### 9.9 SOLO-II engineering subsections
 
@@ -1043,11 +1045,66 @@ Format `WIP %5d %4d %4d %4d %4d %4d  %-11s %6d  0x%04X`.
 
 Example source: [C.7](xmessage-format.md#c7-wims-configuration-parameters-0xc5) (decoded from RAW files; not yet in a production listing). Parser: not read.
 
-## 13. Mission configuration: `MIS`, `m`, `mis`
+## 13. Microstructure data: `MSF`, `MSC`, `MSB`, `msm`, `msv`, `MSX`
+
+Micro-ALTO floats send the files of their Rockland MAPLe microstructure board in guest file fragment blobs (0xF1, [xmessage-format.md C.8](xmessage-format.md#c8-guest-file-fragments-maple-microstructure-files-0xf1)). `XMaple::GenerateListingString()` (`src/data/xmsg/XMaple.h`) lists them under the top-level banner `Microstructure Data (MAPLe, 0xF1)`, after the WIMS parameters. The section is printed as soon as the dive has one 0xF1 blob. A file is decoded only once all its fragments have arrived. Until then it has only its `MSF` line, and the other lines of its channel are missing.
+
+Times are in seconds after the channel's MAPLe start time (`MSC` start). A record's time is its middle: the record starts at sample `ridx * navg * nfft`, and its middle is `(navg + 1) * nfft / 2` samples later, divided by `fsEff`. A value that is absent or not a number is listed as `NaN`.
+
+```
+# --- Guest Files ----------------------------------------------------------------------------------
+#      SN dive dev fid ver nFrag    bytes complete name
+MSF 11491  850   5   2   1     5     1401      yes tm_shear.eng
+MSF 11491  850   5   3   1    18     5477      yes tm_shear_logavg.eng
+MSF 11491  850   5   4   1     2      570      yes tm_shear_motors.eng
+MSF 11491  850   5  11   1     5     1309      yes tm_temp.eng
+MSF 11491  850   5  12   1    17     5403      yes tm_temp_logavg.eng
+MSF 11491  850   5  13   1     2      496      yes tm_temp_motors.eng
+# --- Channels -------------------------------------------------------------------------------------
+#      SN dive ch name    nfft navg    fs  fsEff     GD      S  dsThr dsPass  nMean  nSpec   samples  despiked goodBlk motorBlk               start-date/time                stop-date/time  comment
+#                                    (Hz)   (Hz)  (sec)         (std)
+MSC 11491  850  0 shear   1024    8   256 257.20 0.9960 0.0816   3.00      1     93     93    765440      2724    1337      158      2024-02-14T15:49:15.952Z      2024-02-14T16:38:55.099Z  Micropod-S SN50 SPM M2512
+MSC 11491  850  1 temp    1024    8   256 257.20 0.9440    NaN   3.00      1     93     93    765440      8818     NaN      NaN      2024-02-14T15:49:15.952Z      2024-02-14T16:38:55.099Z  Micropod-T SN17 FP07 T2023
+# --- Band-Averaged Spectra: Bands -----------------------------------------------------------------
+#      SN dive ch name    band  kLo  kHi     freq    fLo    fHi
+#                                            (Hz)   (Hz)   (Hz)
+MSB 11491  850  0 shear      0    0    0     0.30   0.13   0.38
+MSB 11491  850  0 shear     11  289  492    98.30  72.71 123.95
+# --- Signal Mean: shear ---------------------------------------------------------------------------
+#      SN dive ch name     ridx     time      sigMean  despiked    shearMask
+#                                 (+sec)     (counts)
+msm 11491  850  0 shear       9   +304.6         4533         0      0x1C000
+msm 11491  850  0 shear      10   +336.4          206         3      0x1FFFF
+# --- Band-Averaged Spectra: temp ------------------------------------------------------------------
+#      SN dive ch name     ridx     time     sigVar         S0         S1  …        S11
+#                                 (+sec) (counts^2)
+#   S<n>: band-averaged spectrum of band n (MSB lines), in counts^2/Hz.
+msv 11491  850  1 temp        0    +17.9 6.2519e+05 7.9982e+05 1.3951e+05  … 2.0084e+03
+# --- Motor Events ---------------------------------------------------------------------------------
+#      SN dive ch name    eidx onoff    sample     time
+#                                                (+sec)
+MSX 11491  850  0 shear      0     1        14     +0.1
+MSX 11491  850  0 shear      1     0     80868   +314.4
+```
+
+(Lines shortened; the decoder writes every band, record and channel.)
+
+| Tag | Fields |
+|---|---|
+| `MSF` | One per file, complete or not, in (device, file ID) order: device ID, file ID, fragment encoding version, fragments received, bytes received, `yes`/`no` complete, file name (`devD-fileF` for an unknown device). A trailing `# …` comment notes retransmitted fragments whose bytes differ, or why a complete file could not be decoded. |
+| `MSC` | One per channel, by channel number: MAPLe channel number and name (`shear`, `shear1`, `shear2`, `temp`, `temp1`, `temp2`), FFT length, FFTs per record, nominal and effective sample rates, differentiator gain, shear-probe sensitivity (`NaN` for thermistors), despike threshold and passes, the number of signal-mean and spectra records (`-1` if that file is missing), then the trailer counts: samples processed, points despiked, good blocks and motor-dropped blocks (shear channels only), start and stop times (UTC, milliseconds), and the probe comment. Header values come from the spectra file, else the signal-mean file, else the motor file. |
+| `MSB` | One per band of each channel's spectra: band index, FFT bin range `kLo`–`kHi`, centre frequency (from the file's `cf_` column names), and band edges. MAPLe bin k is the frequency `(k + 1) * fsEff / nfft`, so the edges are `(kLo + 0.5) * fsEff / nfft` and `(kHi + 1.5) * fsEff / nfft`. |
+| `msm` | One per signal-mean record: record index, time, signal mean (counts), points despiked in the record, and the shear mask (`0x%05X`, one bit per FFT block, bit 0 first; `-1` for thermistor channels). The differences sent by the MAPLe board are already summed. |
+| `msv` | One per spectra record: record index, time, signal variance (counts²), then one band average per band (counts²/Hz), `%.4e`. Records whose blocks were all rejected (motor running) are `NaN`. |
+| `MSX` | One per motor event of each channel: event index, on (1) or off (0), sample index, time. |
+
+The spectra are in counts: the decoder does not convert them to shear or temperature gradient, or compute dissipation.
+
+## 14. Mission configuration: `MIS`, `m`, `mis`
 
 Top-level section `Mission Configuration`, always printed. Writer: `XMfaMissionCfg::GenerateListingString()` and its per-layout `GenerateListingStringFw<version>()` functions (`src/data/xmsg/XMfaMissionCfg.cpp`), from the dive's mission configuration messages (0xD0, 0xD1). Binary format, supported firmware and the full list of parameters: [C.1](xmessage-format.md#c1-mission-configuration-0xd0-0xd7); listing styles: [C.1.11](xmessage-format.md#c111-listing-output).
 
-### 13.1 No mission configuration
+### 14.1 No mission configuration
 
 If the dive has no mission configuration message (firmware word still 0xFFFFFFFF), the section is:
 
@@ -1059,7 +1116,7 @@ Most dives look like this: floats send their mission configuration only in some 
 
 For a firmware word the code does not support, the release build throws (`Unsupported ALAMO Mission Parameters message version`), and the section has its banner only.
 
-### 13.2 `MIS` and `m` (firmware 4.5.63, 5.0.61 and later)
+### 14.2 `MIS` and `m` (firmware 4.5.63, 5.0.61 and later)
 
 ```
 #      SN dive        CfgMsgVer       FWVer sensor-type        sensor-type-name
@@ -1098,7 +1155,7 @@ m   11700  -12   3 MDS         2100      [dBar]       # maximum depth
 
 Parser: `MIS` gives `cfgver`, `fwver` and `ctdtype` (found by locating the two hex fields, so the older form with an index also works). Each `m` line gives name (`x[4]`), value (`x[5]`), units (`x[6]` without brackets) and index (`x[3]`), stored with the current sub-group name in `mission.entries` and by name in `mission.parameters`; the description is not kept.
 
-### 13.3 `mis` groups (firmware 2.0.62 to 4.6.61)
+### 14.3 `mis` groups (firmware 2.0.62 to 4.6.61)
 
 Older firmware layouts list the parameters in fixed-column groups, one `mis` line per group, with a minor index:
 
@@ -1118,7 +1175,7 @@ mis 10108    3    0    0           2         500           1          2
 
 Parser: `MIS` is read as in 13.2; `mis` lines are not read.
 
-## 14. SBD hex dump: `SHX`, `shx`
+## 15. SBD hex dump: `SHX`, `shx`
 
 Top-level section `SBD Message Hex Data`, printed when the dive has a mail message, always last. One block per mail message, in MOMSN order. Writer: `XFloatMailMessage::GenerateSbdHexListingString()` (`src/data/XFloatMailMessage.h`). The bytes are the X packet ([A.1.2](xmessage-format.md#a12-x-packet-x-nn-mm-dd-p-data--c-c-)), the same as the SBD file ([sbd-file-format.md](sbd-file-format.md)).
 
@@ -1154,7 +1211,7 @@ Each `shx` line is followed by a comment line showing the same bytes as characte
 
 Parser: `SHX` and `shx` are skipped.
 
-## 15. Older listings in production
+## 16. Older listings in production
 
 Production listings are not regenerated when the decoder changes, only when their float is reprocessed. On 2026-10-30 the 86,109 files on argus came from 67 builds, from 0.04.2230a (2014) to 1.0.3332b; 31,742 are from 0.6.3067b (2022) and 18,349 from 1.0.3332b. Readers of old listings meet these differences (from CHANGELOG.md and the production files):
 
@@ -1177,14 +1234,14 @@ Production listings are not regenerated when the decoder changes, only when thei
 | `WIP` | absent | build 3336 |
 | `APS` SNROut | Repeats SNRIn | fixed in build 3309 |
 | `wvm` | Columns in xx, xy, yy, zz order under the zz-first header | builds 3234–3289 |
-| `E0A` 0x10 | NUL or control character in the `nErr` column (3,085 files, all 2016–2023) | still present in the code (section 17) |
+| `E0A` 0x10 | NUL or control character in the `nErr` column (3,085 files, all 2016–2023) | still present in the code (section 18) |
 | `XSV` version | `0.6.<build>` | `1.0.<build>` since 2026-10-26 |
 
 The example in the repository, `example/listing/lis9303-0440.txt`, was written by 0.6.3310a: it has `f`/`r` temperature and salinity columns, a `PRC` line without the surface statistics, and no decimal-position row in the hex dump headers.
 
-## 16. How `xmtps-list2json.py` reads a listing
+## 17. How `xmtps-list2json.py` reads a listing
 
-### 16.1 General
+### 17.1 General
 
 - `ProcessListingFile()` (`bin/py/xmtps-list2json.py`) reads the whole file as UTF-8 (strict), strips LF, skips blank lines, and dispatches each line by a regular expression on its tag. Every data line is split on whitespace; most tags are read by field position.
 - Comment lines are not stored, but four kinds set parser state:
@@ -1194,7 +1251,7 @@ The example in the repository, `example/listing/lis9303-0440.txt`, was written b
   4. `# Engineering…` and `# Mission Configuration` titles reset the sub-group name.
 - A line that raises an exception is logged as an error and skipped (`-H` makes it fatal). Lines with an unhandled tag are logged at debug level as unknown.
 
-### 16.2 Tags
+### 17.2 Tags
 
 | Tag | Read | Fields used |
 |---|---|---|
@@ -1222,8 +1279,14 @@ The example in the repository, `example/listing/lis9303-0440.txt`, was written b
 | `WVS` | yes | slen, fsam |
 | `wvs` | yes | idx, six spectra (fill → NaN) |
 | `wvm` | skipped | — |
-| `E05`–`E0C`, `e0A`, `e0c` | yes, by header name | all columns (section 16.3) |
+| `E05`–`E0C`, `e0A`, `e0c` | yes, by header name | all columns (section 17.3) |
 | `CMD`, `XFF`, `WIP` | no (unknown) | — |
+| `MSF` | yes (`ParseMicrostructureLine`) | dev, fid, ver, nFrag, bytes, complete, name |
+| `MSC` | yes | ch, name, nfft, navg, fs, fsEff, GD, S, dsThr, dsPass, samples, despiked, goodBlk, motorBlk, start, stop, comment (nMean and nSpec are not stored) |
+| `MSB` | yes | ch, name, kLo, kHi, freq, fLo, fHi |
+| `msm` | yes | ch, name, time, sigMean, despiked, shearMask |
+| `msv` | yes | ch, name, time, sigVar, band spectra |
+| `MSX` | yes | ch, name, onoff, sample, time |
 | `MIS` | yes | CfgMsgVer, FWVer, sensor type |
 | `m` | yes | idx, name, value, units, sub-group |
 | `mis` | no (unknown) | — |
@@ -1233,7 +1296,7 @@ The example in the repository, `example/listing/lis9303-0440.txt`, was written b
 
 So the machine-relied-upon parts of the format are: the tag names; the field positions of `LIS`, `SBD`, `GPS`, `PRC`, `F`/`f`, `R`/`r`, `SFC`/`sfc`, `D`, `PRO`, `pmp`, `WVS`, `wvs`, `MIS`, `m`; the column-header text above `pro` and `d` lines; and the header, units and sub-group comment lines above engineering lines.
 
-### 16.3 Engineering lines
+### 17.3 Engineering lines
 
 `ParseEngineeringLine()`:
 
@@ -1243,7 +1306,7 @@ So the machine-relied-upon parts of the format are: the tag names; the field pos
 - `e0A`/`e0c` lines become entries of `engineering.errors` with `section`, `idx`, `dt_str` and `code`.
 - The section is chosen by tag: E05/E06 `bit`, E07 `descent`, E08 `drift`, E09 `ascent`, E0A `surface`, E0C `ice`.
 
-## 17. Open questions / discrepancies
+## 18. Open questions / discrepancies
 
 Found while writing this document (code = source tree as of 2026-10-30; production = argus listings):
 

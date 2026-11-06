@@ -583,6 +583,10 @@ class XFloatDiveData:
      */
     shared_ptr<x::XWave> xmsg_wave_field_;
 
+    /** A pointer to the guest file fragments (0xF1): the MAPLe microstructure files of micro-ALTO
+     *  floats, rebuilt as their fragments arrive. */
+    shared_ptr<x::XMaple> xmsg_maple_;
+
   public:
 
     /* Public Static Member Functions*/

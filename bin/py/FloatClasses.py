@@ -546,6 +546,8 @@ class Dive:
             surface: surface CTD samples (Surface).
             wave: wave spectra (Wave), or None; the attribute is deleted by PostProcess() if
                 the dive has no wave data.
+            microstructure: MAPLe microstructure data of micro-ALTO floats (Microstructure), or
+                None; the attribute is deleted by PostProcess() if the dive has none.
         """
         self.json_vers   = json_vers
         self.id          = FloatId()
@@ -563,6 +565,7 @@ class Dive:
         self.sbd_types   = []
         self.surface     = Surface()
         self.wave        = None
+        self.microstructure = None
    
     def SurfaceFix(self):
         """Return the GPS fix of the surfacing that ends the dive, for the wave measurement.
@@ -604,6 +607,10 @@ class Dive:
                 self.wave.PostProcess(lat=fix.lat, lon=fix.lon, dt_epoch=fix.dt_epoch)
         else:
             del self.wave
+        if self.microstructure is not None:
+            self.microstructure.PostProcess(self.ascent)
+        else:
+            del self.microstructure
         
         if self.drift.HasMeasuredDatetimes():
             self.drift.SetDatetimes(self.drift.dt_epoch)
@@ -1797,6 +1804,127 @@ class Wave:
         except: 
         
             raise Exception('Failed to post-process wave data.')
+
+class MicrostructureChannel:
+    """One MAPLe microstructure channel of a micro-ALTO dive (the listing's MSC, MSB, msm, msv and
+    MSX lines of one channel name), decoded from the files the MAPLe board writes during the ascent.
+
+    Attributes:
+        ch: MAPLe channel number (0 or 1).
+        name: channel name: shear, shear1, shear2, temp, temp1 or temp2.
+        nfft: FFT length in samples; navg: FFTs per record (a record is navg * nfft samples).
+        fs, fs_eff: nominal and effective sample rates, in Hz.
+        gd: differentiator gain, in s; s: shear probe sensitivity (NaN for temperature channels).
+        despike_threshold (standard deviations), despike_passes.
+        samples, despiked, good_blocks, motor_blocks: the file trailer counts (NaN when absent).
+        start, stop: start and stop of the MAPLe acquisition, ISO 8601 with milliseconds.
+        start_epoch: start in seconds since epoch (NaN if unknown).
+        comment: the channel's comment (probe type and serial numbers).
+        band_k_lo, band_k_hi: FFT bin range of each band (MAPLe bin k is (k + 1) * fs_eff / nfft).
+        band_freq, band_f_lo, band_f_hi: band centre and edge frequencies, in Hz.
+        mean_t, spec_t: record mid times, in seconds after start; mean_dt_epoch, spec_dt_epoch:
+            the same in seconds since epoch (set by PostProcess()).
+        mean_pres, spec_pres: pressure at each record, in dBar, interpolated in time from the
+            ascent pressures (NaN outside them; set by PostProcess()).
+        sigmean: signal mean of each record, in counts; despiked_points: points of the record
+            replaced by despiking; shear_mask: FFT blocks used (bit set) for shear channels, -1
+            for others.
+        sigvar: signal variance of each record, in counts^2.
+        spec: band-averaged spectra, one list per record of one value per band, in counts^2/Hz.
+        motor_onoff, motor_sample, motor_t: motor on (1) and off (0) events, at a sample index
+            and in seconds after start.
+    """
+
+    def __init__(self, ch: int = -1, name: str = ''):
+        self.ch = ch
+        self.name = name
+        self.nfft = -1
+        self.navg = -1
+        self.fs = np.nan
+        self.fs_eff = np.nan
+        self.gd = np.nan
+        self.s = np.nan
+        self.despike_threshold = np.nan
+        self.despike_passes = np.nan
+        self.samples = np.nan
+        self.despiked = np.nan
+        self.good_blocks = np.nan
+        self.motor_blocks = np.nan
+        self.start = ''
+        self.stop = ''
+        self.start_epoch = np.nan
+        self.comment = ''
+        self.band_k_lo = []
+        self.band_k_hi = []
+        self.band_freq = []
+        self.band_f_lo = []
+        self.band_f_hi = []
+        self.mean_t = []
+        self.sigmean = []
+        self.despiked_points = []
+        self.shear_mask = []
+        self.spec_t = []
+        self.sigvar = []
+        self.spec = []
+        self.motor_onoff = []
+        self.motor_sample = []
+        self.motor_t = []
+
+    def PostProcess(self, ascent: 'Ascent' = None):
+        """Set the record times since epoch and interpolate the record pressures from the ascent.
+
+        Args:
+            ascent: the dive's ascent pressure series (post-processed), or None.
+        """
+        t0 = self.start_epoch
+        self.mean_dt_epoch = [round(t0 + t, 1) if t == t and t0 == t0 else np.nan for t in self.mean_t]
+        self.spec_dt_epoch = [round(t0 + t, 1) if t == t and t0 == t0 else np.nan for t in self.spec_t]
+        self.mean_pres = [np.nan] * len(self.mean_t)
+        self.spec_pres = [np.nan] * len(self.spec_t)
+        if ascent is None or len(ascent.dt_epoch) < 2 or len(ascent.dt_epoch) != len(ascent.pres):
+            return
+        te = np.array(ascent.dt_epoch, dtype=float)
+        pr = np.array(ascent.pres, dtype=float)
+        order = np.argsort(te)
+        te, pr = te[order], pr[order]
+
+        def interp(ts):
+            x = np.array(ts, dtype=float)
+            p = np.interp(x, te, pr, left=np.nan, right=np.nan)
+            return [round(float(v), 2) if v == v else np.nan for v in p]
+
+        self.mean_pres = interp(self.mean_dt_epoch)
+        self.spec_pres = interp(self.spec_dt_epoch)
+
+
+class Microstructure:
+    """The MAPLe microstructure data of a micro-ALTO dive: the guest files rebuilt from the 0xF1
+    fragments (the listing's MSF lines) and the decoded channels.
+
+    Attributes:
+        files: one dict per file: dev, fid, ver (fragment encoding), n_frag, bytes, complete
+            (bool) and name (e.g. tm_shear_logavg.eng).
+        channels: the channels (MicrostructureChannel), in listing order.
+    """
+
+    def __init__(self):
+        self.files = []
+        self.channels = []
+
+    def Channel(self, ch: int, name: str):
+        """Return the channel with this name, adding it if new."""
+        for c in self.channels:
+            if c.name == name:
+                return c
+        c = MicrostructureChannel(ch, name)
+        self.channels.append(c)
+        return c
+
+    def PostProcess(self, ascent: 'Ascent' = None):
+        """Post-process every channel (record times and pressures)."""
+        for c in self.channels:
+            c.PostProcess(ascent)
+
 
 """
 Composite classes

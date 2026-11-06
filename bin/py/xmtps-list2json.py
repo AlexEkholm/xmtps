@@ -26,7 +26,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import argparse
 import gc
 # import datetime
-# import dateutil
+from dateutil import parser as dateparser
 # import json
 import jsonpickle
 import logging
@@ -37,7 +37,7 @@ import os
 import re
 
 # local
-from FloatClasses import DateTime, Dive, Drift, FloatId, Gps, Sbd, SbdType, Profile, Wave
+from FloatClasses import DateTime, Dive, Drift, FloatId, Gps, Sbd, SbdType, Profile, Wave, Microstructure
 import RhoLUT
 
 """
@@ -455,6 +455,65 @@ def ParseEngineeringLine(engineering, line, header, units_line, group):
             key = name + ('_' + unit if name in extra and unit else '')
             extra[key] = ParseValue(value)
 
+def ParseMicrostructureLine(dive_data, line):
+    """Parse one microstructure (MAPLe, 0xF1) listing line into dive_data.microstructure.
+
+    MSF lines add a file entry; MSC, MSB, msm, msv and MSX lines fill the channel named in their
+    fifth field (see spec/listing-file-format.md, section 13). 'NaN' fields become NaN; an msm
+    shear mask of -1 (no mask) stays -1.
+    """
+    if dive_data.microstructure is None:
+        dive_data.microstructure = Microstructure()
+    ms = dive_data.microstructure
+    tag = line.split(None, 1)[0]
+
+    if tag == 'MSF':
+        x = line.split(None, 9)
+        ms.files.append({'dev': int(x[3]), 'fid': int(x[4]), 'ver': int(x[5]),
+                         'n_frag': int(x[6]), 'bytes': int(x[7]), 'complete': x[8] == 'yes',
+                         'name': x[9].split(' #')[0].strip()})
+        return
+
+    if tag == 'MSC':
+        x = line.split(None, 21)
+        c = ms.Channel(int(x[3]), x[4])
+        c.nfft, c.navg = int(x[5]), int(x[6])
+        c.fs, c.fs_eff, c.gd, c.s = float(x[7]), float(x[8]), float(x[9]), float(x[10])
+        c.despike_threshold, c.despike_passes = float(x[11]), float(x[12])
+        c.samples, c.despiked = float(x[15]), float(x[16])
+        c.good_blocks, c.motor_blocks = float(x[17]), float(x[18])
+        c.start, c.stop = x[19], x[20]
+        c.comment = x[21].strip() if len(x) > 21 else ''
+        try:
+            c.start_epoch = dateparser.isoparse(c.start).timestamp()
+        except (ValueError, OverflowError):
+            c.start_epoch = np.nan
+        return
+
+    x = line.split()
+    c = ms.Channel(int(x[3]), x[4])
+
+    if tag == 'MSB':
+        c.band_k_lo.append(int(x[6]))
+        c.band_k_hi.append(int(x[7]))
+        c.band_freq.append(float(x[8]))
+        c.band_f_lo.append(float(x[9]))
+        c.band_f_hi.append(float(x[10]))
+    elif tag == 'msm':
+        c.mean_t.append(float(x[6]))
+        c.sigmean.append(float(x[7]))
+        c.despiked_points.append(float(x[8]))
+        c.shear_mask.append(int(x[9], 16) if x[9].lower().startswith('0x') else int(x[9]))
+    elif tag == 'msv':
+        c.spec_t.append(float(x[6]))
+        c.sigvar.append(float(x[7]))
+        c.spec.append([float(v) for v in x[8:]])
+    elif tag == 'MSX':
+        c.motor_onoff.append(float(x[6]))
+        c.motor_sample.append(float(x[7]))
+        c.motor_t.append(float(x[8]))
+
+
 def PreviousValidFix(fpath_list, dive_num):
     """Return the most recent valid GPS fix of the float before dive dive_num, or None.
 
@@ -523,6 +582,9 @@ def ProcessListingFile(fpath_list):
         PRC          surface pressure offset correction (offset, valid flag, samples, dives)
         pmp         pump records (pres, time, voltage, current, vacuum)
         WVS, wvs     wave spectra; fill values of bins not received become NaN (wvm is ignored)
+        MSF, MSC,    microstructure (MAPLe) files, channels, bands, signal means, spectra and
+        MSB, msm,    motor events of micro-ALTO floats (ParseMicrostructureLine)
+        msv, MSX
 
     Drift and profile samples get density and sigma0 from RhoLUT; temperatures and salinities at
     or below the lookup table minimum become NaN. SBT lines (SBD data by message type) fill
@@ -1122,6 +1184,12 @@ def ProcessListingFile(fpath_list):
                 if re.match('^vlv ', line):
                     continue
                     
+                # Microstructure (MAPLe) data of micro-ALTO floats:
+
+                if re.match('^(MSF|MSC|MSB|msm|msv|MSX) ', line):
+                    ParseMicrostructureLine(dive_data, line)
+                    continue
+
                 # Wave data:
                     
                 if re.match('^WVS ', line):

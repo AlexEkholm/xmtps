@@ -54,6 +54,7 @@
 #include "xmsg/XEngStandard.h"
 #include "xmsg/XEngSurface.h"
 #include "xmsg/XGPS.h"
+#include "xmsg/XMaple.h"
 #include "xmsg/XMfaMissionCfg.h"
 #include "xmsg/XMissionCmdEcho.h"
 #include "xmsg/XExtendedRecord.h"

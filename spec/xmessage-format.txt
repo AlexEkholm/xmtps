@@ -213,7 +213,10 @@ Message type index
 |           | summary, gains and       |            |                       |                      |
 |           | offsets)                 |            |                       |                      |
 +-----------+--------------------------+------------+-----------------------+----------------------+
-| 0xF1      | Test pattern             | —          | no                    | —                    |
+| 0xF1      | Guest file fragments:    | C.8        | yes                   | MSF, MSC, MSB, msm,  |
+|           | MAPLe microstructure     |            |                       | msv, MSX             |
+|           | files of micro-ALTO      |            |                       |                      |
+|           | floats                   |            |                       |                      |
 +-----------+--------------------------+------------+-----------------------+----------------------+
 | 0xFF      | Extended records (event, | C.6        | since build 3321      | XFF                  |
 |           | reset, serial number,    |            | (format inferred)     |                      |
@@ -388,7 +391,8 @@ How the decoder splits a packet into blobs [D] (XFloatDiveData::DecodeXMsgData):
    XMessage::CheckXMsgData; the size must be at least 4). Extra bytes produce a warning; a missing
    terminator is an error.
 5. IDs without a decoder are logged as Unknown X message ID: 0x.. and skipped, for example 0xC2 and
-   0x70–0x77 (and 0xFF before build 3321, C.6). 0xF1 (test pattern) is ignored silently.
+   0x70–0x77 (and 0xFF before build 3321, C.6). 0xF1 is decoded as guest file fragments (C.8);
+   earlier builds ignored it silently as a test pattern.
 
 
 A.1.4 Byte order, bit order, epochs
@@ -3914,42 +3918,50 @@ Part C — Mission configuration, command echo, waves and acoustics
 
 This part covers these blob types:
 
-+------------+----------------------------+----------------------------+---------------------------+
-| ID         | Name                       | Decoder class              | Status in the XMTPS       |
-|            |                            |                            | decoder                   |
-+============+============================+============================+===========================+
-| 0xD0-0xD7  | Mission configuration      | XMfaMissionCfg (XAlamoMiss | D0 and D1 are decoded for |
-|            |                            | ionConfiguration is the    | 117 firmware versions.    |
-|            |                            | unused older version)      | D2-D7 are rejected.       |
-|            |                            |                            | SOLO-II ASCII dumps are   |
-|            |                            |                            | not decoded.              |
-+------------+----------------------------+----------------------------+---------------------------+
-| 0xDE       | Mission command echo       | XMissionCmdEcho            | Decoded since build 3310; |
-|            |                            |                            | one CMD listing line per  |
-|            |                            |                            | command.                  |
-+------------+----------------------------+----------------------------+---------------------------+
-| 0xC1, 0xC3 | Ocean surface waves        | XWave,                     | Spectral versions 0-2 are |
-|            |                            | XWaveSpectralSample,       | decoded. The raw IMU      |
-|            |                            | XWaveRawSample             | format is not.            |
-+------------+----------------------------+----------------------------+---------------------------+
-| 0xCA       | Marginal-ice-zone (MIZ)    | XAcousticPosition          | Subtypes 3 and 5 are      |
-|            | acoustics                  |                            | decoded. Subtypes 1 and 2 |
-|            |                            |                            | are seen in production    |
-|            |                            |                            | but ignored.              |
-+------------+----------------------------+----------------------------+---------------------------+
-| 0xFF       | Extended records           | XExtendedRecord            | Decoded since build 3321; |
-|            |                            |                            | one XFF listing line per  |
-|            |                            |                            | record. The format is     |
-|            |                            |                            | inferred from production  |
-|            |                            |                            | messages (C.6).           |
-+------------+----------------------------+----------------------------+---------------------------+
-| 0xC5       | WIMS configuration         | XWimsParameters            | Decoded since build 3336; |
-|            | parameters                 |                            | one WIP listing line per  |
-|            |                            |                            | parameter. The format and |
-|            |                            |                            | most parameter names are  |
-|            |                            |                            | inferred from production  |
-|            |                            |                            | messages (C.7).           |
-+------------+----------------------------+----------------------------+---------------------------+
++------------+---------------------------+----------------------------+----------------------------+
+| ID         | Name                      | Decoder class              | Status in the XMTPS        |
+|            |                           |                            | decoder                    |
++============+===========================+============================+============================+
+| 0xD0-0xD7  | Mission configuration     | XMfaMissionCfg (XAlamoMiss | D0 and D1 are decoded for  |
+|            |                           | ionConfiguration is the    | 117 firmware versions.     |
+|            |                           | unused older version)      | D2-D7 are rejected.        |
+|            |                           |                            | SOLO-II ASCII dumps are    |
+|            |                           |                            | not decoded.               |
++------------+---------------------------+----------------------------+----------------------------+
+| 0xDE       | Mission command echo      | XMissionCmdEcho            | Decoded since build 3310;  |
+|            |                           |                            | one CMD listing line per   |
+|            |                           |                            | command.                   |
++------------+---------------------------+----------------------------+----------------------------+
+| 0xC1, 0xC3 | Ocean surface waves       | XWave,                     | Spectral versions 0-2 are  |
+|            |                           | XWaveSpectralSample,       | decoded. The raw IMU       |
+|            |                           | XWaveRawSample             | format is not.             |
++------------+---------------------------+----------------------------+----------------------------+
+| 0xCA       | Marginal-ice-zone (MIZ)   | XAcousticPosition          | Subtypes 3 and 5 are       |
+|            | acoustics                 |                            | decoded. Subtypes 1 and 2  |
+|            |                           |                            | are seen in production but |
+|            |                           |                            | ignored.                   |
++------------+---------------------------+----------------------------+----------------------------+
+| 0xFF       | Extended records          | XExtendedRecord            | Decoded since build 3321;  |
+|            |                           |                            | one XFF listing line per   |
+|            |                           |                            | record. The format is      |
+|            |                           |                            | inferred from production   |
+|            |                           |                            | messages (C.6).            |
++------------+---------------------------+----------------------------+----------------------------+
+| 0xC5       | WIMS configuration        | XWimsParameters            | Decoded since build 3336;  |
+|            | parameters                |                            | one WIP listing line per   |
+|            |                           |                            | parameter. The format and  |
+|            |                           |                            | most parameter names are   |
+|            |                           |                            | inferred from production   |
+|            |                           |                            | messages (C.7).            |
++------------+---------------------------+----------------------------+----------------------------+
+| 0xF1       | Guest file fragments      | XMaple, XMapleFile         | Fragments are reassembled  |
+|            | (MAPLe microstructure     |                            | into the MAPLe files and   |
+|            | files)                    |                            | decoded: signal means,     |
+|            |                           |                            | band-averaged spectra and  |
+|            |                           |                            | motor events, listed as    |
+|            |                           |                            | MSF, MSC, MSB, msm, msv    |
+|            |                           |                            | and MSX lines (C.8).       |
++------------+---------------------------+----------------------------+----------------------------+
 
 
 C.0 Conventions
@@ -6498,6 +6510,122 @@ an unknown name:
 
 Open questions: parameters 1, 20, 25–27, 31 and 37, the inferred names, and why 9310 sent no reply
 to WCG -1.
+
+
+C.8 Guest file fragments: MAPLe microstructure files (0xF1)
+-----------------------------------------------------------
+
+[MRV fileAssembler source, Rockland TN-055, production data] Micro-ALTO floats (MRV "ualto" builds;
+11491-11495 report firmware 0x0A060233, 10.6.2.33) carry a Rockland Scientific MAPLe board with two
+microstructure channels (shear probes and/or FP07 thermistors). The MAPLe board samples during the
+ascent, processes the data in place, and writes one set of files per dive into a folder named after
+the dive. After surfacing, the float reads the processed files from the board and sends them in 0xF1
+blobs: MRV's generic transfer of guest-subsystem files. The raw file tm.dat (tens of MB) stays on
+the board's card.
+
+Floats checked: 11491, 11492, 11494 and 11495 (production, 2022-2024), and MRV's demonstration float
+11344 (2021).
+
+Blob layout. The high nibble of the size word jj is the fragment encoding version; the low 12 bits
+are the size, as for the other blobs.
+
++----------------+------+-------+-------------------------------+----------------------------------+
+| Offset         | Size | Type  | Field                         | Notes                            |
++================+======+=======+===============================+==================================+
+|              0 |    1 | U1    | ID                            | 0xF1.                            |
++----------------+------+-------+-------------------------------+----------------------------------+
+|              1 |    2 | U2    | jj                            | Bits 15-12: version (0 or 1).    |
+|                |      |       |                               | Bits 11-0: blob size.            |
++----------------+------+-------+-------------------------------+----------------------------------+
+|              3 |    1 | U1    | Version 0: device ID. Version |                                  |
+|                |      |       | 1: device ID (bits 7-5) and   |                                  |
+|                |      |       | file ID (bits 4-0)            |                                  |
++----------------+------+-------+-------------------------------+----------------------------------+
+|              4 |    1 | U1    | Version 0 only: file ID       |                                  |
++----------------+------+-------+-------------------------------+----------------------------------+
+| 4 (v1), 5 (v0) |    3 | U3    | More flag and offset          | Bit 23: more fragments follow.   |
+|                |      |       |                               | Bits 22-0: offset of this        |
+|                |      |       |                               | fragment's data in the file.     |
++----------------+------+-------+-------------------------------+----------------------------------+
+| 7 (v1), 8 (v0) |    n | bytes | File data                     | n = size - 8 (v1) or size - 9    |
+|                |      |       |                               | (v0).                            |
++----------------+------+-------+-------------------------------+----------------------------------+
+|       size - 1 |    1 | char  | ;                             |                                  |
++----------------+------+-------+-------------------------------+----------------------------------+
+
+The demonstration float (firmware 10.1) sends version 0; the production floats send version 1. A
+file is complete when its fragments, sorted by offset, are contiguous from offset 0 and the last has
+the more flag clear. Fragments arrive in any packet order and can be retransmitted (same offset);
+the decoder keeps the first copy.
+
+Device and file IDs. Device 5 is the MAPLe board (expansion port J5). Its file IDs, from the MRV
+fileAssembler documentation:
+
++---------+--------------------------------------+---------+---------------------------------------+
+| File ID | File                                 | File ID | File                                  |
++=========+======================================+=========+=======================================+
+|       1 | tm.dat (raw; not sent)               |   11-13 | tm_temp.eng, tm_temp_logavg.eng,      |
+|         |                                      |         | tm_temp_motors.eng                    |
++---------+--------------------------------------+---------+---------------------------------------+
+|     2-4 | tm_shear.eng, tm_shear_logavg.eng,   |   14-16 | tm_temp1… (same three)                |
+|         | tm_shear_motors.eng                  |         |                                       |
++---------+--------------------------------------+---------+---------------------------------------+
+|     5-7 | tm_shear1… (same three)              |   17-19 | tm_temp2… (same three)                |
++---------+--------------------------------------+---------+---------------------------------------+
+|    8-10 | tm_shear2… (same three)              |         |                                       |
++---------+--------------------------------------+---------+---------------------------------------+
+
+The channel names come from the MAPLe configuration (chN_Name): shear and temp for a
+shear-and-thermistor float (11491, 11492), shear1 and shear2 for two shear probes (11494, 11495),
+temp1 and temp2 for two thermistors.
+
+File format. Every .eng file is a text header of %key: value lines ending with the %start: line, a
+body, then a trailer from the last \n%stop: line. Header keys: container (the dive number),
+samplerate, effectivesamplerate (Hz), channels, channel (number and name, e.g. 0 shear),
+binaryoutput, nfft, navg, GD (differentiator gain, s), S (shear probe sensitivity; absent for
+thermistors), despikethreshold (standard deviations), despikepasses, comment (probe types and serial
+numbers), serialnum, osc, scaleoff (8-bit spectra only), columns, logmap, start. Trailer keys: stop,
+motordroppedblocks, goodblocks, finalstarti (shear channels), samplesprocessed, totaldespike. start
+and stop are MM DD YYY hh mm ss ms with the year since 1900 (e.g. 2 14 124 15 49 15 952 is
+2024-02-14T15:49:15.952Z). They are UTC: on 11491 dive 850 the MAPLe started 40 s after the ascent
+started and stopped within 6 s of the end of the ascent.
+
+The MAPLe board processes the data in records. A record is 2 navg + 1 FFT blocks of nfft samples,
+overlapping by half; consecutive records start navg x nfft samples apart. The record count is
+floor(samplesprocessed / (navg x nfft)) (93 records of 8192 samples on 11491 dive 850). Shear blocks
+taken while a motor runs (pump) are rejected.
+
+- Signal mean, tm_<ch>.eng. ASCII rows, one per record. Columns sigmean despikepoints and, for shear
+  channels, shearmask. Each column holds its first value, then first differences: sum them. sigmean
+  is the record's mean in counts, despikepoints the points replaced by despiking, and shearmask has
+  one bit per FFT block of the record (2 navg + 1 bits; least significant bit first), set when the
+  block was used. On 11491 dive 850, the first set mask bit (block 158 of the ascent) is the block
+  where the motor log says the pump stopped.
+- Band-averaged spectra, tm_<ch>_logavg.eng. Binary rows, one per record, of the columns
+  sigvar cf_<f1> … cf_<f12>: the record's variance (counts²) and the spectrum averaged over each
+  band of logmap (counts²/Hz). Values are little-endian float32 (binaryoutput: 16, no scaleoff; all
+  production floats). With %scaleoff: (scale,offset) (the demonstration float), each value is one
+  byte b standing for 10^(b / scale - offset). [verified] The variance equals the sum of the band
+  averages times their bandwidths to within 5-30 % in both encodings. NaN (float32 0x7FC00000) marks
+  records whose blocks were all rejected.
+- Bands. logmap lists FFT bin ranges lo-hi, e.g. 0-0,1-1,2-3,…,289-492. MAPLe bin k is the frequency
+  (k + 1) x effectivesamplerate / nfft: bin 0 is the first bin above DC. The cf_ column names are
+  the band centres computed that way (e.g. cf_98.3 for 289-492 at 257.20 Hz).
+- Motors, tm_<ch>_motors.eng. ASCII rows onoff sample: motor on (1) or off (0) at the sample index
+  (absolute, not differenced).
+
+The spectra are in counts. Converting shear spectra to shear and dissipation needs the probe
+sensitivity S, the differentiator gain GD, the ADC conversion and the speed of the float, which this
+decoder does not apply.
+
+Decoder. XMaple (src/data/xmsg/XMaple.h) collects the fragments of a dive, rebuilds and parses each
+file as fragments arrive, and lists them. Earlier builds ignored 0xF1 as a "test pattern".
+
+Listing. Section "Microstructure Data (MAPLe, 0xF1)": MSF (files), MSC (channels), MSB (bands), msm
+(signal mean), msv (spectra) and MSX (motor events); see listing-file-format.md section 13.
+
+Open questions: the meaning of 0 and 255 in 8-bit spectra (clipped values or fill), and whether
+other guest devices exist.
 
 
 Appendix C.A: Offset maps of every MFA layout (decoder)

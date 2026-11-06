@@ -5,8 +5,25 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 ## 2026-11-06
 
+Decoder:
+
+- Micro-ALTO microstructure data. X-message 0xF1, which the decoder ignored as a "test pattern", is
+  MRV's guest file fragment: micro-ALTO floats (11491, 11492, 11494, 11495) send in it the files
+  their Rockland MAPLe board writes during the ascent. New class `XMaple` (`src/data/xmsg/XMaple.h`)
+  rebuilds the files from their fragments (encodings 0 and 1, any packet order, retransmissions
+  ignored) and decodes them: signal means (first differences summed), band-averaged spectra
+  (little-endian float32, or 8-bit with `%scaleoff`: 10^(b/scale - offset)) and motor events. The
+  listing has a new section "Microstructure Data (MAPLe, 0xF1)" with `MSF` (files), `MSC`
+  (channels), `MSB` (bands), `msm` (signal mean), `msv` (spectra) and `MSX` (motor events) lines.
+  Record times are the record middles, from the MAPLe start time (UTC) and effective sample rate.
+  The SBD summary (`SBT`) names 0xF1 "guest file fragments (MAPLe)".
+
 Python tools:
 
+- `xmtps-list2json.py` reads the microstructure lines into a new per-dive `microstructure` member
+  (`FloatClasses.Microstructure`, `MicrostructureChannel`): files, channel setup, bands, record
+  times and pressures (interpolated from the ascent), signal means, shear masks, spectra and motor
+  events. Absent for other floats; `json_vers` is unchanged.
 - `xmtps-aggregate-json.py`, float pages: new plot `energy_remaining_cycles`, the cycles left if the
   float stays on its current mission, with a range: usable energy 65-95 % (central 80 %) of the
   pack's nominal energy, the energy and duration of a cycle the medians of the last 10 dives, and
@@ -39,6 +56,13 @@ Python tools:
 - `xmtps-aggregate-json.py`: plots of floats with a single dive no longer divide by zero in the
   dive color ramp (10008, 10270); the satellite-count and HDOP axes allow an empty GPS table, and ascent and
   descent plots allow no rate values (11332).
+
+Documentation:
+
+- `spec/xmessage-format.md` C.8 (0xF1 blob layout, MAPLe file IDs and file formats, checked on
+  11491, 11492, 11494, 11495 and MRV's 11344 demonstration data), `spec/listing-file-format.md`
+  section 13 (sections 13-17 renumbered 14-18), `spec/json-file-format.md` 3.16 (3.16-3.17
+  renumbered 3.17-3.18), README listing tags.
 
 ## 2026-11-05
 

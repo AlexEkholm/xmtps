@@ -273,7 +273,7 @@ namespace util {
 //    ENG = 0xEE,
 //    ENG = 0xEF,
       XMSG_TYPE_ID_ARGO_DATA = 0xF0,     //!< ARGO_DATA
-      XMSG_TYPE_ID_TEST = 0xF1,          //!< TEST
+      XMSG_TYPE_ID_GUEST_FILE = 0xF1,    //!< Guest file fragment (MAPLe microstructure files)
       XMSG_TYPE_ID_UNKNOWN = 0xFF    //!< UNKNOWN
     } XMsgTypeId_t;
 

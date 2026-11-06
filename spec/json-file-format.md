@@ -105,13 +105,13 @@ Because the dive part is at least four characters wide, `sorted()` on the file n
 - The format version is the string `"0.11"` (`JSON_VERSION` in `xmtps-list2json.py`, `xmtps-aggregate-json.py` and the three page generators).
 - It is stored as `json_vers` in every per-dive file, in every summary file and in the fleet summary table. Aggregate files carry no version.
 - Every reader compares `json_vers` with its own `JSON_VERSION` and ignores a file that differs, with a warning ("Ignoring file with mismatched JSON version").
-- The version was not changed when attributes were added (October 2026). Files written by older code and files written by current code both say `0.11` (section 3.17). Readers must therefore treat attributes added after the first 0.11 files as optional. `xmtps-aggregate-json.py` does so with `getattr(..., default)`.
+- The version was not changed when attributes were added (October 2026). Files written by older code and files written by current code both say `0.11` (section 3.18). Readers must therefore treat attributes added after the first 0.11 files as optional. `xmtps-aggregate-json.py` does so with `getattr(..., default)`.
 
 ### 2.5 Missing values
 
 | File kind | Missing value |
 |---|---|
-| Per-dive (jsonpickle) | The bare token `NaN` for a missing float. Integer sentinels (-1, -9, -999, -9.99) and empty strings for some attributes; see section 3.16. |
+| Per-dive (jsonpickle) | The bare token `NaN` for a missing float. Integer sentinels (-1, -9, -999, -9.99) and empty strings for some attributes; see section 3.17. |
 | Aggregate (pandas) | `null`. Unset times keep -1 and `""`. Separator rows have the string `"nan"` in `dt_str` (section 4.2). |
 | Summary (jsonpickle) | Sentinels -999 and -1; `NaN` in an unset `Gps`/`Sbd` position. |
 | Fleet summary table | `null`; never `NaN` (strict JSON). |
@@ -186,8 +186,9 @@ The repository copy `example/json/dives/9303_0440.json` is in the same format bu
 | `sbd_types` | list of `SbdType` | The dive's SBD data by X-message type, from the `SBT` lines without the `total` (3.12.1). Empty for listings written before build 3352; absent from files written before the tools read `SBT` (2026-11-04), which readers must allow (`json_vers` was not changed). |
 | `surface` | `Surface` | Surface time series and pressure correction (3.9). |
 | `wave` | `Wave` | Wave spectra and statistics (3.15). The key is absent when the listing has no `WVS` line. |
+| `microstructure` | `Microstructure` | MAPLe microstructure files and channels of micro-ALTO floats (3.16). The key is absent when the listing has no microstructure lines. |
 
-Members appear in the order above, except that `wave` is last.
+Members appear in the order above, except that `wave` and `microstructure` are last.
 
 ### 3.5 `FloatId`, `File`, `DateTime`
 
@@ -712,7 +713,47 @@ The declination uses the first valid fix with `idx` 0 or 2, else the first valid
 
 If `Wave.PostProcess()` raises (for example `slen` 1, which gives empty arrays), the `Wave` object is written with its numpy arrays unconverted (`py/reduce` encoding), and the rest of `Dive.PostProcess()` after the wave step (the drift sample times) is skipped.
 
-### 3.16 Defaults and sentinels in per-dive files
+### 3.16 `Microstructure` and `MicrostructureChannel`
+
+Present only when the listing has microstructure lines (micro-ALTO floats; `MSF`, `MSC`, `MSB`, `msm`, `msv`, `MSX`, [listing-file-format.md section 13](listing-file-format.md#13-microstructure-data-msf-msc-msb-msm-msv-msx)), parsed by `ParseMicrostructureLine()` in `xmtps-list2json.py`. Otherwise `Dive.PostProcess()` deletes the key. Added 2026-11-06 without changing `json_vers`. See [xmessage-format.md C.8](xmessage-format.md#c8-guest-file-fragments-maple-microstructure-files-0xf1) for what the MAPLe board measures.
+
+`Microstructure`:
+
+| Attribute | Type | Contents |
+|---|---|---|
+| `files` | list of objects | One per `MSF` line: `dev`, `fid`, `ver` (ints), `n_frag`, `bytes` (ints), `complete` (bool), `name` (string, e.g. `tm_shear_logavg.eng`). |
+| `channels` | list of `MicrostructureChannel` | One per channel name, in listing order (by channel number). |
+
+`MicrostructureChannel` (one MAPLe channel):
+
+| Attribute | Type | Units | Contents |
+|---|---|---|---|
+| `ch`, `name` | int, string | | MAPLe channel number (0, 1) and name (`shear`, `shear1`, `shear2`, `temp`, `temp1`, `temp2`). |
+| `nfft`, `navg` | int | | FFT length and FFTs per record; -1 without an `MSC` line. |
+| `fs`, `fs_eff` | float | Hz | Nominal and effective sample rates. |
+| `gd` | float | s | Differentiator gain. |
+| `s` | float | | Shear-probe sensitivity; `NaN` for thermistors. |
+| `despike_threshold`, `despike_passes` | float | std, — | Despiking settings. |
+| `samples`, `despiked`, `good_blocks`, `motor_blocks` | float | | Trailer counts: samples processed, points despiked, good and motor-dropped FFT blocks (`NaN` when absent; the block counts are for shear channels only). |
+| `start`, `stop` | string | UTC | MAPLe start and stop times, ISO 8601 with milliseconds. |
+| `start_epoch` | float | s | `start` in seconds since epoch, with milliseconds; `NaN` if invalid. |
+| `comment` | string | | Probe types and serial numbers. |
+| `band_k_lo`, `band_k_hi` | list of int | | FFT bin range of each band (bin k is (k + 1) × `fs_eff` / `nfft`). |
+| `band_freq`, `band_f_lo`, `band_f_hi` | list of float | Hz | Band centre and edges. |
+| `mean_t` | list of float | s | Signal-mean record times (middle of the record), after `start`. |
+| `mean_dt_epoch` | list of float | s | The same, since epoch (0.1 s). |
+| `mean_pres` | list of float | dBar | Pressure at each record, interpolated in time from the ascent pressures (`Ascent.dt_epoch`, `Ascent.pres`, so corrected like them); `NaN` outside the ascent samples or without them. |
+| `sigmean` | list of float | counts | Signal mean of each record. |
+| `despiked_points` | list of float | | Points despiked in each record. |
+| `shear_mask` | list of int | | FFT blocks used in each record, one bit per block (bit 0 first; 2 `navg` + 1 bits); -1 for thermistor channels. |
+| `spec_t`, `spec_dt_epoch`, `spec_pres` | lists of float | s, s, dBar | As the `mean_` attributes, for the spectra records. |
+| `sigvar` | list of float | counts² | Signal variance of each record. |
+| `spec` | list of lists of float | counts²/Hz | Band-averaged spectrum of each record: one list per record, one value per band. `NaN` for records whose blocks were all rejected. |
+| `motor_onoff`, `motor_sample`, `motor_t` | lists of float | —, —, s | Motor on (1) and off (0) events: sample index and time after `start`. |
+
+The spectra are in counts, as the MAPLe board sends them; the tools do not compute shear, temperature gradient or dissipation.
+
+### 3.17 Defaults and sentinels in per-dive files
 
 | Value | Where | Meaning |
 |---|---|---|
@@ -729,7 +770,7 @@ If `Wave.PostProcess()` raises (for example `slen` 1, which gives empty arrays),
 
 Listing fill values are not removed in per-dive files, except where noted: temperature ≤ −5 °C and salinity ≤ 0 PSU in drift and profile, surface temperature ≤ −9.99 and salinity ≤ 0, and the wave spectral fill. A pressure of -9.999 or a vacuum of 655.35 therefore appears as a number. `xmtps-aggregate-json.py` removes these (section 4.2).
 
-### 3.17 Older files with the same `json_vers`
+### 3.18 Older files with the same `json_vers`
 
 On 2026-10-30, 33,721 of the 55,003 production per-dive files (61 %) were written before 2026-10-24 and lack the attributes added since, although they say `"json_vers":"0.11"`. Example: `11145/dives/11145_0424.json`. Differences:
 
@@ -1255,7 +1296,7 @@ Summary files: `jsonpickle.decode(text, keys=True)`, which also resolves `py/id`
 | Per-dive | Bare `NaN` tokens (not valid JSON). | Use a parser that accepts them, or replace the tokens before parsing: `NaN` never appears inside a string in these files, so a regular expression such as `(?<=[\[,:])NaN(?=[,\]}])` → `null` is enough. Handle `Infinity`/`-Infinity` the same way to be safe. |
 | Per-dive | `py/object` members. | Ignore them, or use them to tell classes apart. |
 | Per-dive | `py/reduce` numpy encodings (failed wave post-processing). | Treat that `wave` member as unusable. |
-| Per-dive | Missing members in older 0.11 files (section 3.17). | Treat every member added in section 3.17 as optional. |
+| Per-dive | Missing members in older 0.11 files (section 3.18). | Treat every member added in section 3.18 as optional. |
 | Aggregate | None: strict JSON. | Map `columns` to the row arrays. Treat `"nan"` in `dt_str` as missing. |
 | Summary | `py/id` references. | Keep a list of the JSON objects in document order (section 5.1) and replace `{"py/id": n}` with the n-th; or compare the times of the slots. |
 | All | Unset times are -1 and `""`, not null. | Check `dt_epoch > 0`. |
@@ -1266,7 +1307,7 @@ JavaScript `JSON.parse` rejects the per-dive files without the replacement above
 
 Code, README and production were compared on 2026-10-30.
 
-1. **`json_vers` not bumped.** Attributes were added to `Profile`, `Surface`, `MissionParameters` and `Engineering` (2026-10-24) and to `Wave` (2026-10-26) without changing `"0.11"`. 61 % of the production per-dive files are in the older layout (section 3.17). The README says all scripts ignore files with any other version, which is true but does not help here.
+1. **`json_vers` not bumped.** Attributes were added to `Profile`, `Surface`, `MissionParameters` and `Engineering` (2026-10-24) and to `Wave` (2026-10-26) without changing `"0.11"`. 61 % of the production per-dive files are in the older layout (section 3.18). The README says all scripts ignore files with any other version, which is true but does not help here.
 2. **README, `_iridium_position`: "one row per dive".** The file has one row per composite (transmission session). Startup sessions have `dive` `null`, and a dive can have more than one row (9303: 495 rows for 484 dives). `dive` is written as a float.
 3. **README, `_surface` column order.** The README lists `dt_ref_delta_sec` before `pres_corr`; the files have it last (section 4.7).
 4. **README does not mention the units of the aggregate `rate`.** The aggregate multiplies the per-dive dBar/s value by 100. The `(-9.99,)` fill rule for `rate` in `FILL_VALUES` cannot match a scaled computed rate and appears to be left over.

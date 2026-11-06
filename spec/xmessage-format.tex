@@ -107,7 +107,7 @@ The MRV documents and the SOLO-II PDF are in the Float Group's \code{mrv/\allowb
 \section{\texorpdfstring{Message type index}{Message type index}}\label{sec:message-type-index}
 
 \begingroup\footnotesize\setlength{\tabcolsep}{3pt}
-\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.0893\linewidth}>{\raggedright\arraybackslash}p{0.2946\linewidth}>{\raggedright\arraybackslash}p{0.0982\linewidth}>{\raggedright\arraybackslash}p{0.2411\linewidth}>{\raggedright\arraybackslash}p{0.2054\linewidth}@{}}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.0893\linewidth}>{\raggedright\arraybackslash}p{0.2857\linewidth}>{\raggedright\arraybackslash}p{0.0982\linewidth}>{\raggedright\arraybackslash}p{0.2232\linewidth}>{\raggedright\arraybackslash}p{0.2321\linewidth}@{}}
 \toprule
 \textbf{ID} & \textbf{Message} & \textbf{Section} & \textbf{Decoded by XMTPS} & \textbf{Listing lines} \\
 \midrule
@@ -158,7 +158,7 @@ The MRV documents and the SOLO-II PDF are in the Float Group's \code{mrv/\allowb
 0xEB & Valve operations & A.5.4 & yes & \code{VLV}/\code{vlv} \\
 0xEC & Engineering, ice detection & B.7 & versions 0x10–0x11 & \code{E0C}, \code{e0c} \\
 0xF0 & Argo data (mission summary, gains and offsets) & A.6 & v2.1–v2.4 & \code{A} \\
-0xF1 & Test pattern & — & no & — \\
+0xF1 & Guest file fragments: MAPLe microstructure files of micro-ALTO floats & C.8 & yes & \code{MSF}, \code{MSC}, \code{MSB}, \code{msm}, \code{msv}, \code{MSX} \\
 0xFF & Extended records (event, reset, serial number, CTD exchange, fault dump) & C.6 & since build 3321 (format inferred) & \code{XFF} \\
 \end{longtable}
 \endgroup
@@ -296,7 +296,7 @@ jj−1 & 1 & char & \code{;\allowbreak{}} (0x3B) & Terminator. \\
 \item At 3 buffered bytes the size is taken as \code{0x0FFF \& u16(\allowbreak{}buf,\allowbreak{} 1)}. \textbf{The 12-bit mask is applied to every type.} This is harmless because a blob is always smaller than 4096 bytes (SBD ≤ 340), so the high nibble of a 16-bit size is always 0.
 \item When the buffer reaches the size, the blob is dispatched on its ID byte and the buffer is cleared. A trailing incomplete blob is silently dropped. A wrong size desynchronizes the rest of the packet.
 \item Each class decoder checks the ID, a minimum length, and that \code{buf[size−1] =\allowbreak{}=\allowbreak{} ';\allowbreak{}'} (most of them via \code{XMessage:\allowbreak{}:\allowbreak{}Check\allowbreak{}XMsg\allowbreak{}Data}; the size must be at least 4). Extra bytes produce a warning; a missing terminator is an error.
-\item IDs without a decoder are logged as \code{Unknown X message ID:\allowbreak{} 0x.\allowbreak{}.\allowbreak{}} and skipped, for example 0xC2 and 0x70–0x77 (and 0xFF before build 3321, C.6). 0xF1 (test pattern) is ignored silently.
+\item IDs without a decoder are logged as \code{Unknown X message ID:\allowbreak{} 0x.\allowbreak{}.\allowbreak{}} and skipped, for example 0xC2 and 0x70–0x77 (and 0xFF before build 3321, C.6). 0xF1 is decoded as guest file fragments (C.8); earlier builds ignored it silently as a test pattern.
 \end{enumerate}
 
 \subsubsection{\texorpdfstring{A.1.4 Byte order, bit order, epochs}{A.1.4 Byte order, bit order, epochs}}\label{sec:a14-byte-order-bit-order-epochs}
@@ -3202,7 +3202,7 @@ Decoder behavior worth knowing (not format discrepancies):
 This part covers these blob types:
 
 \begingroup\footnotesize\setlength{\tabcolsep}{3pt}
-\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.0982\linewidth}>{\raggedright\arraybackslash}p{0.2946\linewidth}>{\raggedright\arraybackslash}p{0.3036\linewidth}>{\raggedright\arraybackslash}p{0.2500\linewidth}@{}}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.0982\linewidth}>{\raggedright\arraybackslash}p{0.2857\linewidth}>{\raggedright\arraybackslash}p{0.2946\linewidth}>{\raggedright\arraybackslash}p{0.2679\linewidth}@{}}
 \toprule
 \textbf{ID} & \textbf{Name} & \textbf{Decoder class} & \textbf{Status in the XMTPS decoder} \\
 \midrule
@@ -3219,6 +3219,7 @@ This part covers these blob types:
 0xCA & Marginal-ice-zone (MIZ) acoustics & \code{XAcoustic\allowbreak{}Position} & Subtypes 3 and 5 are decoded. Subtypes 1 and 2 are seen in production but ignored. \\
 0xFF & Extended records & \code{XExtended\allowbreak{}Record} & Decoded since build 3321; one \code{XFF} listing line per record. The format is inferred from production messages (C.6). \\
 0xC5 & WIMS configuration parameters & \code{XWims\allowbreak{}Parameters} & Decoded since build 3336; one \code{WIP} listing line per parameter. The format and most parameter names are inferred from production messages (C.7). \\
+0xF1 & Guest file fragments (MAPLe microstructure files) & \code{XMaple}, \code{XMaple\allowbreak{}File} & Fragments are reassembled into the MAPLe files and decoded: signal means, band-averaged spectra and motor events, listed as \code{MSF}, \code{MSC}, \code{MSB}, \code{msm}, \code{msv} and \code{MSX} lines (C.8). \\
 \end{longtable}
 \endgroup
 
@@ -4664,6 +4665,80 @@ WIP  9297   15    0    2    0   42  wav.gaina       32  0x0020
 \end{Verbatim}
 
 Open questions: parameters 1, 20, 25–27, 31 and 37, the inferred names, and why 9310 sent no reply to \code{WCG -1}.
+
+\subsection{\texorpdfstring{C.8 Guest file fragments: MAPLe microstructure files (0xF1)}{C.8 Guest file fragments: MAPLe microstructure files (0xF1)}}\label{sec:c8-guest-file-fragments-maple-microstructure-files-0xf1}
+
+{}[MRV \code{file\allowbreak{}Assembler} source, Rockland TN-055, production data] Micro-ALTO floats (MRV “ualto” builds; 11491-11495 report firmware 0x0A060233, 10.6.2.33) carry a Rockland Scientific MAPLe board with two microstructure channels (shear probes and/or FP07 thermistors). The MAPLe board samples during the ascent, processes the data in place, and writes one set of files per dive into a folder named after the dive. After surfacing, the float reads the processed files from the board and sends them in 0xF1 blobs: MRV's generic transfer of guest-subsystem files. The raw file \code{tm.\allowbreak{}dat} (tens of MB) stays on the board's card.
+
+Floats checked: 11491, 11492, 11494 and 11495 (production, 2022-2024), and MRV's demonstration float 11344 (2021).
+
+\textbf{Blob layout.} The high nibble of the size word \code{jj} is the fragment encoding version; the low 12 bits are the size, as for the other blobs.
+
+\begingroup\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}>{\raggedleft\arraybackslash}p{0.1339\linewidth}>{\raggedleft\arraybackslash}p{0.0446\linewidth}>{\raggedright\arraybackslash}p{0.0536\linewidth}>{\raggedright\arraybackslash}p{0.3304\linewidth}>{\raggedright\arraybackslash}p{0.3661\linewidth}@{}}
+\toprule
+\textbf{Offset} & \textbf{Size} & \textbf{Type} & \textbf{Field} & \textbf{Notes} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Offset} & \textbf{Size} & \textbf{Type} & \textbf{Field} & \textbf{Notes} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+0 & 1 & U1 & ID & 0xF1. \\
+1 & 2 & U2 & \code{jj} & Bits 15-12: version (0 or 1). Bits 11-0: blob size. \\
+3 & 1 & U1 & Version 0: device ID. Version 1: device ID (bits 7-5) and file ID (bits 4-0) &  \\
+4 & 1 & U1 & Version 0 only: file ID &  \\
+4 (v1), 5 (v0) & 3 & U3 & More flag and offset & Bit 23: more fragments follow. Bits 22-0: offset of this fragment's data in the file. \\
+7 (v1), 8 (v0) & n & bytes & File data & n = size - 8 (v1) or size - 9 (v0). \\
+size - 1 & 1 & char & \code{;\allowbreak{}} &  \\
+\end{longtable}
+\endgroup
+
+The demonstration float (firmware 10.1) sends version 0; the production floats send version 1. A file is complete when its fragments, sorted by offset, are contiguous from offset 0 and the last has the more flag clear. Fragments arrive in any packet order and can be retransmitted (same offset); the decoder keeps the first copy.
+
+\textbf{Device and file IDs.} Device 5 is the MAPLe board (expansion port J5). Its file IDs, from the MRV \code{file\allowbreak{}Assembler} documentation:
+
+\begingroup\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}>{\raggedleft\arraybackslash}p{0.0714\linewidth}>{\raggedright\arraybackslash}p{0.4018\linewidth}>{\raggedleft\arraybackslash}p{0.0714\linewidth}>{\raggedright\arraybackslash}p{0.4018\linewidth}@{}}
+\toprule
+\textbf{File ID} & \textbf{File} & \textbf{File ID} & \textbf{File} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{File ID} & \textbf{File} & \textbf{File ID} & \textbf{File} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+1 & \code{tm.\allowbreak{}dat} (raw; not sent) & 11-13 & \code{tm\_\allowbreak{}temp.\allowbreak{}eng}, \code{tm\_\allowbreak{}temp\_\allowbreak{}logavg.\allowbreak{}eng}, \code{tm\_\allowbreak{}temp\_\allowbreak{}motors.\allowbreak{}eng} \\
+2-4 & \code{tm\_\allowbreak{}shear.\allowbreak{}eng}, \code{tm\_\allowbreak{}shear\_\allowbreak{}logavg.\allowbreak{}eng}, \code{tm\_\allowbreak{}shear\_\allowbreak{}motors.\allowbreak{}eng} & 14-16 & \code{tm\_\allowbreak{}temp1…} (same three) \\
+5-7 & \code{tm\_\allowbreak{}shear1…} (same three) & 17-19 & \code{tm\_\allowbreak{}temp2…} (same three) \\
+8-10 & \code{tm\_\allowbreak{}shear2…} (same three) &  &  \\
+\end{longtable}
+\endgroup
+
+The channel names come from the MAPLe configuration (\code{ch\allowbreak{}N\_\allowbreak{}Name}): \code{shear} and \code{temp} for a shear-and-thermistor float (11491, 11492), \code{shear1} and \code{shear2} for two shear probes (11494, 11495), \code{temp1} and \code{temp2} for two thermistors.
+
+\textbf{File format.} Every \code{.\allowbreak{}eng} file is a text header of \code{\%key:\allowbreak{} value} lines ending with the \code{\%start:\allowbreak{}} line, a body, then a trailer from the last \code{\textbackslash{}\allowbreak{}n\%stop:\allowbreak{}} line. Header keys: \code{container} (the dive number), \code{samplerate}, \code{effectivesamplerate} (Hz), \code{channels}, \code{channel} (number and name, e.g. \code{0 shear}), \code{binaryoutput}, \code{nfft}, \code{navg}, \code{GD} (differentiator gain, s), \code{S} (shear probe sensitivity; absent for thermistors), \code{despikethreshold} (standard deviations), \code{despikepasses}, \code{comment} (probe types and serial numbers), \code{serialnum}, \code{osc}, \code{scaleoff} (8-bit spectra only), \code{columns}, \code{logmap}, \code{start}. Trailer keys: \code{stop}, \code{motordroppedblocks}, \code{goodblocks}, \code{finalstarti} (shear channels), \code{samplesprocessed}, \code{totaldespike}. \code{start} and \code{stop} are \code{MM DD YYY hh mm ss ms} with the year since 1900 (e.g. \code{2 14 124 15 49 15 952} is 2024-02-14T15:49:15.952Z). They are UTC: on 11491 dive 850 the MAPLe started 40 s after the ascent started and stopped within 6 s of the end of the ascent.
+
+The MAPLe board processes the data in records. A record is 2 navg + 1 FFT blocks of nfft samples, overlapping by half; consecutive records start navg x nfft samples apart. The record count is floor(samplesprocessed / (navg x nfft)) (93 records of 8192 samples on 11491 dive 850). Shear blocks taken while a motor runs (pump) are rejected.
+
+\begin{itemize}
+\item \textbf{Signal mean, \code{tm\_\allowbreak{}<ch>.\allowbreak{}eng}.} ASCII rows, one per record. Columns \code{sigmean despikepoints} and, for shear channels, \code{shearmask}. Each column holds its first value, then first differences: sum them. \code{sigmean} is the record's mean in counts, \code{despikepoints} the points replaced by despiking, and \code{shearmask} has one bit per FFT block of the record (2 navg + 1 bits; least significant bit first), set when the block was used. On 11491 dive 850, the first set mask bit (block 158 of the ascent) is the block where the motor log says the pump stopped.
+\item \textbf{Band-averaged spectra, \code{tm\_\allowbreak{}<ch>\_\allowbreak{}logavg.\allowbreak{}eng}.} Binary rows, one per record, of the columns \code{sigvar cf\_\allowbreak{}<f1> … cf\_\allowbreak{}<f12>}: the record's variance (counts²) and the spectrum averaged over each band of \code{logmap} (counts²/Hz). Values are little-endian float32 (\code{binaryoutput:\allowbreak{} 16}, no \code{scaleoff}; all production floats). With \code{\%scaleoff:\allowbreak{} (\allowbreak{}scale,\allowbreak{}offset)} (the demonstration float), each value is one byte b standing for 10\textasciicircum{}(b / scale - offset). [verified] The variance equals the sum of the band averages times their bandwidths to within 5-30 \% in both encodings. NaN (float32 0x7FC00000) marks records whose blocks were all rejected.
+\item \textbf{Bands.} \code{logmap} lists FFT bin ranges \code{lo-hi}, e.g. \code{0-0,\allowbreak{}1-1,\allowbreak{}2-3,\allowbreak{}…,\allowbreak{}289-492}. MAPLe bin k is the frequency (k + 1) x effectivesamplerate / nfft: bin 0 is the first bin above DC. The \code{cf\_\allowbreak{}} column names are the band centres computed that way (e.g. \code{cf\_\allowbreak{}98.\allowbreak{}3} for 289-492 at 257.20 Hz).
+\item \textbf{Motors, \code{tm\_\allowbreak{}<ch>\_\allowbreak{}motors.\allowbreak{}eng}.} ASCII rows \code{onoff sample}: motor on (1) or off (0) at the sample index (absolute, not differenced).
+\end{itemize}
+
+The spectra are in counts. Converting shear spectra to shear and dissipation needs the probe sensitivity \code{S}, the differentiator gain \code{GD}, the ADC conversion and the speed of the float, which this decoder does not apply.
+
+\textbf{Decoder.} \code{XMaple} (\code{src/\allowbreak{}data/\allowbreak{}xmsg/\allowbreak{}XMaple.\allowbreak{}h}) collects the fragments of a dive, rebuilds and parses each file as fragments arrive, and lists them. Earlier builds ignored 0xF1 as a “test pattern”.
+
+\textbf{Listing.} Section “Microstructure Data (MAPLe, 0xF1)”: \code{MSF} (files), \code{MSC} (channels), \code{MSB} (bands), \code{msm} (signal mean), \code{msv} (spectra) and \code{MSX} (motor events); see \href{listing-file-format.md\#13-microstructure-data-msf-msc-msb-msm-msv-msx}{listing-file-format.md section 13}.
+
+Open questions: the meaning of 0 and 255 in 8-bit spectra (clipped values or fill), and whether other guest devices exist.
 
 \subsection{\texorpdfstring{Appendix C.A: Offset maps of every MFA layout (decoder)}{Appendix C.A: Offset maps of every MFA layout (decoder)}}\label{sec:appendix-ca-offset-maps-of-every-mfa-layout-decoder}
 

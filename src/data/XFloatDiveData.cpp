@@ -400,7 +400,7 @@ string XFloatDiveData::GenerateSbdDataSummaryListingString() const {
           case 0xEB: name = "valve"; break;
           case 0xEC: name = "engineering: ice detection"; break;
           case 0xF0: name = "Argo data"; break;
-          case 0xF1: name = "test pattern"; break;
+          case 0xF1: name = "guest file fragments (MAPLe)"; break;
           case 0xFF: name = "extended records"; break;
           default: name = "unknown"; break;
         }
@@ -1775,6 +1775,7 @@ void XFloatDiveData::ResetData() {
     mail_messages_.clear();
     set_num_sbd_msgs(0);
     xmsg_acoustic_positions_.reset();
+    xmsg_maple_.reset();
     xmsg_argo_data_.reset();
     xmsg_composite_profile_binned_.Reset();
     xmsg_composite_profile_unbinned_.Reset();
