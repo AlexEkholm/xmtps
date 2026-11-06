@@ -3749,7 +3749,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
 
             # Create color range
             
-            colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
             
             # Preprocess data
@@ -4875,7 +4875,7 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
             # Create color range
             
             #colors = list(Color("#33FF33").range_to(Color("#3333FF"), round(len(dives)/2))) + list(Color("#3333FF").range_to(Color("#FF3333"), round(len(dives)/2)+1))
-            colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
             colors[len(dives)-1] = 'rgb(0,0,0)'
         
@@ -5186,7 +5186,7 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
             # Create color range
             
             #colors = list(Color("#33FF33").range_to(Color("#3333FF"), round(len(dives)/2))) + list(Color("#3333FF").range_to(Color("#FF3333"), round(len(dives)/2)+1))
-            colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
             colors[len(dives)-2] = 'rgb(0,0,0)'
         
@@ -6115,7 +6115,7 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             # Create color range
             
             #colors = list(Color("#33FF33").range_to(Color("#3333FF"), round(len(dives)/2))) + list(Color("#3333FF").range_to(Color("#FF3333"), round(len(dives)/2)+1))
-            colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
             colors[len(dives)-1] = 'rgb(0,0,0)'
             
@@ -7095,7 +7095,7 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             
             #colors = list(Color("#3333FF").range_to(Color("#FF3333"), len(dives)))
             #colors = [ 'rgb'+str(tuple([round(255*y) for y in x.rgb])) for x in colors]
-            colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
             colors[len(dives)-1] = 'rgb(0,0,0)'
             
@@ -7122,7 +7122,7 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             rng = dict(
                 dt_ref_delta_min = np.array([0, np.max(df_dives['dt_ref_delta_sec'].values)/60]).astype(np.double),
                 pres             = np.array([np.max(df_dives['pres'].values), 0]).astype(np.double),
-                rate             = np.percentile(df_dives['rate'][~df_dives['rate'].isna()].values, [1, 99]).astype(np.double),
+                rate             = RangePercentile(df_dives['rate'].values, [1, 99]),
                 dive             = np.array([0, np.max(df_dives['dive'].values)]).astype(np.double),
                 )
             rng['dt_ref_delta_min'] = np.round(rng['dt_ref_delta_min']   + [ 0.00, 1.00], 0)
@@ -7555,7 +7555,7 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             
             #colors = list(Color("#3333FF").range_to(Color("#FF3333"), len(dives)))
             #colors = [ 'rgb'+str(tuple([round(255*y) for y in x.rgb])) for x in colors]
-            colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
             colors[len(dives)-1] = 'rgb(0,0,0)'
             
@@ -7580,7 +7580,7 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             rng = dict(
                 dt_ref_delta_min = np.array([0, np.max(df_dives['dt_ref_delta_sec'].values)/60]).astype(np.double),
                 pres             = np.array([np.max(df_dives['pres'].values), 0]).astype(np.double),
-                rate             = np.percentile(df_dives['rate'][~df_dives['rate'].isna()].values, [1, 99]).astype(np.double),
+                rate             = RangePercentile(df_dives['rate'].values, [1, 99]),
                 dive             = np.array([0, np.max(df_dives['dive'].values)]).astype(np.double),
                 )
             rng['dt_ref_delta_min'] = np.round(rng['dt_ref_delta_min']   + [ 0.00, 1.00], 0)
@@ -8010,7 +8010,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
             
             #colors = list(Color("#3333FF").range_to(Color("#FF3333"), len(dives)))
             #colors = [ 'rgb'+str(tuple([round(255*y) for y in x.rgb])) for x in colors]
-            colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
             colors[len(dives)-1] = 'rgb(0,0,0)'
             
@@ -8762,7 +8762,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             
             #colors = list(Color("#3333FF").range_to(Color("#FF3333"), len(dives)))
             #colors = [ 'rgb'+str(tuple([round(255*y) for y in x.rgb])) for x in colors]
-            colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
             colors[len(dives)-1] = 'rgb(0,0,0)'
             
@@ -10409,7 +10409,7 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             
             #colors = list(Color("#3333FF").range_to(Color("#FF3333"), len(dives)))
             #colors = [ 'rgb'+str(tuple([round(255*y) for y in x.rgb])) for x in colors]
-            colors = [colorsys.hsv_to_rgb(x*.666/(len(dives)-1),.8,1) for x in range(len(dives))][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
             colors[len(dives)-1] = 'rgb(0,0,0)'
             
@@ -11219,7 +11219,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         yaxis=dict(
                             title='No. Satellites',
                             autorange=False,
-                            range=[ -1, np.max(df_gps['nsat'].values)+1 ],
+                            range=[ -1, (np.nanmax(df_gps['nsat'].values) if len(df_gps) else 0)+1 ],
                             ),
                         hoverlabel=dict(
                             font=dict(
@@ -11248,7 +11248,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         yaxis=dict(
                             title='HDOP',
                             autorange=False,
-                            range=[ 0, np.max(df_gps['hdop'].values)+1 ],
+                            range=[ 0, (np.nanmax(df_gps['hdop'].values) if len(df_gps) else 0)+1 ],
                             ),
                         hoverlabel=dict(
                             font=dict(

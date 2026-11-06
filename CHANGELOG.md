@@ -28,6 +28,9 @@ Python tools:
   figures when a float has no surface temperature instead of failing; wave plots are skipped when
   no spectra are left after filtering (9046); profile plots are skipped when no profile with
   temperature is left (9091, 9212).
+- `xmtps-aggregate-json.py`: plots of floats with a single dive no longer divide by zero in the
+  dive color ramp (10008, 10270); the satellite-count and HDOP axes allow an empty GPS table, and ascent and
+  descent plots allow no rate values (11332).
 
 ## 2026-11-05
 
