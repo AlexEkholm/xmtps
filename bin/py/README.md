@@ -250,6 +250,7 @@ Options, besides the [common ones](#conventions-shared-by-the-tools):
 | `-f`, `--force` | off | Process every directory, ignoring `.lastprocessed`. Needed after a change to `FloatClasses.py` or `RhoLUT.py` or to this script. |
 | `-S`, `--strip-path REGEX` | `.*/alamo/` | Remove the part of file paths that matches `REGEX` before storing them in the JSON and plot metadata (dive JSON paths and the figure file paths used by the float page). |
 | `--image-tabs N` | `4` | Render the PNG images in `N` browser tabs at once. Each plot group's images are written in one batch, spread over the tabs. On argus, 4 tabs made a float's plots about twice as fast as 1 (9305: 125 s instead of 239 s). Lower it if many floats are updated at once and the CPU is busy. |
+| `--image-timeout S` | `120` | Watchdog on the PNG export. A Kaleido call that takes longer than `S` s plus 10 s an image counts as hung. Its Chrome (only this process's) is killed, a new browser is started and the images are retried one at a time. After 3 restarts, the rest of the images fail. `0` turns the watchdog off. |
 | `-D`, `--display-figures` | off | Also open each figure in a web browser as it is made (interactive use). |
 | `-s`, `--skip` | off | Accepted for compatibility with `xmtps-list2json.py`; it has no effect. |
 

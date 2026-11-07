@@ -64,6 +64,7 @@ import plotly.io as pio
 # import pygmt
 # import pprint
 import re
+import threading
 import time
 # import time
 from scipy import interpolate
@@ -103,6 +104,15 @@ bathymetry = None
 # Browser tabs Kaleido renders PNG images in at once (--image-tabs). The plot service runs up to
 # 8 floats at a time on argus (16 cores); 4 tabs rendered a batch 3.2x faster than 1 there.
 IMAGE_EXPORT_TABS = 4
+
+# Watchdog on the PNG export (--image-timeout): a Kaleido call may wait on its headless Chrome
+# forever (seen on 9044, 9045, 9207, 9304 and 11558, 2026-11-06, each fine when rerun), so a call
+# that takes longer than IMAGE_EXPORT_TIMEOUT_S plus IMAGE_EXPORT_TIMEOUT_PER_IMAGE_S an image
+# counts as hung: its Chrome is killed and a new browser started. A batch normally takes well
+# under a second an image. After IMAGE_EXPORT_MAX_RESTARTS restarts the rest of the images fail.
+IMAGE_EXPORT_TIMEOUT_S = 120
+IMAGE_EXPORT_TIMEOUT_PER_IMAGE_S = 10
+IMAGE_EXPORT_MAX_RESTARTS = 3
 
 def OpenBathymetry():
     """Open the bathymetry file once and return the cached grid dict, or False if it can't be read.
@@ -15026,6 +15036,129 @@ def WritePlotImageFiles(
         logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
         return None
 
+image_server = dict(running = False, restarts = 0)
+
+def StartImageServer():
+    """Start Kaleido's sync server: one Chromium browser with --image-tabs tabs for all exports.
+
+    Keeps the browser running for all image exports instead of Kaleido starting one per image
+    (about 0.6 s instead of 2.2 s per image). Logs a warning and leaves Kaleido starting a browser
+    per image if it can't be started.
+    """
+    try:
+        import kaleido
+        kaleido.start_sync_server(n = max(1, args.image_tabs), silence_warnings = True)
+        image_server['running'] = True
+    except Exception as e:
+        logger.warning('Failed to start kaleido server, starting a browser per image: {}'.format(e))
+
+def StopImageServer():
+    """Stop Kaleido's sync server if StartImageServer started it."""
+    if image_server['running']:
+        import kaleido
+        kaleido.stop_sync_server(silence_warnings = True)
+        image_server['running'] = False
+
+def KillChildBrowsers():
+    """Kill the Chrome processes this process started (Linux, from /proc); return how many.
+
+    Only descendants of this process are touched, so the browsers of the other floats the plot
+    service runs at the same time are left alone.
+    """
+    if not os.path.isdir('/proc'):
+        return 0
+    parent = {}
+    for pid in os.listdir('/proc'):
+        if not pid.isdigit():
+            continue
+        try:
+            with open('/proc/{}/stat'.format(pid)) as f:
+                stat = f.read()
+            # the command name is in parentheses and may contain spaces
+            parent[int(pid)] = int(stat[stat.rindex(')') + 2:].split()[1])
+        except (OSError, ValueError, IndexError):
+            continue
+    me = os.getpid()
+    descendants, frontier = [], [me]
+    while frontier:
+        p = frontier.pop()
+        children = [ c for c, pp in parent.items() if pp == p ]
+        descendants += children
+        frontier += children
+    killed = 0
+    for pid in descendants:
+        try:
+            with open('/proc/{}/comm'.format(pid)) as f:
+                name = f.read().strip().lower()
+            if 'chrom' in name or 'headless' in name:
+                os.kill(pid, 9)
+                killed += 1
+        except (OSError, ValueError):
+            continue
+    return killed
+
+def RestartImageServer():
+    """Abandon a hung Kaleido server, kill its Chrome and start a new one.
+
+    The hung server's thread can't be joined (stop_sync_server would wait on it forever), so it is
+    left behind as a daemon thread: it is marked stopped, so its exit handler does nothing, and a
+    new GlobalKaleidoServer replaces kaleido's module-level one, so the old thread and the new
+    server share no queues.
+    """
+    import kaleido
+    from kaleido import _sync_server
+    old = kaleido._global_server
+    old._initialized = False
+    _sync_server.GlobalKaleidoServer._instance = None
+    kaleido._global_server = _sync_server.GlobalKaleidoServer()
+    image_server['running'] = False
+    image_server['restarts'] += 1
+    n = KillChildBrowsers()
+    logger.warning('Image export hung; killed {} Chrome process{}, restarting the image browser ({} of {})'.format(
+        n, '' if n == 1 else 'es', image_server['restarts'], IMAGE_EXPORT_MAX_RESTARTS))
+    StartImageServer()
+
+class ImageExportTimeout(Exception):
+    pass
+
+def CallImageExport(fn, n_images):
+    """Call fn() (a plotly.io image export) under the --image-timeout watchdog.
+
+    Runs fn in a daemon thread and waits for it up to args.image_timeout plus
+    IMAGE_EXPORT_TIMEOUT_PER_IMAGE_S an image. On a timeout it restarts the image browser
+    (RestartImageServer), which makes the stuck call fail or leaves it waiting in its abandoned
+    thread, and raises ImageExportTimeout; after IMAGE_EXPORT_MAX_RESTARTS restarts it raises
+    without restarting. Exceptions of fn are raised. A timeout of 0 or less calls fn directly.
+    """
+    timeout = getattr(args, 'image_timeout', IMAGE_EXPORT_TIMEOUT_S)
+    if timeout is None or timeout <= 0:
+        return fn()
+    if image_server['restarts'] >= IMAGE_EXPORT_MAX_RESTARTS:
+        raise ImageExportTimeout('image browser restarted {} times already'.format(image_server['restarts']))
+    result = {}
+
+    def Run():
+        try:
+            result['value'] = fn()
+        except BaseException as e:
+            result['error'] = e
+
+    t = threading.Thread(target = Run, daemon = True)
+    limit = timeout + IMAGE_EXPORT_TIMEOUT_PER_IMAGE_S * n_images
+    t.start()
+    t.join(limit)
+    if t.is_alive():
+        if image_server['running'] and image_server['restarts'] < IMAGE_EXPORT_MAX_RESTARTS:
+            RestartImageServer()
+        else:
+            # a browser per image (no server) or no restarts left: kill the stuck browser only
+            KillChildBrowsers()
+        raise ImageExportTimeout('no result after {:.0f} s for {} image{}'.format(
+            limit, n_images, '' if n_images == 1 else 's'))
+    if 'error' in result:
+        raise result['error']
+    return result.get('value')
+
 def FlushImageQueue():
     """Write the PNG images queued by WritePlotImageFiles; return the ids of the figures that failed.
 
@@ -15066,7 +15199,7 @@ def FlushImageQueue():
 
     batch_error = None
     try:
-        pio.write_images(figures, paths, width = widths, height = heights)
+        CallImageExport(lambda: pio.write_images(figures, paths, width = widths, height = heights), len(paths))
     except Exception as e:
         batch_error = e
     retry = [ i for i, path in enumerate(paths) if not IsWritten(path) ]
@@ -15076,7 +15209,7 @@ def FlushImageQueue():
     errors = {}
     for i in retry:
         try:
-            pio.write_image(figures[i], paths[i], width = widths[i], height = heights[i])
+            CallImageExport(lambda: pio.write_image(figures[i], paths[i], width = widths[i], height = heights[i]), 1)
         except Exception as e:
             errors[i] = e
         if not IsWritten(paths[i]) and i not in errors:
@@ -15184,6 +15317,15 @@ parser.add_argument(
     type=int,
     help='render PNG images in N browser tabs at once (default={:d})'.format(IMAGE_EXPORT_TABS),
     metavar='N')
+parser.add_argument(
+    '--image-timeout',
+    default=IMAGE_EXPORT_TIMEOUT_S,
+    dest='image_timeout',
+    type=float,
+    help=('restart the image browser when a PNG export call takes longer than S seconds plus {:d} s '
+          'an image (default={:d}; 0 disables the watchdog)').format(
+        IMAGE_EXPORT_TIMEOUT_PER_IMAGE_S, IMAGE_EXPORT_TIMEOUT_S),
+    metavar='S')
 
 parser.add_argument(
     '-D', '--display-figures',
@@ -15309,22 +15451,13 @@ try:
         if not os.path.isdir(args.plot_output):
             logger.error('Invalid plot output directory: ' + args.plot_output)
         else:
-            # Keep one Chromium browser running for all image exports instead of kaleido
-            # starting one per image (about 0.6 s instead of 2.2 s per image), with
-            # --image-tabs tabs, over which each plot group's batch of images is spread.
-            kaleido_server = False
+            # One Chromium browser with --image-tabs tabs renders all PNG images
             if float_aggregate_map:
-                try:
-                    import kaleido
-                    kaleido.start_sync_server(n = max(1, args.image_tabs), silence_warnings = True)
-                    kaleido_server = True
-                except Exception as e:
-                    logger.warning('Failed to start kaleido server, starting a browser per image: {}'.format(e))
+                StartImageServer()
             try:
                 WritePlotFiles()
             finally:
-                if kaleido_server:
-                    kaleido.stop_sync_server(silence_warnings = True)
+                StopImageServer()
 
     # Record processed files only after all output has been written
 

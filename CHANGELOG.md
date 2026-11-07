@@ -20,6 +20,12 @@ Decoder:
 
 Python tools:
 
+- Plots: a watchdog on the PNG export. A Kaleido call that waits on its headless Chrome longer
+  than `--image-timeout` (default 120 s) plus 10 s an image counts as hung. The process kills the
+  Chrome it started (not other floats'), starts a new browser and retries the images one at a time.
+  After 3 restarts, the rest of the images fail. On 2026-11-06, 9044, 9045, 9207, 9304 and 11558
+  hung this way until the one-hour limit of the plot service, and each was fine when rerun. A
+  simulated hang on 11558 cost 115 s, after which all 243 images were written.
 - Energy estimate: battery age at each dive's first SBD message, not its last. A float resends a
   lost packet of an earlier dive at a later surfacing; on 11213 dive 48 resent packets of dives 40
   and 43, which then took the controller drain and self-discharge of eight days (21 kJ) and left
