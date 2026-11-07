@@ -3,6 +3,13 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-07
+
+Python tools:
+
+- Plots: the remaining-cycles hover label shows the expected, minimum and maximum cycles
+  left after the dive, in one label on the estimate line.
+
 ## 2026-11-06
 
 Decoder:

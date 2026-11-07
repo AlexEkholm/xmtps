@@ -14583,19 +14583,23 @@ def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float):
         title=dict(text='{}<br><sup>{}</sup>'.format(title, sub)),
         xaxis=dict(title='Dive'),
         yaxis=dict(title='Remaining cycles', rangemode='tozero'),
-        hovermode='x unified',
+        hovermode='x',
         hoverlabel=dict(font=dict(family='Consolas, monospace', size=12)),
         plot_bgcolor='white',
         margin=dict(l=10, r=10, b=20, t=70, pad=4),
         ))
+    # one hover label, on the estimate line, with the expected cycles and the range; the band
+    # edges have none
     fig.add_trace(go.Scatter(x=r['dive'], y=r['remaining_high'], mode='lines', line=dict(width=0),
-                             name='High', hovertemplate='%{y:.0f}', showlegend=False))
+                             name='High', hoverinfo='skip', showlegend=False))
     fig.add_trace(go.Scatter(x=r['dive'], y=r['remaining_low'], mode='lines', line=dict(width=0),
-                             fill='tonexty', fillcolor=band, name='Range',
-                             hovertemplate='%{y:.0f}'))
+                             fill='tonexty', fillcolor=band, name='Range', hoverinfo='skip'))
     fig.add_trace(go.Scatter(x=r['dive'], y=r['remaining_mid'], mode='lines',
                              line=dict(color='rgb(31,119,180)', width=2), name='Estimate',
-                             hovertemplate='<b>%{y:.0f}</b>'))
+                             customdata=np.column_stack([r['remaining_low'], r['remaining_high']]),
+                             hovertemplate=('Dive %{x}<br><b>Expected: %{y:.0f}</b><br>'
+                                            'Min:      %{customdata[0]:.0f}<br>'
+                                            'Max:      %{customdata[1]:.0f}<extra></extra>')))
     return WritePlotImageFiles(
         id_str = 'energy_remaining_cycles',
         figure = fig,
