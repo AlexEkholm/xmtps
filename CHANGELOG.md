@@ -3,6 +3,19 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-08
+
+Python tools:
+
+- Remaining-cycles plot: usable energy 68 % of nominal, range 50-95 % (was 80 %, 65-95 %).
+  Backtested on the 92 floats that ran out of battery, the old values over-predicted the cycles
+  left by 1.4-1.9 times through most of a float's life; the new ones are unbiased (1.04-1.07)
+  and about three quarters of the floats end inside the range.
+- Remaining-cycles plot: a falling pump voltage is marked (red dashed line and label from the dive
+  where the highest pump voltage stays below 95 % of its early-life median for 3 dives; the title
+  ends "Pump voltage falling"). On the floats that ran out of battery it came a median 60 dives,
+  16 % of their dives, before the end, and caught the abrupt failures the energy estimate misses.
+
 ## 2026-11-07
 
 Python tools:

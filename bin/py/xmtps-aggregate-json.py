@@ -477,13 +477,22 @@ ENERGY_PACK_OVERRIDES[9062] = 'saft'       # startup 13.2 V, 2014-2016 batch; 13
 ENERGY_PACK_OVERRIDES.update({9179: 'tadiran', 9181: 'tadiran', 9207: 'tadiran'})
 ENERGY_SECONDS_PER_YEAR = 365.25 * 86400
 # Remaining-cycles estimate (energy_remaining_cycles): the usable share of the pack's nominal
-# energy, low / central / high, from the floats that ran out of battery (most used 65-95 % of
-# nominal); the controller drain's uncertainty (+-30 %), applied to each cycle's controller
+# energy, low / central / high, from the floats that ran out of battery: most used 50-95 % of
+# nominal, median about 67 %; backtested on 92 of them, 50 / 68 / 95 % removes the bias that
+# 65 / 80 / 95 % had (predicted / actual cycles left 1.4-1.9) and puts about three quarters of the
+# floats inside the range; the controller drain's uncertainty (+-30 %), applied to each cycle's controller
 # energy; and the number of latest dives whose median gives the energy and duration of a cycle on
 # the current mission.
-ENERGY_USABLE_FRACTION = (0.65, 0.80, 0.95)
+ENERGY_USABLE_FRACTION = (0.50, 0.68, 0.95)
 ENERGY_CONTROLLER_UNCERTAINTY = 0.30
 ENERGY_REMAINING_RECENT_DIVES = 10
+# Falling pump voltage, marked on the remaining-cycles plot: a run of ENERGY_VOLTAGE_FALL_DIVES dives
+# whose highest oil-pump voltage is below ENERGY_VOLTAGE_FALL_FRACTION of its median over the first
+# ENERGY_VOLTAGE_EARLY_DIVES dives. On the floats that ran out of battery it came a median 60 dives,
+# 16 % of their dives, before the end, and caught the abrupt failures the energy estimate misses.
+ENERGY_VOLTAGE_FALL_FRACTION = 0.95
+ENERGY_VOLTAGE_FALL_DIVES = 3
+ENERGY_VOLTAGE_EARLY_DIVES = 10
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
     ['phase_vac'],
     ['pump_vac', 'pump_vac_avg'],
@@ -14549,10 +14558,34 @@ def RemainingCycles(df, cycle_j):
         'nominal_j':      nominal,
         })
 
-def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float):
+def PumpVoltageFallDive(df_pump):
+    """Return (dive, v0, v_last) for the first positive dive after dive ENERGY_VOLTAGE_EARLY_DIVES
+    that starts a run of ENERGY_VOLTAGE_FALL_DIVES dives whose highest oil-pump voltage is below
+    ENERGY_VOLTAGE_FALL_FRACTION of its median over dives 1 to ENERGY_VOLTAGE_EARLY_DIVES (v0); v_last
+    is the latest dive's highest voltage. None when the voltage has not fallen or the pump data is
+    missing. On the floats that ran out of battery this flag came a median 16 % of their dives before
+    the end."""
+    if not isinstance(df_pump, pd.DataFrame) or len(df_pump) < 1 or 'volt' not in df_pump.columns:
+        return None
+    p = df_pump[['dive', 'volt']].apply(pd.to_numeric, errors='coerce').dropna()
+    v = p[p['dive'] > 0].groupby('dive')['volt'].max().sort_index()
+    n0 = ENERGY_VOLTAGE_EARLY_DIVES
+    if len(v) <= n0:
+        return None
+    v0 = float(v.iloc[:n0].median())
+    below = (v < ENERGY_VOLTAGE_FALL_FRACTION * v0).values
+    run = 0
+    for i in range(n0, len(v)):
+        run = run + 1 if below[i] else 0
+        if run >= ENERGY_VOLTAGE_FALL_DIVES:
+            return int(v.index[i - run + 1]), v0, float(v.iloc[-1])
+    return None
+
+def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float, df_pump=None):
     """Write energy_remaining_cycles (see WriteEnergyPlots) from the 'energy' aggregate's positive
     dives df and their energy without storage cycle_j; return its figure metadata, or None when the
-    pack energy is unknown."""
+    pack energy is unknown. With the 'pump' aggregate df_pump, a falling pump voltage
+    (PumpVoltageFallDive) is marked by a dashed line from that dive and noted in the title."""
     r = RemainingCycles(df, cycle_j)
     if r is None:
         return None
@@ -14571,6 +14604,9 @@ def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float):
             title += ', about {:.1f} years ({:.1f}–{:.1f})'.format(*[ x / ENERGY_SECONDS_PER_YEAR for x in t ])
         else:
             title += ', about {:.0f} days ({:.0f}–{:.0f})'.format(*[ x / 86400 for x in t ])
+    fall = PumpVoltageFallDive(df_pump)
+    if fall is not None:
+        title += '. Pump voltage falling'
     # one short line: the PNG images keep only a 40 px top margin and are 780 px wide (small)
     sub = ('Used {:.0f}% of the {:.2f} MJ {}pack; {:.1f} kJ, {:.1f} days a cycle (last {} dives); '
            'range: usable {:.0f}–{:.0f}%, controller ±{:.0f}%').format(
@@ -14600,6 +14636,16 @@ def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float):
                              hovertemplate=('Dive %{x}<br><b>Expected: %{y:.0f}</b><br>'
                                             'Min:      %{customdata[0]:.0f}<br>'
                                             'Max:      %{customdata[1]:.0f}<extra></extra>')))
+    if fall is not None:
+        dive, v0, v_last = fall
+        warn = 'rgb(214,39,40)'
+        fig.add_vline(x=dive, line=dict(color=warn, width=1.5, dash='dash'))
+        right = dive > r['dive'].min() + 0.6 * (r['dive'].max() - r['dive'].min())   # label left of a late line
+        fig.add_annotation(x=dive, y=1, yref='paper', xanchor='right' if right else 'left', yanchor='top',
+                           xshift=-4 if right else 4, showarrow=False, align='right' if right else 'left',
+                           font=dict(color=warn, size=12),
+                           text='Pump voltage below {:.0f}% of early life<br>since dive {} ({:.1f} → {:.1f} V)'.format(
+                               100 * ENERGY_VOLTAGE_FALL_FRACTION, dive, v0, v_last))
     return WritePlotImageFiles(
         id_str = 'energy_remaining_cycles',
         figure = fig,
@@ -14734,7 +14780,8 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             figs_meta.append(fig_meta)
 
         # cycles left on the current mission, after each dive
-        fig_meta = WriteRemainingCyclesPlot(float_id, df, bar_total, dpath_float)
+        fig_meta = WriteRemainingCyclesPlot(float_id, df, bar_total, dpath_float,
+                                            float_aggregate_data.get('pump'))
         if fig_meta is not None:
             figs_meta.append(fig_meta)
 
