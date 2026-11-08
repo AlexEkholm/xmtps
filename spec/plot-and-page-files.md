@@ -318,11 +318,11 @@ Input: `surface`. Time series plots have x "Time [seconds]" and one line per div
 
 ### 3.12 Satcom (`WriteSatcomPlots`, category `satcom`)
 
-Input: `sbd`, `gps`, `iridium_position`, summary. Default size `fig2`. "before descent" markers are red (`rgba(255,69,69,0.7)`), "after ascent" blue (`rgba(69,69,255,0.7)`).
+Input: `sbd`, `sbd_session`, `gps`, `iridium_position`, summary. Default size `fig2`. "before descent" markers are red (`rgba(255,69,69,0.7)`), "after ascent" blue (`rgba(69,69,255,0.7)`).
 
 | ID | Title | Size | Page | Contents |
 |---|---|---|---|---|
-| `satcom` | Satcom | `figWideXL` | Satcom | x: date (UTC); y: time of day (UTC), plotted on the dummy date 2021-02-12 with a range from 23:00 the day before to 01:00 the day after. Markers: "Iridium TX" (SBD messages with MTMSN 0, red), "Iridium TX+RX" (MTMSN > 0, i.e. a mobile-terminated message was received, blue), "GPS" (green). |
+| `satcom` | Satcom | `figWideXL` | Satcom | x: date (UTC); y: time of day (UTC), plotted on the dummy date 2021-02-12 with a range from 23:00 the day before to 01:00 the day after. Markers, in the colors of fmtps: "Iridium empty" (empty uploads from `_sbd_session`, yellow `rgba(255,220,0,0.8)`), "Iridium failed" (failed transfers, red `rgba(255,69,69,0.7)`), "Iridium TX" (SBD messages with MTMSN 0, purple `rgba(160,69,220,0.7)`; red until 2026-11-07), "Iridium TX+RX" (MTMSN > 0, i.e. a mobile-terminated message was received, blue `rgba(69,69,255,0.7)`), "GPS" (green `rgb(69,255,69)`). The message markers are size 16 and GPS size 8, all with a black 0.5 px outline. The empty and failed markers are drawn first, under the messages with data, and larger (size 24; fmtps uses 16), since a failed transfer is minutes before its retry: they show as a yellow or red ring around it; their hover gives the dive, time, position ± CEP, MOMSN and session status. |
 | `satcom_gps_ttf` | GPS Time-to-fix (TTF) | `fig2` | Satcom | x: "Dive"; y: "TTF [seconds]". |
 | `satcom_gps_cno` | GPS Carrier-to-Noise (CNO) Ratio | `fig2` | Satcom | y: "CNO [dBHz]"; average with min./max. lines. Not written when every fix it shows (`idx` 0–2) has a CNO of 0 (unset); the float page then shows `position_all` in its place. |
 | `satcom_gps_nsat` | GPS No. Satellites | `fig2` | Satcom | y: "No. Satellites". |

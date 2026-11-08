@@ -18,7 +18,27 @@ Python tools:
 
 ## 2026-11-07
 
+Decoder:
+
+- Empty Iridium messages and failed transfers are listed. The gateway sends a mail without an SBD
+  attachment for an empty upload (session status 0 or 2) and for a failed transfer (any other
+  status, mostly 13, Incomplete Transfer). These were kept only as a RAW `-incomplete-` file and a
+  database row. Two new listing lines, `SBE` (empty) and `SBF` (failed), list them after the `SBT`
+  lines: MOMSN, MTMSN, session status, time, position, CEP and the status text. A failed transfer
+  goes with the dive of its retry (the message with the same MOMSN), an empty upload with the dive
+  of the nearest message in time, within 24 hours. In production about 95% of these mails are
+  failed transfers.
+
 Python tools:
+
+- `SBE` and `SBF` lines are read into the dive JSON as `sbd_empty` and `sbd_failed` (new class
+  `SbdSession`), and aggregated into the new `<serial>_sbd_session.json` (column `kind`: `empty`
+  or `failed`). They are not in `_sbd`, so the message counts, sizes, positions and energy are
+  unchanged.
+- Plots: the satcom plot marks empty uploads (yellow) and failed transfers (red) in the colors of
+  fmtps, under the messages with data and larger, so that a failed transfer shows as a red ring
+  around its retry a few minutes later. The "Iridium TX" markers are now purple, as in fmtps, so
+  that red only means failed.
 
 - Plots: the remaining-cycles hover label shows the expected, minimum and maximum cycles
   left after the dive, in one label on the estimate line.

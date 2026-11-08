@@ -202,8 +202,17 @@ void XFloatMailProcessingService::ProcessMailMsg(const shared_ptr<XFloatMailMess
     // only decoded once it is saved.
     msg->SaveObjectToDatabase();
 
+    // An Iridium session without SBD data (an empty upload or a failed transfer) is not decoded,
+    // but passed on so that it is listed with its dive (SBE and SBF lines).
+    if(msg->is_session_without_data()) {
+
+      linf() << (msg->is_failed_transfer() ? "Failed Iridium transfer" : "Empty Iridium message")
+             << " (session status " << msg->sbd_session_status_code() << ").";
+      if(push)
+        XFloatTelemetryDecoderService::MsgDecodingQueuePush(msg);
+
     // Check if the message attachment is valid.
-    if(!msg->sbd_data_is_valid())
+    } else if(!msg->sbd_data_is_valid())
 
       lwrn() << "Ignoring mail message with invalid binary SBD attachment.";
 

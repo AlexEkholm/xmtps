@@ -449,6 +449,8 @@ so far. The Python tools (`xmtps-list2json.py`) parse these files.
 | `LIS` | Listing details | Serial number, dive, DAC ID, IMEI, WMO ID. |
 | `SBD` | SBD messages | One line per message: size, IMEI, MOMSN, MTMSN, packet ID, session time and position, CEP. |
 | `SBT` | SBD data by message type | One line per X-message type in the dive's SBD data: blobs, bytes, share of the total, and for the compressed sensor series the values carried, their size as plain counts and the compression ratio; then the packet frame, any unparsed bytes and a `total` line. |
+| `SBE` | Empty Iridium message | An Iridium session in which the float sent no data (status 0 or 2; the gateway's mail has no attachment). Listed with the dive of the nearest message in time. |
+| `SBF` | Failed Iridium transfer | An Iridium session that failed (any other status, mostly 13, Incomplete Transfer). Listed with the dive of its retry, the message with the same MOMSN. |
 | `GPS` | GPS | GPS fixes: time, position, time to fix, satellites, SNR, HDOP, status. |
 | `A` | Argo data | Mission phase, pressures, durations, cycle timing and sensor gains and offsets (`midx` 0–5). |
 | `PRC` | Pressure correction | Surface pressure offset (`presOffset`), whether it is valid, and the dives and samples it comes from, then the dive's uncorrected surface pressure min (outliers excluded), mean, max and standard deviation; a note above it says whether it was subtracted from this listing's pressures and how to recover the raw ones (see [Surface pressure offset correction](#surface-pressure-offset-correction)). |
@@ -690,6 +692,7 @@ part of the format (`json_vers`, currently `0.11`, identifies it). Missing value
 | `pump` | `Pump` | Pump actions: `pres`, `time` (s), `volt`, `curr` (battery voltage and current), `vac`, `power`, `energy` (drawn from the batteries). |
 | `gps`, `sbd` | lists of `Gps`, `Sbd` | GPS fixes and the dive's SBD messages (position, CEP, MOMSN, packet ID, size). |
 | `sbd_types` | list of `SbdType` | The dive's SBD data by message type, from the `SBT` lines (empty for listings before build 3352). |
+| `sbd_empty`, `sbd_failed` | list of `SbdSession` | Empty Iridium messages and failed transfers, from the `SBE` and `SBF` lines: MOMSN, MTMSN, session status and its text, time, position and CEP. |
 | `wave` | `Wave` | Wave spectra (`Szz_g` … in g²/Hz, `Szz` … in m²/Hz), directional moments and derived values: significant wave height `swh` (m), periods (s), mean direction `mwd` (°). Bins not received are NaN. The displacement spectra have the noise-floor mask (bins where `Szz_g` is below 0.0005 g²/Hz are zeroed) and the low-frequency response correction (cosine taper, [f0, w] = [0.02622, 0.08951] Hz) applied alike to all six spectra. Directions are clockwise from true north (magnetic north when the declination is unavailable) and give the direction the waves propagate toward, not from. A dive without a valid GPS fix uses the declination at the float's most recent valid fix after deployment. |
 | `mission` | `MissionParameters` | Firmware and configuration versions, CTD type, `parameters` (`{name: value}`) and `entries` (section, index, name, value, units of every `m` line). |
 | `engineering` | `Engineering` | One object per engineering section (`descent`, `drift`, `ascent`, `surface`, `ice`, `bit`) with an attribute per parameter, `errors` (error codes) and `extra` (columns not mapped to an attribute). |
@@ -716,6 +719,7 @@ Read one with `pandas.read_json(path, orient="split")`.
 | `_pump` | pump action | `pres`, `time`, `volt`, `curr`, `vac`, `power`, `energy` |
 | `_gps` | GPS fix | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `idx`, `ttf_sec`, `nsat`, `snr_min`, `snr_avg`, `snr_max`, `hdop`, `valid` (`false` for a fix that puts the float more than 2 m/s from the surfacings before and after it; left out of positions, displacements and the summary), `qc_reject` |
 | `_sbd` | SBD message | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `size_b`, `momsn`, `mtmsn`, `pid` |
+| `_sbd_session` | Iridium session without SBD data | `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `momsn`, `mtmsn`, `status`, `status_text`, `kind` (`empty` or `failed`) |
 | `_iridium_position` | dive | Iridium position composited from the dive's messages (CEP⁻²-weighted): time (with its range `dt_min_*`/`dt_max_*`), `lat`, `lon`, `cep_km` (GPS-calibrated: `sqrt(1 / sum(CEP^-2) + 1.55^2)`), `num_pos` |
 | `_profile_position` | dive | Position assigned to the profile: time, `lat`, `lon`, `cep_km`, `src` (`gps`; `iridium`, the composite, for a dive without a GPS fix when its `cep_km` is at most 2 km; or `none`) |
 | `_displacement_surface`, `_displacement_submerged` | dive | Displacement between two positions: `azi` (°), `dist_m`, `duration_s`, `speed_mps`, and `pos1_*`/`pos2_*` |

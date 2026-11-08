@@ -546,6 +546,10 @@ class Dive:
             sbd_types: the dive's SBD data by X-message type ([SbdType]), without the total; empty
                 for listings written before build 3352. JSON files written before it was added
                 have no such attribute.
+            sbd_empty: empty Iridium uploads ([SbdSession], SBE lines).
+            sbd_failed: failed Iridium transfers ([SbdSession], SBF lines). Both are empty for
+                listings without such lines; JSON files written before they were added have no
+                such attributes.
             surface: surface CTD samples (Surface).
             wave: wave spectra (Wave), or None; the attribute is deleted by PostProcess() if
                 the dive has no wave data.
@@ -566,6 +570,8 @@ class Dive:
         self.pump        = Pump()
         self.sbd         = []
         self.sbd_types   = []
+        self.sbd_empty   = []
+        self.sbd_failed  = []
         self.surface     = Surface()
         self.wave        = None
         self.microstructure = None
@@ -1125,6 +1131,30 @@ class Sbd(Position):
         self.momsn    = -1
         self.mtmsn    = -1
         self.pid      = -1
+
+class SbdSession(Position):
+    """An Iridium session without SBD data, positioned by the Iridium network: an empty upload
+    (the listing's SBE line, session status 0 or 2) or a failed transfer (SBF line, any other
+    status, mostly 13, Incomplete Transfer). The gateway sends a mail without an attachment for
+    both; the decoder lists it with the dive of the message it belongs to."""
+
+    def __init__(self):
+        """Initialize an empty session; -1 where not set.
+
+        Attributes:
+            momsn: mobile-originated message sequence number (a failed transfer repeats the MOMSN
+                of the message sent next).
+            mtmsn: mobile-terminated message sequence number.
+            status: Iridium session status code.
+            status_text: the gateway's text for the status, e.g. 'Incomplete Transfer'.
+
+        The time, lat, lon and cep_km (Iridium CEP radius in km) are inherited from Position.
+        """
+        Position.__init__(self)
+        self.momsn       = -1
+        self.mtmsn       = -1
+        self.status      = -1
+        self.status_text = ''
 
 class SbdType:
     """The SBD data of one X-message type in a dive (the listing's SBT line, build 3352 and later)."""

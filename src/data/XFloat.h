@@ -56,6 +56,10 @@ namespace argo {
 namespace iridium {
 namespace xfloat {
 
+/** The longest time between an Iridium session without SBD data and the message with data it is
+ *  matched to (see XFloat::FindSessionDive()); defined in XFloat.cpp. */
+extern const boost::posix_time::time_duration XFLT_SESSION_MATCH_WINDOW;
+
 /* Class Definition: */
 
 class XFloatTelemetryDecoderService;    // forward declaration
@@ -276,6 +280,12 @@ class XFloat:
      *  dive number is not below this one shows that the float was restarted. Kept in memory only.
      */
     int last_startup_dive_ = XFLT_DIVE_UNKNOWN;
+
+    /** The Iridium sessions without SBD data (empty uploads and failed transfers, see
+     *  XFloatMailMessage::is_session_without_data()) read in this run, kept only without the SQL
+     *  database, where they are looked up instead (see @ref GetMailMessagesNear()).
+     */
+    vector<shared_ptr<XFloatMailMessage> > sessions_without_data_;
 
     /** The reported instrument firmware version.
      *
@@ -644,6 +654,16 @@ class XFloat:
     shared_ptr<XFloatDiveData> GetCachedDiveData(int dive) const;
 
     shared_ptr<XFloatDiveData> StartNewStartupSession(int dive);
+
+    void AddSessionWithoutData(const shared_ptr<XFloatMailMessage>& msg);
+
+    vector<shared_ptr<XFloatMailMessage> > GetMailMessagesNear(
+        const ptime& from, const ptime& to, bool with_data) const;
+
+    int FindSessionDive(
+        const shared_ptr<XFloatMailMessage>& session,
+        const vector<shared_ptr<XFloatMailMessage> >& with_data,
+        bool require_momsn_match = false) const;
 
     /** The startup dive number of the last startup message decoded in this run. */
     int last_startup_dive() const {

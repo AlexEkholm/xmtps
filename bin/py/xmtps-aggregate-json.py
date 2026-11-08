@@ -967,7 +967,8 @@ def AggregateDiveData():
 
     For each float, concatenates the per-dive data into pandas DataFrames, one per key: 'ascent',
     'descent', 'drift', 'profile', 'pump', 'surface', 'gps', 'sbd', 'sbd_type' (the SBT lines;
-    empty for dives listed before build 3352), 'engineering', and 'wave' and
+    empty for dives listed before build 3352), 'sbd_session' (the empty Iridium uploads and failed
+    transfers, SBE and SBF lines, with kind 'empty' or 'failed'), 'engineering', and 'wave' and
     'wave_spectra' (both removed when either is empty), and 'microstructure' and
     'microstructure_bands' (MAPLe spectra records and bands of micro-ALTO floats; only when some
     dive has them). 'mission', 'engineering_data' (all
@@ -1113,6 +1114,19 @@ def AggregateDiveData():
                                                  'momsn',
                                                  'mtmsn',
                                                  'pid',
+                                                 ]) ,
+                    'sbd_session':
+                        pd.DataFrame(columns = [ 'dive',
+                                                 'dt_epoch',
+                                                 'dt_str',
+                                                 'lat',
+                                                 'lon',
+                                                 'cep_km',
+                                                 'momsn',
+                                                 'mtmsn',
+                                                 'status',
+                                                 'status_text',
+                                                 'kind',
                                                  ]) ,
                     'sbd_type':
                         pd.DataFrame(columns = [ 'dive',
@@ -1747,6 +1761,28 @@ def AggregateDiveData():
                                 }
                             )
                             float_aggregate_data['sbd_type'] = AppendRows(float_aggregate_data['sbd_type'], df_sbd_type)
+
+                        # Iridium sessions without SBD data (SBE and SBF lines); absent from older
+                        # dive JSON files
+                        sessions = ([ ('empty', s) for s in (getattr(dive_data, 'sbd_empty', None) or []) ]
+                                    + [ ('failed', s) for s in (getattr(dive_data, 'sbd_failed', None) or []) ])
+                        if sessions:
+                            df_sbd_session = pd.DataFrame(
+                                {
+                                    'dive':     np.array([dive_num]*len(sessions), dtype='int'),
+                                    'dt_epoch': np.array([s.dt_epoch for _, s in sessions], dtype='int'),
+                                    'dt_str':   np.array([s.dt_str for _, s in sessions], dtype='str'),
+                                    'lat':      np.array([s.lat for _, s in sessions], dtype='float'),
+                                    'lon':      np.array([s.lon for _, s in sessions], dtype='float'),
+                                    'cep_km':   np.array([s.cep_km for _, s in sessions], dtype='float'),
+                                    'momsn':    np.array([s.momsn for _, s in sessions], dtype='int'),
+                                    'mtmsn':    np.array([s.mtmsn for _, s in sessions], dtype='int'),
+                                    'status':   np.array([s.status for _, s in sessions], dtype='int'),
+                                    'status_text': np.array([s.status_text for _, s in sessions], dtype='str'),
+                                    'kind':     np.array([k for k, _ in sessions], dtype='str'),
+                                }
+                            ).sort_values('dt_epoch', kind='stable')
+                            float_aggregate_data['sbd_session'] = AppendRows(float_aggregate_data['sbd_session'], df_sbd_session)
 
                         
                         # TODO Get summary data
@@ -2960,6 +2996,15 @@ def WriteAggregateJsonFiles():
                 
                 logger.debug('Writing aggregegate SBD file: ' + fpath)
                 float_aggregate_data['sbd'].to_json(fpath, orient='split', index=False)
+
+            # Write aggregate Iridium sessions without SBD data file
+
+            if 'sbd_session' in float_aggregate_data:
+                fpath = os.path.join(dpath_float, '{}_sbd_session.json'.format(float_id))
+                fpath = re.sub('\\\\', '/', fpath)
+
+                logger.debug('Writing aggregate Iridium session file: ' + fpath)
+                float_aggregate_data['sbd_session'].to_json(fpath, orient='split', index=False)
 
             # Write aggregate SBD data by message type file
 
@@ -11274,7 +11319,8 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
     Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
     max_dive) and uses float_id, float_aggregate_data, dpath_float and dives.
 
-    Plots the 'sbd', 'sbd_type', 'gps', 'iridium_position' and 'summary' data as satcom, satcom_gps_ttf,
+    Plots the 'sbd', 'sbd_type', 'sbd_session' (empty uploads and failed transfers, as markers on
+    satcom), 'gps', 'iridium_position' and 'summary' data as satcom, satcom_gps_ttf,
     satcom_gps_cno, satcom_gps_nsat, satcom_gps_hdop, satcom_gps_fix_cep, satcom_sbd_count,
     satcom_sbd_data_size (stacked by message type), satcom_sbd_data_type (one-row stacked bar of
     the total by message type; only with SBT data), satcom_sbd_data_size_avg and satcom_iridium_fix_cep_avg
@@ -11689,7 +11735,53 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 )
             
             # Add traces to figures
-            
+
+            # Iridium sessions without SBD data, in the fmtps colors: empty uploads yellow and
+            # failed transfers red, drawn first so the messages with data cover them. A failed
+            # transfer is minutes before its retry, so its marker is larger (24, not 16) and shows
+            # as a ring around the retry's
+            df_ses = float_aggregate_data.get('sbd_session')
+            if isinstance(df_ses, pd.DataFrame) and len(df_ses):
+                for kind, label, color in (('empty', 'Iridium empty', 'rgba(255,220,0,0.8)'),
+                                           ('failed', 'Iridium failed', 'rgba(255,69,69,0.7)')):
+                    d = df_ses[df_ses['kind'] == kind]
+                    if len(d) < 1:
+                        continue
+                    figs['satcom'].add_trace(go.Scatter(
+                        x = d['dt_str'],
+                        y = [ dateutil.parser.parse('2021-02-12 '+x[11:19]) for x in d['dt_str'].values ],
+                        customdata=np.stack(
+                            (
+                                d['dive'],
+                                d['momsn'],
+                                d['status'],
+                                d['status_text'],
+                                d['lat'],
+                                d['lon'],
+                                d['cep_km'],
+                                ),
+                            -1
+                            ),
+                        hovertemplate='<br>'.join([
+                            'Dive <b>%{customdata[0]}</b>: ' + label,
+                            '%{x|%Y-%m-%d %H:%M:%S}Z',
+                            '%{customdata[4]:.3f}°N %{customdata[5]:.3f}°E ± %{customdata[6]} km',
+                            'MOMSN = %{customdata[1]}',
+                            'status = %{customdata[2]} (%{customdata[3]})',
+                            '<extra></extra>',
+                            ]),
+                        name=label,
+                        marker=dict(
+                            color=color,
+                            line=dict(
+                                color='rgb(0,0,0)',
+                                width=0.5,
+                                ),
+                            size=24,
+                            ),
+                        mode='markers',
+                        ))
+
             figs['satcom'].add_trace(go.Scatter(
                 x = df_sbd['dt_str'][df_sbd['mtmsn'] == 0],
                 y = [ dateutil.parser.parse('2021-02-12 '+x[11:19]) for x in df_sbd['dt_str'][df_sbd['mtmsn'] == 0].values ],
@@ -11716,7 +11808,8 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                     ]),
                 name='Iridium TX',
                 marker=dict(
-                    color='rgba(255,69,69,0.7)',
+                    # purple, as in fmtps: red marks the failed transfers
+                    color='rgba(160,69,220,0.7)',
                     line=dict(
                         color='rgb(0,0,0)',
                         width=0.5,

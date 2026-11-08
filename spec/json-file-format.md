@@ -184,6 +184,8 @@ The repository copy `example/json/dives/9303_0440.json` is in the same format bu
 | `pump` | `Pump` | Pump runs (3.10). |
 | `sbd` | list of `Sbd` | Iridium SBD messages of the dive, in listing order (3.12). |
 | `sbd_types` | list of `SbdType` | The dive's SBD data by X-message type, from the `SBT` lines without the `total` (3.12.1). Empty for listings written before build 3352; absent from files written before the tools read `SBT` (2026-11-04), which readers must allow (`json_vers` was not changed). |
+| `sbd_empty` | list of `SbdSession` | Empty Iridium uploads assigned to the dive, from the `SBE` lines (3.12.2). |
+| `sbd_failed` | list of `SbdSession` | Failed Iridium transfers assigned to the dive, from the `SBF` lines (3.12.2). Both lists are empty for listings without such lines; absent from files written before 2026-11-07, which readers must allow (`json_vers` was not changed). |
 | `surface` | `Surface` | Surface time series and pressure correction (3.9). |
 | `wave` | `Wave` | Wave spectra and statistics (3.15). The key is absent when the listing has no `WVS` line. |
 | `microstructure` | `Microstructure` | MAPLe microstructure files and channels of micro-ALTO floats (3.16). The key is absent when the listing has no microstructure lines. |
@@ -412,6 +414,18 @@ One object per `SBT` line except `total` ([listing-file-format.md 6.1](listing-f
 | `raw_b` | int | bytes | Size without compression, field 8. |
 
 The `pct` and `ratio` fields are not stored; they follow from `size_b` and `raw_b`.
+
+#### 3.12.2 `SbdSession`
+
+One object per `SBE` or `SBF` line ([listing-file-format.md 6.2](listing-file-format.md#62-sbe-sbf-empty-iridium-messages-and-failed-transfers)): an Iridium session for which the gateway sent a mail without SBD data. An `SBE` line (empty upload, status 0 or 2) goes to the dive's `sbd_empty`, an `SBF` line (failed transfer, any other status) to `sbd_failed`. Extends `Position` (3.2), from the date/time, position and CEP fields.
+
+| Attribute | Type | Units | Contents and source |
+|---|---|---|---|
+| `momsn` | int | | MOMSN, field 5. A failed transfer has the MOMSN of its retry. |
+| `mtmsn` | int | | MTMSN, field 6. |
+| `status` | int | | Iridium session status code, field 7. |
+| `status_text` | string | | The gateway's text for the status, after `#` (for example `Incomplete Transfer`). |
+| `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km` | | | As in `Sbd` (3.12): session time, Iridium position and CEP, fields 8 to 10. |
 
 ### 3.13 `MissionParameters`
 
@@ -829,7 +843,7 @@ Each file is one pandas DataFrame written with `DataFrame.to_json(path, orient='
 
 | File | Written when | Rows |
 |---|---|---|
-| `_ascent`, `_descent`, `_drift`, `_profile`, `_pump`, `_sbd`, `_surface`, `_gps`, `_engineering`, `_profile_position`, `_iridium_position`, `_displacement_submerged`, `_displacement_surface`, `_cycle_timing` | always (possibly with no rows) | see each section |
+| `_ascent`, `_descent`, `_drift`, `_profile`, `_pump`, `_sbd`, `_sbd_type`, `_sbd_session`, `_surface`, `_gps`, `_engineering`, `_profile_position`, `_iridium_position`, `_displacement_submerged`, `_displacement_surface`, `_cycle_timing` | always (possibly with no rows) | see each section |
 | `_mission` | some dive has `mission.fwver` or `mission.parameters` | dive with mission data |
 | `_engineering_data` | always when the float has a dive | dive |
 | `_engineering_errors` | some dive has an `errors` entry | error line |
@@ -943,6 +957,8 @@ One row per SBD message of every dive, including negative dives and messages wit
 | `momsn`, `mtmsn`, `pid` | int | |
 
 `_sbd_type` (written since 2026-11-04): one row per `SbdType` of every dive, in read order, the same columns as 3.12.1 plus `dive`: `dive`, `ids`, `name`, `nblob`, `size_b`, `nvalues`, `raw_b`. Dives without `SBT` lines have no rows; the file has only the header if no dive has any.
+
+`_sbd_session` (written since 2026-11-07): one row per `SbdSession` of every dive (3.12.2), the empty uploads and failed transfers, each dive's rows in session time order. Columns `dive`, `dt_epoch`, `dt_str`, `lat`, `lon`, `cep_km`, `momsn`, `mtmsn`, `status`, `status_text`, and `kind`: `empty` (from `sbd_empty`) or `failed` (from `sbd_failed`). These rows are not in `_sbd`, so the counts, sizes, CEP statistics, positions and energy that use `_sbd` are unchanged. The file has only the header if no dive has any.
 
 ### 4.11 `_engineering` and `_engineering_data`
 

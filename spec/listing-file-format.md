@@ -11,7 +11,7 @@ Status: written on 2026-10-30 from the source tree (version 1.0, after build 333
 3. [Lexical conventions](#3-lexical-conventions)
 4. [Section order](#4-section-order)
 5. [Header block: title, completeness, `XSV`, `LIS`](#5-header-block-title-completeness-xsv-lis)
-6. [Iridium SBD messages: `SBD`, `SBT`](#6-iridium-sbd-messages-sbd-sbt)
+6. [Iridium SBD messages: `SBD`, `SBT`, `SBE`, `SBF`](#6-iridium-sbd-messages-sbd-sbt-sbe-sbf)
 7. [Position data: `APS`, `GPS`](#7-position-data-aps-gps)
 8. [Dive data](#8-dive-data)
 9. [Engineering data: `E05` to `E0C`, `e0A`, `e0c`](#9-engineering-data-e05-to-e0c-e0a-e0c)
@@ -138,7 +138,7 @@ The column headers are exact text. Units are in parentheses in headers and in sq
 | # | Top-level banner (`=`) | Subsections (`-`) | Condition | Tags |
 |---|---|---|---|---|
 | 1 | `Intermediate Listing for Float #<serial>, Dive #<dive>` | `Dive Data Completeness`, `XMTPS Software Version`, `Listing Details` | always | `XSV`, `LIS` |
-| 2 | `Iridium Short-Burst Data (SBD) Message(s)` | `SBD Data by Message Type` (after the `SBD` lines; build 3352 and later) | the dive has at least one mail message | `SBD`, `SBT` |
+| 2 | `Iridium Short-Burst Data (SBD) Message(s)` | `SBD Data by Message Type` (after the `SBD` lines; build 3352 and later), then `Empty Iridium Messages (no SBD data)` and `Failed Iridium Transfers (no SBD data)` (each only if the dive has one; build 3392 and later) | the dive has at least one mail message | `SBD`, `SBT`, `SBE`, `SBF` |
 | 3 | `Position Data` | `Acoustic Position` (if any 0xCA blob), `GPS` (if any GPS fix) | the dive has a GPS fix or a mail message (`HasPositionData()`) | `APS`, `GPS` |
 | 4 | `Dive Data` | `Argo Data`, `Pressure Correction`, `Fall Time-Series Data`, `Drift Data`, `Profile Data (Binned) - Sensor Columns`, `Profile Data (Binned)`, `Profile Data (Unbinned)`, `Valve Data`, `Pump Data`, `Rise Time-Series Data`, `Surface Time-Series Data`, `Surface Time-Series Data - Derived Fields`, `Ocean Surface Wave-Field Data` | drift data, a complete binned or unbinned profile, fall or rise data, surface data, or wave data (`HasDiveData()`) | `A`, `PRC`, `F`/`f`, `D`/`d`, `PRD`/`prd`, `PRO`/`pro`, `PRU`/`pru`, `VLV`/`vlv`, `PMP`/`pmp`, `R`/`r`, `SFC`/`sfc`, `SFD`, `WVS`/`wvs`/`wvm` |
 | 5 | `Engineering Data` | `Engineering (Abort)`, `(BIT failed)`, `(BIT passed)`, `(Descent)`, `(Diagnostic Dive)`, `(Park/Drift)`, `(Ascent)`, `(Ice)`, `(Standard Dive)`, `(Surface)` | any engineering message except ice (`HasEngineeringData()`; section 18) | `E05`, `E06`, `E07`, `E08`, `E09`, `E0C`, `e0c`, `E0A`, `e0A` |
@@ -253,7 +253,7 @@ Format `LIS %5d %4d   %04d %015d %07d`.
 
 Parser: reads SN (`x[1]`), dive (`x[2]`), DAC-ID (`x[3]`) and WMO-ID (`x[5]`); the IMEI is ignored. Reading `LIS` also triggers the up-to-date check: without `--force`, the listing is skipped if its JSON file is newer (or exists at all, with `--skip`).
 
-## 6. Iridium SBD messages: `SBD`, `SBT`
+## 6. Iridium SBD messages: `SBD`, `SBT`, `SBE`, `SBF`
 
 Top-level section `Iridium Short-Burst Data (SBD) Message(s)`. One line per mail message assigned to the dive, in ascending MOMSN order (`XFloatDiveData::AssignMailMessage`, `src/data/XFloatMailMessage.cpp`). Retransmissions (same SBD bytes under a new MOMSN) are listed too, so a packet ID can appear twice. Writer: `XFloatMailMessage::GenerateListingComment()` and `GenerateListingString()` (`src/data/XFloatMailMessage.h`).
 
@@ -329,6 +329,42 @@ Rows are in ID order, one per type present. They are followed by `frame` (the 8-
 Every other type is sent as fixed-width fields and gets ratio 1.00. The `total` ratio covers all SBD data, frame included.
 
 Parser: each `SBT` line except `total` becomes an `SbdType` in the dive's `sbd_types` ([json-file-format.md 3.12.1](json-file-format.md#3121-sbdtype)).
+
+### 6.2 `SBE`, `SBF`: empty Iridium messages and failed transfers
+
+Subsections `Empty Iridium Messages (no SBD data)` and `Failed Iridium Transfers (no SBD data)`, after the `SBT` lines (build 3392 and later). Each is printed only when the dive has such a session. They list the Iridium sessions for which the gateway sent a mail without an SBD attachment (`Message Size (bytes): 0`, [iridium-mail-format.md 5.1](iridium-mail-format.md)):
+
+- **Empty upload** (`SBE`): session status 0 (Transfer OK) or 2 (Transfer OK, Bad Location). The float ran a session but sent no data. The session takes its own MOMSN.
+- **Failed transfer** (`SBF`): any other status. In production almost all are 13 (Incomplete Transfer), a few 14 (SBD Protocol Error). The MOMSN does not advance, so the float's next message, its retry, has the same MOMSN.
+
+Writer: `XFloatMailMessage::GenerateSessionListingComment()` and `GenerateSessionListingString()` (`src/data/XFloatMailMessage.h`), called from `XFloatDiveData::GenerateListingString()`.
+
+```
+#      SN dive            IMEI MOMSN MTMSN status            date/time            position  CEP  status text
+#                                                                                    (km)
+SBF 11731    7 000000008600000   176     0     13 2026-09-27T07:52:44Z  +10.18628-52.82332    2  # Incomplete Transfer
+```
+
+Format `%3s %5d %4d %015d %5d %5d %6d %20s %19s %4d  # %s`, the first field being the tag.
+
+| Column | Format | Units | Meaning |
+|---|---|---|---|
+| SN | `%5d` | | Serial number. |
+| dive | `%4d` | | The dive the session is assigned to (see below). |
+| IMEI | `%015d` | | Last seven digits of the IMEI. |
+| MOMSN | `%5d` | | Mobile-originated message sequence number. |
+| MTMSN | `%5d` | | Mobile-terminated message sequence number (0 if none). |
+| status | `%6d` | | The mail's `Session Status` code. |
+| date/time | `%20s` | UTC | The mail's `Time of Session (UTC)`. |
+| position | `%19s` | degrees | The mail's Iridium unit location. |
+| CEP | `%4d` | km | The mail's `CEPradius`. |
+| status text | `# %s` | | The gateway's text for the status (comment, read by the parser). |
+
+**Dive assignment.** Such a mail has no X packet, so no dive number. A failed transfer goes with the message with data that has its MOMSN, its retry. An empty upload, and a failed transfer whose retry never arrived, goes with the message with data nearest in time. Only messages within 24 hours of the session count (`XFLT_SESSION_MATCH_WINDOW`; `XFloat::FindSessionDive()`, `XFloatDiveData::UpdateSessionsWithoutData()` in `src/data/XFloat.cpp`). Lines are in session time order.
+
+While the decoder runs, a failed transfer is listed once its retry arrives (the retry rewrites the dive's listing). An empty upload rewrites the listing of its dive when it arrives. With the SQL database the sessions are read from `XFloatMail` (`msg_is_valid` 0, `sbd_file_size_bytes` 0), so a reprocessed float lists all its stored sessions. Their `id_dive` stays -999 in the database. Without the database, only the sessions read in the same run are listed. A float that never sent a valid message has no dive, and its sessions are not listed.
+
+Parser: each line becomes an `SbdSession` in the dive's `sbd_empty` or `sbd_failed` ([json-file-format.md 3.12.2](json-file-format.md#3122-sbdsession)).
 
 ## 7. Position data: `APS`, `GPS`
 
@@ -1291,6 +1327,8 @@ The example in the repository, `example/listing/lis9303-0440.txt`, was written b
 | `m` | yes | idx, name, value, units, sub-group |
 | `mis` | no (unknown) | — |
 | `SBT` | `sbd_types` (`SbdType`), without `total` | ids, name, nBlob, bytes, nValues, rawBytes |
+| `SBE` | `sbd_empty` (`SbdSession`) | MOMSN, MTMSN, status, date/time, position, CEP, status text |
+| `SBF` | `sbd_failed` (`SbdSession`) | MOMSN, MTMSN, status, date/time, position, CEP, status text |
 | `SHX`, `shx` | skipped | — |
 | `X`, `SFP`, `sfp`, `M` (2014) | no (unknown) | — |
 

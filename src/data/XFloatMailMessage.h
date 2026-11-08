@@ -1494,6 +1494,81 @@ class XFloatMailMessage:
       return os.str();
     }
 
+    /** Check whether this message is an Iridium session without SBD data.
+     *
+     *  The gateway sends a mail without an attachment (Message Size 0) both for an empty upload, in
+     *  which the float sent no data (session status 0 or 2), and for a failed transfer (any other
+     *  status, mostly 13, Incomplete Transfer). Such a message has no X packet, so no dive number;
+     *  @ref XFloatDiveData::UpdateSessionsWithoutData() assigns it to a dive.
+     *
+     *  @return         TRUE for a message with a parsed session status, a Message Size of 0 and
+     *                  no valid SBD data.
+     */
+    bool is_session_without_data() const {
+
+      // Get an exclusive lock.
+      lock_guard<recursive_mutex> guard(mutex_);
+
+      return sbd_file_size_bytes_ == 0 && sbd_session_status_code_ >= 0 && !sbd_data_is_valid()
+          && !iridium_position_datetime().is_not_a_date_time();
+    }
+
+    /** Check whether this message is a failed transfer: a session without SBD data (see @ref
+     *  is_session_without_data()) whose status is neither 0 (Transfer OK) nor 2 (Transfer OK, Bad
+     *  Location). A failed transfer repeats the MOMSN of the message that is sent next.
+     *
+     *  @return         TRUE for a failed transfer, FALSE for an empty upload or a message with data.
+     */
+    bool is_failed_transfer() const {
+
+      // Get an exclusive lock.
+      lock_guard<recursive_mutex> guard(mutex_);
+
+      return is_session_without_data() && sbd_session_status_code_ != 0 && sbd_session_status_code_ != 2;
+    }
+
+    /** Get the listing file comment string for the empty-upload (SBE) or failed-transfer (SBF)
+     *  lines.
+     *
+     *  @return         The two comment lines.
+     */
+    static string GenerateSessionListingComment() {
+
+      return "#      SN dive            IMEI MOMSN MTMSN status            date/time            position  CEP  status text\n"
+             "#                                                                                    (km)";
+    }
+
+    /** Generate the listing file entry for an Iridium session without SBD data: an @c SBE line for
+     *  an empty upload or an @c SBF line for a failed transfer.
+     *
+     *  @param[in]      id_dive     The dive the session is assigned to (the message itself has
+     *                              no dive number).
+     *
+     *  @return         The listing file entry string.
+     */
+    const string GenerateSessionListingString(int id_dive) const {
+      ostringstream os;
+
+      try {
+
+        const format fmt("%3s %5d %4d %015d %5d %5d %6d %20s %19s %4d  # %s");
+
+        string status_text(sbd_session_status_string());
+        while(!status_text.empty() && isspace((unsigned char) status_text.back()))
+          status_text.pop_back();
+
+        os << format(fmt) % (is_failed_transfer() ? "SBF" : "SBE")
+                        % id_instrument() % id_dive % (id_imei() % 10000000)
+                        % id_sbd_momsn() % id_sbd_mtmsn() % sbd_session_status_code()
+                        % iridium_position_datetime_as_iso8601_string()
+                        % iridium_position_as_iso6709_string() % iridium_position_cep_radius()
+                        % status_text;
+
+      }CATCH_BLOCK("Failed to generate session listing string from mail message object!")
+
+      return os.str();
+    }
+
     const string GenerateSbdHexListingString() const {
 
       static const format fmt_char(" %2c");

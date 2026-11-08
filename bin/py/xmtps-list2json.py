@@ -37,7 +37,7 @@ import os
 import re
 
 # local
-from FloatClasses import DateTime, Dive, Drift, FloatId, Gps, Sbd, SbdType, Profile, Wave, Microstructure
+from FloatClasses import DateTime, Dive, Drift, FloatId, Gps, Sbd, SbdSession, SbdType, Profile, Wave, Microstructure
 import RhoLUT
 
 """
@@ -1091,6 +1091,28 @@ def ProcessListingFile(fpath_list):
                     
                     del x
                     del sbd
+
+                    continue
+
+                # Iridium sessions without SBD data: empty uploads (SBE) and failed transfers (SBF)
+
+                if re.match('^SB[EF] ', line):
+                    x = line.split('#', 1)
+                    text = x[1].strip() if len(x) > 1 else ''
+                    x = x[0].split()
+
+                    session             = SbdSession()
+                    session.momsn       = int(x[4])
+                    session.mtmsn       = int(x[5])
+                    session.status      = int(x[6])
+                    session.status_text = text
+                    session.dt_from_iso8601_str(x[7])
+                    session.pos_from_iso6709_str(x[8])
+                    session.cep_km      = int(x[9])
+                    (dive_data.sbd_failed if x[0] == 'SBF' else dive_data.sbd_empty).append(session)
+
+                    del x
+                    del session
 
                     continue
              

@@ -322,6 +322,12 @@ class XFloatDiveData:
      */
     static_vector<shared_ptr<XFloatMailMessage>, XMSG_MAX_MAIL> mail_messages_;
 
+    /** The Iridium sessions without SBD data assigned to this dive: empty uploads and failed
+     *  transfers (XFloatMailMessage::is_session_without_data()), in session time order. They carry
+     *  no data and are only listed (SBE and SBF lines). Set by @ref UpdateSessionsWithoutData().
+     */
+    vector<shared_ptr<XFloatMailMessage> > session_messages_;
+
     /** The number of SBD messages that have been received for this dive cycle.
      *
      */
@@ -642,6 +648,14 @@ class XFloatDiveData:
             int min_num_samples = 5);
 
     string GenerateListingString() const;
+
+    /** Get a copy of this dive's mail messages (the ones with data). */
+    vector<shared_ptr<XFloatMailMessage> > GetMailMessages() const {
+      lock_guard<recursive_mutex> guard(mutex_);
+      return vector<shared_ptr<XFloatMailMessage> >(mail_messages_.begin(), mail_messages_.end());
+    }
+
+    bool UpdateSessionsWithoutData();
 
     string GeneratePhyString() const;
 

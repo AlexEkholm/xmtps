@@ -214,9 +214,9 @@ The DAC and WMO identifiers of the message are copied from the float (`XFloat::G
 2. Resolve the serial (section 8); discard if out of range.
 3. Write the RAW file ([raw-file-format.md](raw-file-format.md)) and, if the SBD data is valid, the SBD file ([sbd-file-format.md](sbd-file-format.md)).
 4. Save the message to `XFloatMail` (`INSERT ... ON DUPLICATE KEY UPDATE`).
-5. If the SBD data is valid, queue it for decoding (stage 3). Otherwise log `Ignoring mail message with invalid binary SBD attachment.`
+5. If the SBD data is valid, queue it for decoding (stage 3). If the message is an Iridium session without SBD data (`Message Size (bytes): 0` with a parsed session status: an empty upload, status 0 or 2, or a failed transfer, any other status; `XFloatMailMessage::is_session_without_data()`), queue it too (build 3392 and later), to be listed with its dive but not decoded. Otherwise log `Ignoring mail message with invalid binary SBD attachment.`
 
-So a message with a valid header and a known float but invalid SBD data (an incomplete transfer) is still kept: it gets a RAW file named `...-incomplete-...` and a database row, but no SBD file and no decoding.
+So a message with a valid header and a known float but invalid SBD data (an incomplete transfer) is still kept: it gets a RAW file named `...-incomplete-...` and a database row, but no SBD file and no decoding. A session without SBD data is also listed, as an `SBE` (empty upload) or `SBF` (failed transfer) line in the listing of the dive it is assigned to ([listing-file-format.md 6.2](listing-file-format.md#62-sbe-sbf-empty-iridium-messages-and-failed-transfers)); its database row keeps `id_dive` -999.
 
 If saving fails because the SQL server is unavailable, the message is held and retried every 10 s (`XFLT_SQL_RETRY_MS`), and no new mail is fetched until the server is back. Any other failure drops the message (it is logged). With `sql.enable = 0` step 4 does nothing.
 

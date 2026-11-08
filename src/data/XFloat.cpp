@@ -1401,6 +1401,160 @@ shared_ptr<XFloatDiveData> XFloat::GetCachedDiveData(int dive) const {
   return it != dive2data_map_.end() ? it->second : shared_ptr<XFloatDiveData>();
 }
 
+/** The longest time between an Iridium session without SBD data and the message with data it is
+ *  matched to (see @ref XFloat::FindSessionDive()). Nearly all sessions are within half an hour of
+ *  their message; a few empty uploads in production were 14 hours from the nearest one.
+ */
+const time_duration XFLT_SESSION_MATCH_WINDOW(24, 0, 0);
+
+/** Keep an Iridium session without SBD data read in this run, for the runs without the SQL
+ *  database (with it, sessions are looked up in the database instead). A message already kept
+ *  (same message UID, if set, or same MOMSN and session time) is not added again.
+ *
+ *  @param[in]  msg         The session (see XFloatMailMessage::is_session_without_data()).
+ */
+void XFloat::AddSessionWithoutData(const shared_ptr<XFloatMailMessage>& msg) {
+
+  if(!msg)
+    return;
+
+  lock_guard<recursive_mutex> guard(mutex_);
+
+  // messages read from files have no UID (-1), so only a set UID counts
+  for(const shared_ptr<XFloatMailMessage>& x : sessions_without_data_)
+    if(x && ((x->id_msg_uid() >= 0 && x->id_msg_uid() == msg->id_msg_uid())
+        || (x->id_sbd_momsn() == msg->id_sbd_momsn()
+            && x->iridium_position_datetime() == msg->iridium_position_datetime())))
+      return;
+
+  sessions_without_data_.push_back(msg);
+}
+
+/** Get this float's mail messages with a session time in [from, to].
+ *
+ *  With the SQL database the messages are selected from it; without, they are taken from the dive
+ *  data objects (messages with data) or the sessions kept by @ref AddSessionWithoutData() read in
+ *  this run.
+ *
+ *  @param[in]  from        The earliest session time.
+ *  @param[in]  to          The latest session time.
+ *  @param[in]  with_data   TRUE for the valid messages (with an X packet), FALSE for the sessions
+ *                          without SBD data (XFloatMailMessage::is_session_without_data()).
+ *
+ *  @return     The messages, in no particular order.
+ */
+vector<shared_ptr<XFloatMailMessage> > XFloat::GetMailMessagesNear(
+    const ptime& from, const ptime& to, bool with_data) const {
+
+  vector<shared_ptr<XFloatMailMessage> > msgs;
+
+  try {
+
+    if(from.is_not_a_date_time() || to.is_not_a_date_time())
+      return msgs;
+
+    if(util::mysql::LocalMysqlConfiguration::is_sql_enabled()) {
+
+      ostringstream where;
+      where << "id_instrument = " << id_instrument()
+            << (with_data ? " AND msg_is_valid = 1" : " AND msg_is_valid = 0 AND sbd_file_size_bytes = 0")
+            << " AND iridium_position_datetime >= '" << bpt::to_iso_string(from) << "'"
+            << " AND iridium_position_datetime <= '" << bpt::to_iso_string(to) << "'";
+      for(const shared_ptr<XFloatMailMessage>& x : XFloatMailMessage::SelectObjectsFromDatabase(where.str()))
+        if(x && (with_data || x->is_session_without_data()))
+          msgs.push_back(x);
+      return msgs;
+    }
+
+    auto in_range = [&](const shared_ptr<XFloatMailMessage>& x) {
+      return x && !x->iridium_position_datetime().is_not_a_date_time()
+          && x->iridium_position_datetime() >= from && x->iridium_position_datetime() <= to;
+    };
+
+    // Copy the dive data objects first, so no dive is locked while the float is
+    vector<shared_ptr<XFloatDiveData> > dives;
+    {
+      lock_guard<recursive_mutex> guard(mutex_);
+      if(!with_data) {
+        for(const shared_ptr<XFloatMailMessage>& x : sessions_without_data_)
+          if(in_range(x))
+            msgs.push_back(x);
+        return msgs;
+      }
+      for(auto it = dive2data_map_.begin(); it != dive2data_map_.end(); ++it)
+        if(it->second)
+          dives.push_back(it->second);
+    }
+    for(const shared_ptr<XFloatDiveData>& d : dives)
+      for(const shared_ptr<XFloatMailMessage>& x : d->GetMailMessages())
+        if(in_range(x))
+          msgs.push_back(x);
+
+  } CATCH_BLOCK("Failed to get mail messages near a date/time!")
+
+  return msgs;
+}
+
+/** Find the dive an Iridium session without SBD data belongs to.
+ *
+ *  A failed transfer repeats the MOMSN of the message that is sent next, so it goes with the
+ *  message with data that has its MOMSN (the nearest in time, if several). An empty upload, and a
+ *  failed transfer without such a message, goes with the message with data nearest in time. Only
+ *  messages within @ref XFLT_SESSION_MATCH_WINDOW of the session count.
+ *
+ *  @param[in]  session                 The session (XFloatMailMessage::is_session_without_data()).
+ *  @param[in]  with_data               Messages with data to match against, for example from
+ *                                      @ref GetMailMessagesNear().
+ *  @param[in]  require_momsn_match     If TRUE, a failed transfer is only matched by its MOMSN:
+ *                                      while its retry has not arrived, it gets no dive.
+ *
+ *  @return     The dive number, or @ref XFLT_DIVE_UNKNOWN if there is no match.
+ */
+int XFloat::FindSessionDive(
+    const shared_ptr<XFloatMailMessage>& session,
+    const vector<shared_ptr<XFloatMailMessage> >& with_data,
+    bool require_momsn_match) const {
+
+  if(!session || session->iridium_position_datetime().is_not_a_date_time())
+    return XFLT_DIVE_UNKNOWN;
+
+  const ptime t(session->iridium_position_datetime());
+  const bool failed = session->is_failed_transfer();
+
+  shared_ptr<XFloatMailMessage> best_momsn, best_time;
+  time_duration gap_momsn, gap_time;
+
+  for(const shared_ptr<XFloatMailMessage>& x : with_data) {
+
+    if(!x || x->id_dive() == XFLT_DIVE_UNKNOWN || x->iridium_position_datetime().is_not_a_date_time())
+      continue;
+
+    time_duration gap(x->iridium_position_datetime() - t);
+    if(gap.is_negative())
+      gap = gap.invert_sign();
+    if(gap > XFLT_SESSION_MATCH_WINDOW)
+      continue;
+
+    if(failed && x->id_sbd_momsn() == session->id_sbd_momsn() && (!best_momsn || gap < gap_momsn)) {
+      best_momsn = x;
+      gap_momsn = gap;
+    }
+
+    // the earlier message wins a tie
+    if(!best_time || gap < gap_time
+        || (gap == gap_time && x->iridium_position_datetime() < best_time->iridium_position_datetime())) {
+      best_time = x;
+      gap_time = gap;
+    }
+  }
+
+  if(best_momsn)
+    return best_momsn->id_dive();
+  if(failed && require_momsn_match)
+    return XFLT_DIVE_UNKNOWN;
+  return best_time ? best_time->id_dive() : XFLT_DIVE_UNKNOWN;
+}
+
 /** Start a new startup session for a startup dive number.
  *
  *  A float that is restarted numbers its startup dives from -1 again, so a startup dive number
@@ -3015,7 +3169,26 @@ string XFloatDiveData::GenerateListingString() const {
             });
 
         XMSG_SECTION("SBD Data by Message Type");
-        os << GenerateSbdDataSummaryListingString() << endl;
+        os << GenerateSbdDataSummaryListingString();
+
+        // Iridium sessions without data: empty uploads (SBE) and failed transfers (SBF), before
+        // the blank line that ends the section
+        for(int failed = 0; failed < 2; ++failed) {
+          bool any = false;
+          for(const shared_ptr<XFloatMailMessage>& msg : session_messages_)
+            if(msg && msg->is_failed_transfer() == (failed == 1)) {
+              if(!any) {
+                if(failed)
+                  XMSG_SECTION("Failed Iridium Transfers (no SBD data)");
+                else
+                  XMSG_SECTION("Empty Iridium Messages (no SBD data)");
+                os << XFloatMailMessage::GenerateSessionListingComment() << endl;
+                any = true;
+              }
+              os << msg->GenerateSessionListingString(id_dive()) << endl;
+            }
+        }
+        os << endl;
 
       } CATCH_BLOCK("Failed to generate SBD data listing entry from dive data object!")
 
@@ -4121,6 +4294,68 @@ bool XFloatDiveData::SensorGainsAndOffsetsAreKnown() const {
  *  @throw          util::log::MessageException if an error occurs while writing the listing file.
  *
  */
+/** Find the Iridium sessions without SBD data that belong to this dive.
+ *
+ *  Takes the float's sessions without data (empty uploads and failed transfers) within
+ *  XFLT_SESSION_MATCH_WINDOW of this dive's messages, and keeps those that
+ *  XFloat::FindSessionDive() assigns to this dive, matching against the float's messages with data
+ *  in a window twice as wide. Without the SQL database only the messages read in this run are
+ *  seen. Call it without holding this dive's lock (the float's dives are read).
+ *
+ *  @return     TRUE if the set of sessions changed (the listing file is then marked out of date).
+ */
+bool XFloatDiveData::UpdateSessionsWithoutData() {
+
+  try {
+
+    shared_ptr<XFloat> inst(parent_instrument());
+    ptime first, last;
+    {
+      lock_guard<recursive_mutex> guard(mutex_);
+      for(const shared_ptr<XFloatMailMessage>& x : mail_messages_)
+        if(x && !x->iridium_position_datetime().is_not_a_date_time()) {
+          if(first.is_not_a_date_time() || x->iridium_position_datetime() < first)
+            first = x->iridium_position_datetime();
+          if(last.is_not_a_date_time() || x->iridium_position_datetime() > last)
+            last = x->iridium_position_datetime();
+        }
+    }
+    if(!inst || first.is_not_a_date_time())
+      return false;
+
+    vector<shared_ptr<XFloatMailMessage> > sessions(
+        inst->GetMailMessagesNear(first - XFLT_SESSION_MATCH_WINDOW, last + XFLT_SESSION_MATCH_WINDOW, false));
+    vector<shared_ptr<XFloatMailMessage> > mine;
+    if(!sessions.empty()) {
+      vector<shared_ptr<XFloatMailMessage> > with_data(inst->GetMailMessagesNear(
+          first - XFLT_SESSION_MATCH_WINDOW * 2, last + XFLT_SESSION_MATCH_WINDOW * 2, true));
+      for(const shared_ptr<XFloatMailMessage>& s : sessions)
+        if(inst->FindSessionDive(s, with_data) == id_dive())
+          mine.push_back(s);
+      stable_sort(mine.begin(), mine.end(),
+          [](const shared_ptr<XFloatMailMessage>& a, const shared_ptr<XFloatMailMessage>& b) {
+            return a->iridium_position_datetime() < b->iridium_position_datetime();
+          });
+    }
+
+    lock_guard<recursive_mutex> guard(mutex_);
+    bool changed = mine.size() != session_messages_.size();
+    for(size_t i = 0; !changed && i < mine.size(); ++i)
+      changed = mine[i]->id_sbd_momsn() != session_messages_[i]->id_sbd_momsn()
+          || mine[i]->iridium_position_datetime() != session_messages_[i]->iridium_position_datetime();
+    if(changed) {
+      linf() << "Dive " << id_dive() << ": " << mine.size()
+             << " Iridium session(s) without data (of " << sessions.size() << " near).";
+      session_messages_ = mine;
+      set_listing_file_updated(false);
+    }
+    return changed;
+
+  } CATCH_BLOCK("Failed to find the Iridium sessions without data for dive data object!")
+
+  return false;
+}
+
 void XFloatDiveData::WriteListingFile() {
 
   try {

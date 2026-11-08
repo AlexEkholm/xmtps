@@ -234,6 +234,9 @@ public:
 
             }CATCH_BLOCK("Failed to check dive data completeness!")
 
+            // The empty uploads and failed transfers listed with the dive (SBE and SBF lines)
+            dive_data->UpdateSessionsWithoutData();
+
             // Check if the dive is complete.
             if(dive_complete) {
 
@@ -357,6 +360,32 @@ public:
             // Check the message pointer.
             if(!msg)
                 EXC_THROW("Null pointer to mail message object!");
+
+            // An Iridium session without SBD data (empty upload or failed transfer) has no dive
+            // number: list it with the dive it belongs to, by rewriting that dive's listing file
+            // (XFloatDiveData::UpdateSessionsWithoutData() finds it there). A failed transfer
+            // waits for its retry, which has the same MOMSN and rewrites the listing.
+            if(msg->is_session_without_data()) {
+
+                xfloat = XFloat::GetFloat(msg->id_instrument());
+                if(!util::mysql::LocalMysqlConfiguration::is_sql_enabled())
+                    xfloat->AddSessionWithoutData(msg);
+                const ptime t(msg->iridium_position_datetime());
+                const int dive = xfloat->FindSessionDive(
+                        msg,
+                        xfloat->GetMailMessagesNear(t - XFLT_SESSION_MATCH_WINDOW, t + XFLT_SESSION_MATCH_WINDOW, true),
+                        true);
+                if(dive == XFLT_DIVE_UNKNOWN) {
+                    linf() << "No dive for the Iridium session without data (MOMSN "
+                           << msg->id_sbd_momsn() << ") yet.";
+                    return;
+                }
+                linf() << "Iridium session without data (MOMSN " << msg->id_sbd_momsn()
+                       << ") goes with dive " << dive << ".";
+                if((xdive = xfloat->GetDiveData(dive)))
+                    ProcessDiveData(xdive);
+                return;
+            }
 
             // Get the corresponding instrument and dive data objects
             xdive = (xfloat = XFloat::GetFloat(msg->id_instrument()))->GetDiveData(msg_id_dive = msg->id_dive());
