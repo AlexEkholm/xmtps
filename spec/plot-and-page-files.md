@@ -52,7 +52,7 @@ Top level of `<plots>` in production (2026-10-30):
 | `index.html` | `xmtps-generate-summary-page.py` | fleet summary page (section 5) |
 | `summary.json` | `xmtps-generate-summary-page.py` | the summary page's table as JSON (since 2026-11-03; [json-file-format.md](json-file-format.md) section 5.3) |
 | `engineering/` | `update-plots-service.sh` (`mkdir -p`) | `params.html`, `startup.html` (sections 6, 7) |
-| `img/` | installed by hand (2022-10-03) | status icons `s0.png`, `s1.png`, `s2.png` (section 9) |
+| `img/` | installed by hand (2022-10-03; `s3.png` 2026-11-08) | status icons `s0.png` to `s3.png` (section 9) |
 | `js/` | installed by hand (2025-11-18) | `datatables.min.js`, `datatables.min.css`; no page uses them (section 9) |
 
 ## 2. Per-float plot files
@@ -441,34 +441,33 @@ Written by `bin/py/xmtps-generate-summary-page.py` from all `<serial>_summary.js
 - `<title>Float Summary</title>`; no `<meta charset>`.
 - DataTables 1.12.1 with jQuery 3.6.0 from `https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js` and `.../dt-1.12.1/datatables.min.css`.
 - Inline script: elapsed times and auto refresh (5.4).
-- DataTables setup for `#stable`: sorted by column 9 (Last Report) descending, 10 rows per page, page lengths 10, 20, 50, 100, ALL.
+- DataTables setup for `#stable`: sorted by column 8 (Last Report) descending, 10 rows per page, page lengths 10, 20, 50, 100, ALL.
 - Inline CSS (`#top` max width 1100 px).
 
 ### 5.2 Body
 
 1. Heading `ALAMO/ALTO Float Summary`, and under it the links "Float Startup" (`engineering/startup.html`) and "Mission Parameters" (`engineering/params.html`), in `<div id="tlinks">`. The paths are relative and assume the production layout of section 11, with both pages in `engineering/` below the summary page.
-2. Map (`div#pit`, 390 × 420 px): a Plotly figure embedded as a `div` (`to_html(full_html=False, include_plotlyjs='cdn', div_id='plot')`), so it also loads plotly.js from the Plotly CDN. Orthographic globe centered on 30° N, 45° W; 15°/30° graticule; dashed lines at the tropics and polar circles; equator line. One marker per float at its latest valid GPS position (`latest.gps`), colored by days since the latest SBD message: green `rgb(123,255,123)` size 6 under 30 days, blue `rgb(123,123,255)` size 5 under 180 days, red `rgb(255,123,123)` size 4 otherwise. Hover shows the serial. Mode bar hidden. The map includes floats the table leaves out (it does not check the cycle or profiled distance).
+2. Map (`div#pit`, 390 × 420 px): a Plotly figure embedded as a `div` (`to_html(full_html=False, include_plotlyjs='cdn', div_id='plot')`), so it also loads plotly.js from the Plotly CDN. Orthographic globe centered on 30° N, 45° W; 15°/30° graticule; dashed lines at the tropics and polar circles; equator line. One marker per float at its latest valid GPS position (`latest.gps`), colored by status (`FloatStatus`, as in the table): orange `rgb(255,168,64)` size 6 PREDEPLOYMENT (last seen at WHOI), green `rgb(123,255,123)` size 6 under 30 days since the latest SBD message, blue `rgb(123,123,255)` size 5 under 180 days, red `rgb(255,123,123)` size 4 otherwise. Hover shows the serial. Mode bar hidden. The map includes floats the table leaves out (it does not check the cycle or profiled distance).
 3. Table `#stable` (class `stripe`), one row per float, most recent report first. A float is left out if `latest.cycle` < 1 or its `profdepthsum` is not positive. Production on 2026-10-30: 250 rows (40 ACTIVE, 11 OVERDUE, 199 ARCHIVED).
 4. Footer (section 8) on the left, and an "Auto Refresh" checkbox on the right.
 
 ### 5.3 Table columns
 
-Two header rows: `ID`, `WMO` (rowspan 2); `Summary` (6 columns); `Most Recent Cycle` (4 columns).
+Two header rows: `ID` (rowspan 2); `Summary` (6 columns); `Most Recent Cycle` (4 columns).
 
 | # | Header | Contents |
 |---|---|---|
-| 0 | ID | serial, linking to the relative URL `<serial>` (the float page directory) |
-| 1 | WMO | WMO ID, or `-` if not above 1 |
-| 2 | Type | `ALAMO` or `ALTO`, and the CTD type in small text |
-| 3 | Firmware | `v<MM>.<m>.<p>` from `fwver` (major two-digit), with the raw `fwver` in small text; `-` if `fwver` has fewer than 10 characters |
-| 4 | Deployed [UTC] | date of the deployment GPS fix (`YYYY-MM-DD`), or `-`; attribute `epoch` for the elapsed-time script |
-| 5 | Age [days] | `age` / 86400, no decimals; `-` if not positive |
-| 6 | Distance Profiled [km] | `profdepthsum` / 1000, one decimal |
-| 7 | Status | status icon and text, from days since the latest SBD message: `img/s2.png` ACTIVE (< 30), `img/s1.png` OVERDUE (< 180), `img/s0.png` ARCHIVED |
-| 8 | No. | latest cycle, or `-` if 9999 or more |
-| 9 | Last Report [UTC] | time of the latest SBD message (`YYYY-MM-DD HH:MM`); attribute `epoch` |
-| 10 | Depth [dBar] | deepest pressure of the latest dive: one decimal under 100, none otherwise; `-` if not in (0, 3000) |
-| 11 | Duration [hours] | duration of the latest cycle, one decimal; `-` if not positive |
+| 0 | ID | serial, linking to the relative URL `<serial>` (the float page directory), and under it the WMO ID in small text if it is above 1 (a separate WMO column until 2026-11-08) |
+| 1 | Type | `ALAMO` or `ALTO`, and in small text the CTD type, with `/WIMS` added (`RBR/WIMS`, `SBE/WIMS`, or `WIMS` alone without a CTD type) when the float's `<serial>_wave.json` next to its summary has a measurement with `slen` > 1 (`HasWimsData`; since 2026-11-08) |
+| 2 | Firmware | `v<MM>.<m>.<p>` from `fwver` (major two-digit), with the raw `fwver` in small text; `-` if `fwver` has fewer than 10 characters |
+| 3 | Deployed [UTC] | date of the deployment GPS fix (`YYYY-MM-DD`), or `-`; attribute `epoch` for the elapsed-time script |
+| 4 | Age [days] | `age` / 86400, no decimals; `-` if not positive |
+| 5 | Distance Profiled [km] | `profdepthsum` / 1000, one decimal |
+| 6 | Status | status icon and text (`FloatStatus`): `img/s3.png` PREDEPLOYMENT (orange) when the last known position is at WHOI; otherwise from days since the latest SBD message: `img/s2.png` ACTIVE (< 30), `img/s1.png` OVERDUE (< 180), `img/s0.png` ARCHIVED. Under it, in small grey text, the last known location (`LastLocation`): "WHOI" within 25 km of Woods Hole (41.524° N, 70.671° W), else the sea or ocean of the position from `bin/py/SeaNames.py` (since 2026-11-08). The position is the later valid one of `latest.gps` and `latest.sbd` (Iridium). The sea is the smallest Natural Earth marine area (`ne_10m_geography_marine_polys`, public domain, converted to `bin/py/data/marine-areas.json`: 292 named oceans, seas, gulfs, bays, straits and others, coordinates rounded to 0.01°) that contains it, else the area with the nearest vertex (a position on land or between areas). |
+| 7 | No. | latest cycle, or `-` if 9999 or more |
+| 8 | Last Report [UTC] | time of the latest SBD message (`YYYY-MM-DD HH:MM`); attribute `epoch` |
+| 9 | Depth [dBar] | deepest pressure of the latest dive: one decimal under 100, none otherwise; `-` if not in (0, 3000) |
+| 10 | Duration [hours] | duration of the latest cycle, one decimal; `-` if not positive |
 
 The Deployed and Last Report cells carry the same `id` (`deployed`, `last-report`) in every row; the script finds them with `querySelectorAll('#deployed')`.
 
@@ -556,9 +555,10 @@ No page uses a local script or stylesheet; all CSS is inline.
 
 | Asset | Location | Used by | Source |
 |---|---|---|---|
-| `img/s0.png` | `<plots>/img/` | summary (relative `img/`), mission page (`<plots-url>/img/`) | 7 × 7 px PNG, red `rgb(255,120,120)`: ARCHIVED. Not in the repository; installed on production 2022-10-03. |
+| `img/s0.png` | `<plots>/img/` | summary (relative `img/`), mission page (`<plots-url>/img/`) | 7 × 7 px PNG, red `rgb(255,120,120)`: ARCHIVED. Installed on production 2022-10-03; copies of all four icons are in `bin/py/img/` since 2026-11-08. |
 | `img/s1.png` | `<plots>/img/` | as above | 7 × 7 px, blue `rgb(120,120,255)`: OVERDUE. |
 | `img/s2.png` | `<plots>/img/` | as above | 7 × 7 px, green `rgb(120,255,120)`: ACTIVE. |
+| `img/s3.png` | `<plots>/img/` | summary page | 7 × 7 px, orange `rgb(255,168,64)` (`s0.png` recolored): PREDEPLOYMENT. Made 2026-11-08. |
 | `js/datatables.min.js`, `js/datatables.min.css` | `<plots>/js/` | none (the code that loads them, `/alamo/js/...`, is commented out) | local copy of DataTables, 2025-11-18 |
 | DataTables 1.12.1 + jQuery 3.6.0 | `https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/` | summary, mission, startup pages | CDN |
 | plotly.js | `https://cdn.plot.ly/plotly-<version>.min.js` (production 4.1.1, from plotly 7.1.0) | every plot HTML file and the summary map | CDN, with an `integrity` hash |
@@ -738,7 +738,7 @@ Code vs. production:
 12. **Stale plot files** (section 2.6): SVG files and old plot names stay in production because nothing removes files. They are not linked, but are served.
 13. **Unused local DataTables copy** in `<plots>/js/`: all pages load DataTables from `cdn.datatables.net`. The pages therefore need internet access to sort and search.
 14. **`PIDFile=/data1/alamo/var/lock/xmtps-plot.pid`** in the systemd unit is never written (the directory holds only the decoder's `xmtps.pid`). With `Type=simple` systemd does not need it, but the setting is misleading.
-15. **Status icons** `img/s0.png`–`s2.png` exist only in production; the repository has no copy, so a fresh install has broken icons on the summary and mission pages.
+15. **Status icons** `img/s0.png`–`s3.png` are served from `<plots>/img/`, which the tools do not install: a fresh install must copy them from `bin/py/img/`.
 16. **Bathymetry comment.** `BathymetryPressure` says the coordinates are float32; that holds for ETOPO2v2c, but ETOPO 2022's `lat`/`lon` are double. The code works for both. ETOPO 2022's `_FillValue` (−99999) is not masked [inferred: the global surface grid has no fill cells].
 
 Code vs. README and docstrings:

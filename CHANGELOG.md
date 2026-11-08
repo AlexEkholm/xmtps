@@ -15,6 +15,17 @@ Python tools:
   where the highest pump voltage stays below 95 % of its early-life median for 3 dives; the title
   ends "Pump voltage falling"). On the floats that ran out of battery it came a median 60 dives,
   16 % of their dives, before the end, and caught the abrupt failures the energy estimate misses.
+- Summary page: under each float's status, its last known location: "WHOI" within 25 km of Woods
+  Hole, else the sea or ocean of its latest GPS fix or Iridium position (new module `SeaNames.py`,
+  with Natural Earth's public-domain marine areas in `bin/py/data/marine-areas.json`). A float last
+  seen at WHOI gets the new status PREDEPLOYMENT, with an orange icon (`img/s3.png`) and an orange
+  map marker; 11 floats on 2026-11-08. `summary.json` gets a `location` field. The status icons are
+  now also in `bin/py/img/`.
+- Summary page: the WMO number is shown in small text under the float ID instead of in its own
+  column.
+- Summary page: the CTD type under a float's type reads `RBR/WIMS` or `SBE/WIMS` when the float
+  has valid WIMS wave data (a measurement with more than one spectral bin in its `_wave` file);
+  45 floats on 2026-11-08. `summary.json` gets a `wims` field.
 
 ## 2026-11-07
 

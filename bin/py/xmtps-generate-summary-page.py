@@ -31,6 +31,7 @@ import re
 from yattag import Doc
 
 from PageStatus import WriteStatusFooter
+from SeaNames import SeaName
 
 # local
 # from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
@@ -128,6 +129,23 @@ def ProcessDirectory(dpath):
             raise Exception(errstr)
         logger.error(errstr)
               
+def HasWimsData(fpath):
+    """Return whether an aggregate <serial>_wave.json file has valid WIMS data.
+
+    Valid means at least one wave measurement with more than one spectral bin (slen > 1), as the
+    energy estimate counts a WIMS run. A missing or unreadable file means no.
+    """
+    if not os.path.isfile(fpath):
+        return False
+    try:
+        with open(fpath, 'r', encoding='utf-8') as f:
+            wave = json.load(f)
+        i = wave['columns'].index('slen')
+        return any(isinstance(r[i], (int, float)) and r[i] > 1 for r in wave['data'])
+    except Exception as e:
+        logger.warning('Failed to read WIMS data from {}: {}'.format(fpath, e))
+        return False
+
 def ProcessJsonSummaryFile(fpath):
     """Decode one <id>_summary.json file with jsonpickle and store it in float_map.
 
@@ -190,6 +208,9 @@ def ProcessJsonSummaryFile(fpath):
             return
             
             
+        # whether the float has valid WIMS wave data, from the <serial>_wave.json next to it
+        summary['wims'] = HasWimsData(os.path.join(os.path.dirname(fpath), '{}_wave.json'.format(summary['id'].whoi)))
+
         float_map[summary['id'].whoi] = summary
         
     except:
@@ -205,8 +226,10 @@ def WriteSummaryFile(dpath):
 
     The page embeds the position map from WriteSummaryPlots and a DataTables table with one row
     per float, most recent report first; floats without a completed cycle or without profiled
-    distance are left out. A float is ACTIVE if it reported within 30 days, OVERDUE within 180
-    days and ARCHIVED otherwise. Inline JavaScript adds elapsed times ('3 hours ago') to the
+    distance are left out. A float last seen at WHOI is PREDEPLOYMENT (orange); otherwise it is
+    ACTIVE if it reported within 30 days, OVERDUE within 180 days and ARCHIVED otherwise
+    (FloatStatus); under the status, the sea or ocean of the last known position (LastLocation).
+    Inline JavaScript adds elapsed times ('3 hours ago') to the
     deployment and last-report dates and handles the auto-refresh checkbox (URL parameter 'r',
     in seconds; 1 means 60, others are at least 10). Errors are logged, or raised with -H; a
     failed row is skipped.
@@ -314,7 +337,7 @@ function toggleAutoRefresh(cb) {
 }
 $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
 </script>''')
-                doc.asis('<script type="text/javascript">$(document).ready(function () { $("#stable").DataTable({ order: [[9, \'desc\']], "pageLength": 10, "lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]], scrollX: false }); jQuery(".dataTable").wrap("<div id=\'tat\' />"); });</script>')
+                doc.asis('<script type="text/javascript">$(document).ready(function () { $("#stable").DataTable({ order: [[8, \'desc\']], "pageLength": 10, "lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]], scrollX: false }); jQuery(".dataTable").wrap("<div id=\'tat\' />"); });</script>')
 
                 # Create styles
                     
@@ -341,8 +364,9 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                     text('#stable { width: 100%; }')
                     text('#stable th { padding: 8px; } ')
                     text('#stable td { padding: 8px; text-align: left; height: 28px; } ')
-                    text('#stable td .stimg { width: 80px; } ')
+                    text('#stable td .stimg { min-width: 80px; white-space: nowrap; } ')
                     text('#stable td .stimg img { padding-right: 4px; display:inline; padding-bottom: 1px; } ')
+                    text('#stable td .sloc { display: block; color: #666; white-space: nowrap; } ')
                     text('#stable td small { color: #aaa; } ')
                     
                     # text('.itiny { width: 120px; text-align: center; } ')
@@ -397,12 +421,7 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                 with tag('tr'):
                                     with tag('th', rowspan=2):
                                         text('ID')
-                                        # doc.stag('br')
-                                        # with tag('small'):
-                                            # text('WMO')
-                                    with tag('th', rowspan=2):
-                                        text('WMO')   
-                                    
+
                                     with tag('th', colspan=6):
                                         text('Summary')
                                     with tag('th', colspan=4):
@@ -491,30 +510,29 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                             # with tag('td'): # idx
                                             #     text('{}'.format(idx))
                                             
-                                            with tag('td'): # id
+                                            with tag('td'): # id, with the WMO number under it
                                                 with tag('a', href='{}'.format(float_id)):
                                                     text('{}'.format(float_id))
-                                                    row['serial'] = int(float_id)
-                                                    # if x['id'].wmo > 1:
-                                                        # doc.stag('br')
-                                                        # with tag('small'):
-                                                            # text(x['id'].wmo)
-                                                    
-                                                    
-                                                    
-                                            with tag('td'): # wmo
-                                                text('{}'.format(x['id'].wmo) if x['id'].wmo > 1 else '-')
+                                                row['serial'] = int(float_id)
                                                 row['wmo'] = int(x['id'].wmo) if x['id'].wmo > 1 else None
+                                                if row['wmo'] is not None:
+                                                    doc.stag('br')
+                                                    with tag('small'):
+                                                        text('{}'.format(row['wmo']))
                                                 
                                             with tag('td'): # type
                                                 text(x['type'])
                                                 row['type'] = x['type']
                                                 row['ctd_type'] = x['ctdtype'] if len(x['ctdtype']) > 0 else None
                                                 
-                                                if len(x['ctdtype']) > 0:
+                                                # the CTD type, with /WIMS for a float with valid
+                                                # WIMS wave data
+                                                row['wims'] = bool(x.get('wims', False))
+                                                subtype = '/'.join([ t for t in (x['ctdtype'], 'WIMS' if row['wims'] else '') if t ])
+                                                if subtype:
                                                     doc.stag('br')
                                                     with tag('small'):
-                                                        text(x['ctdtype'])
+                                                        text(subtype)
                                                     
                                             with tag('td'): # fw ver
                                                 if len(x['fwver']) > 9:
@@ -564,25 +582,18 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
                                                     
                                             with tag('td'): # status
 
-                                                time_since_last = (datetime.datetime.now(datetime.UTC).timestamp() - x['latest']['sbd'].dt_epoch) /86400
+                                                # the status, and under it the sea or ocean of
+                                                # the last known position (or "WHOI")
+                                                row['location'] = LastLocation(x) or None
+                                                status = FloatStatus(x, row['location'])
+                                                with tag('div', klass='stimg'):
+                                                    doc.stag('img', src=status['img'])
+                                                    text(status['name'])
+                                                    row['status'] = status['name']
 
-                                                if time_since_last < 30:
-                                                    with tag('div', klass='stimg'):
-                                                        doc.stag('img', src='img/s2.png')
-                                                        text('ACTIVE')
-                                                        row['status'] = 'ACTIVE'
-                                                    
-                                                elif time_since_last < 180:
-                                                    with tag('div', klass='stimg'):
-                                                        doc.stag('img', src='img/s1.png')
-                                                        text('OVERDUE')
-                                                        row['status'] = 'OVERDUE'
-                                                    
-                                                else:
-                                                    with tag('div', klass='stimg'):
-                                                        doc.stag('img', src='img/s0.png')
-                                                        text('ARCHIVED')
-                                                        row['status'] = 'ARCHIVED'
+                                                if row['location']:
+                                                    with tag('small', klass='sloc'):
+                                                        text(row['location'])
                                                 
                                             with tag('td'): # cycle no.
                                             
@@ -674,14 +685,60 @@ $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
             raise Exception(errstr)
         logger.error(errstr)
    
+# The float statuses: name, table icon (in <plots>/img), map marker color and size. A float whose
+# last known position is at WHOI is PREDEPLOYMENT; otherwise ACTIVE if it reported within 30 days,
+# OVERDUE within 180 days, else ARCHIVED.
+STATUS_PREDEPLOYMENT = dict(name='PREDEPLOYMENT', img='img/s3.png', color='rgb(255,168,64)', size=6)
+STATUS_BY_AGE = ((30, dict(name='ACTIVE', img='img/s2.png', color='rgb(123,255,123)', size=6)),
+                 (180, dict(name='OVERDUE', img='img/s1.png', color='rgb(123,123,255)', size=5)),
+                 (float('inf'), dict(name='ARCHIVED', img='img/s0.png', color='rgb(255,123,123)', size=4)))
+
+def FloatStatus(summary, location):
+    """Return the status dict (STATUS_PREDEPLOYMENT or one of STATUS_BY_AGE) of a float.
+
+    Args:
+        summary: the float's summary (the latest SBD time gives the days since its last report).
+        location: its LastLocation(); "WHOI" makes it PREDEPLOYMENT.
+    """
+    if location == 'WHOI':
+        return STATUS_PREDEPLOYMENT
+    days = (datetime.datetime.now(datetime.UTC).timestamp() - summary['latest']['sbd'].dt_epoch) / 86400
+    for limit, status in STATUS_BY_AGE:
+        if days < limit:
+            return status
+    return STATUS_BY_AGE[-1][1]
+
+def LastLocation(summary):
+    """Return the sea or ocean of a float's last known position, "WHOI" near Woods Hole, or ''.
+
+    The position is the latest valid one of the summary's latest GPS fix and latest SBD message
+    (Iridium position); SeaNames.SeaName names it.
+    """
+    best = None
+    for key in ('gps', 'sbd'):
+        p = summary.get('latest', {}).get(key)
+        try:
+            if p is not None and p.is_valid() and (best is None or p.dt_epoch > best.dt_epoch):
+                best = p
+        except Exception:
+            continue
+    if best is None:
+        return ''
+    try:
+        return SeaName(best.lat, best.lon)
+    except Exception as e:
+        logger.warning('Failed to name the sea of {}, {}: {}'.format(best.lat, best.lon, e))
+        return ''
+
 def WriteSummaryJsonFile(dpath):
     """Write the summary table <dpath>/summary.json from summary_rows (filled by WriteSummaryFile).
 
     The file is strict JSON: {"json_vers", "generated" (ISO 8601 UTC), "floats": [...]}, with one
     record per table row in table order (most recent report first). Record keys: serial, wmo, type,
-    ctd_type, firmware, fwver, deployed, age_days, distance_profiled_km, status, cycle,
-    last_report, depth_dbar, duration_hours. Numbers are rounded as on the page, times are full
-    ISO 8601 strings, and values the page shows as '-' are null. Errors are logged, or raised
+    ctd_type, wims (valid WIMS wave data; see HasWimsData), firmware, fwver, deployed, age_days,
+    distance_profiled_km, status, location (the sea or ocean of the last known position, or
+    "WHOI"; see LastLocation), cycle, last_report, depth_dbar, duration_hours. Numbers are
+    rounded as on the page, times are full ISO 8601 strings, and values the page shows as '-' are null. Errors are logged, or raised
     with -H.
     """
 
@@ -859,21 +916,8 @@ def WriteSummaryPlots(dpath):
                 if not gps.is_valid():
                     continue
                 
-                time_since_last = (datetime.datetime.now(datetime.UTC).timestamp() - x['latest']['sbd'].dt_epoch) /86400
-
-                color = 'rbg(0,0,0)'
-
-                if time_since_last < 30:
-                    color = 'rgb(123,255,123)'
-                    size = 6
-                    
-                elif time_since_last < 180:
-                    color = 'rgb(123,123,255)'
-                    size = 5
-                    
-                else:
-                    color = 'rgb(255,123,123)'
-                    size = 4
+                status = FloatStatus(x, LastLocation(x))
+                color, size = status['color'], status['size']
 
                 position_summary.add_trace(go.Scattergeo(
                     lat = [ gps.lat ],

@@ -1245,7 +1245,9 @@ Written by `bin/py/xmtps-generate-summary-page.py` (`WriteSummaryJsonFile`) next
 | `deployed` | string or null | Deployed | `deployment.gps.dt_str`, the full time (the page shows the date); null if the fix is not valid |
 | `age_days` | integer or null | Age | `age` / 86400, rounded; null if not positive |
 | `distance_profiled_km` | number | Distance Profiled | `profdepthsum` / 1000, one decimal |
-| `status` | string | Status | `ACTIVE` (< 30 days since the latest SBD message), `OVERDUE` (< 180) or `ARCHIVED` |
+| `status` | string | Status | `PREDEPLOYMENT` (last known position at WHOI; since 2026-11-08), else `ACTIVE` (< 30 days since the latest SBD message), `OVERDUE` (< 180) or `ARCHIVED` |
+| `wims` | bool | Type (`/WIMS` after the CTD type) | Whether the float has valid WIMS wave data: a row of its `_wave` file with `slen` > 1. Since 2026-11-08. |
+| `location` | string | Status (small text) | The sea or ocean of the last known position, or `WHOI` within 25 km of Woods Hole; null without a valid position. Since 2026-11-08. |
 | `cycle` | integer or null | No. | `latest.cycle`; null if 9999 or more |
 | `last_report` | string or null | Last Report | `latest.sbd.dt_str`, the full time (the page shows it to the minute); null if unset (the page cell is then empty; 3 floats in production on 2026-11-03) |
 | `depth_dbar` | number or null | Depth | `latest.depth`: one decimal under 100, an integer otherwise; null if not in (0, 3000) |
