@@ -270,6 +270,10 @@ def ProcessJsonSummaryFile(fpath):
                 values = dict(zip(eng['columns'], row))
                 if IsSet(values.get('bit.version')) or IsSet(values.get('bit.results')):
                     bits.append(values)
+            # leave out the BITs of resets in the field (the aggregate's summary lists them): they
+            # are not startups, and would bring long-deployed floats back onto the page
+            resets = set(r.get('dive') for r in summary.get('field_resets', []))
+            bits = [ b for b in bits if b.get('dive') not in resets ]
             bits.sort(key=BitOrder)
         else:
             logger.info('Float without engineering data file: {}'.format(float_id))

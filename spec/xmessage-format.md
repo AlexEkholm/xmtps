@@ -360,8 +360,10 @@ which the fix was taken. There is one layout for all phases.
   - (when the fix is assigned) the time is later than the dive's last Iridium session time.
 
   An invalid fix gets lat 99.99999, lon 999.99999 and no time.
-- A valid 0x05 fix advances the float's start-of-mission time. Packets sent before the
-  start-of-mission or deployment time are ignored.
+- A valid 0x05 fix advances the float's start-of-mission time, unless it is after the metadata
+  launch time: floats with a GPS firmware bug reset at sea and send their startup messages
+  again, which must not move the start of mission past the dives before (since 2026-11-08).
+  Packets sent before the start-of-mission or deployment time are ignored.
 - **Profile position selection:**
   - A 0x02 fix of the same dive is the profile position.
   - A 0x01 fix labeled with dive N+1 is valid for dive N.

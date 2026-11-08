@@ -684,6 +684,19 @@ void XFloat::LoadMetadataFromFiles() {
 
         shared_ptr<XFloat> parent(GetFloat(meta->id_instrument()));
         parent->set_metadata(meta);
+
+        // A field reset after deployment (a GPS firmware bug made floats restart at sea) moved
+        // the start of mission to its built-in-test fix before AssignGps() stopped doing so; the
+        // messages before it were then left out of reprocessing. Bring it back to deployment.
+        const ptime& deployed = meta->deployment_datetime();
+        if(!deployed.is_not_a_date_time() && !parent->start_of_mission_datetime().is_not_a_date_time()
+            && parent->start_of_mission_datetime() > deployed) {
+          lwrn() << "Start of mission " << bpt::to_iso_extended_string(parent->start_of_mission_datetime())
+                 << "Z is after deployment (a field reset); set to the deployment time "
+                 << bpt::to_iso_extended_string(deployed) << "Z.";
+          parent->set_start_of_mission_datetime(deployed);
+        }
+
         parent->SaveObjectToDatabase();
         lout() << "Loaded instrument metadata.";
 
@@ -1977,14 +1990,22 @@ void XFloatDiveData::AssignGps(shared_ptr<x::XGPS>& x) {
 
     try {
 
-      // Update the start-of-mission date/time, if possible.
+      // Update the start-of-mission date/time, if possible. A built-in-test fix after the
+      // deployment time (metadata launch time) comes from a field reset: floats with a GPS
+      // firmware bug restarted at sea and sent startup messages again. It does not advance the
+      // start of mission, which would leave all earlier dives out of reprocessing.
+      shared_ptr<XFloatMetadata> meta(inst->metadata());
+      const bool field_reset = meta && !meta->deployment_datetime().is_not_a_date_time()
+          && !x->position_datetime().is_not_a_date_time()
+          && x->position_datetime() > meta->deployment_datetime();
       if(x->id_xmsg_type() == XMSG_TYPE_ID_GPS_BITEST
           && !x->position_datetime().is_not_a_date_time()
           && (inst->start_of_mission_datetime().is_not_a_date_time()
-              || inst->start_of_mission_datetime() < x->position_datetime())) {
+              || (inst->start_of_mission_datetime() < x->position_datetime() && !field_reset))) {
 
-        // Update the start-of-mission date/time and save the object to the database.
-        inst->set_start_of_mission_datetime(x->position_datetime());
+        // Update the start-of-mission date/time and save the object to the database. A float
+        // whose first built-in-test fix is from a field reset starts its mission at deployment.
+        inst->set_start_of_mission_datetime(field_reset ? meta->deployment_datetime() : x->position_datetime());
         inst->SaveObjectToDatabase();
       }
 

@@ -252,7 +252,7 @@ Identifier conventions used across tables:
 | `latest_sbd_mtmsn` | `int` | NOT NULL / -1 | -1 | — | MTMSN of that message. | `sql_coli`, `latest_sbd_mtmsn` |
 | `netcdf_file_generation_is_enabled` | `bit(1)` | NOT NULL / 0 | 0 | — | Per-float NetCDF switch. The daemon never changes it; it writes back the loaded value. | `sql_colb`, `netcdf_file_generation_is_enabled` |
 | `phy_file_generation_is_enabled` | `bit(1)` | NULL / 0 | 0 | — | Per-float PHY switch. Set by `--phy-enable`/`--phy-disable`. A PHY file also needs `.meta` metadata and a complete dive (see [phy-file-format.md](phy-file-format.md)). | `sql_colb`, `phy_file_generation_is_enabled` |
-| `start_of_mission_datetime` | `datetime` | NOT NULL / 1400-01-01 | zero date | UTC | Time of the newest built-in-test GPS fix (X-message 0x05). Messages sent more than 15 min before it are ignored (section 10.3). | `sql_colt`, `start_of_mission_datetime` |
+| `start_of_mission_datetime` | `datetime` | NOT NULL / 1400-01-01 | zero date | UTC | Time of the newest built-in-test GPS fix (X-message 0x05) up to the deployment time (since 2026-11-08: a fix after the metadata launch time is from a reset in the field and does not move it; a stored value after the launch time is set back to it when the metadata is loaded). Messages sent more than 15 min before it are ignored (section 10.3). | `sql_colt`, `start_of_mission_datetime` |
 | `xmsg_version_major` | `smallint unsigned` | NULL / 255 | 255 | — | X-format major version from the Argo message. 255 = unknown. | `sql_cou8`, `xmsg_version_major` |
 | `xmsg_version_minor` | `smallint unsigned` | NULL / 255 | 255 | — | X-format minor version. | `sql_cou8`, `xmsg_version_minor` |
 
@@ -276,13 +276,13 @@ Every save is a full-row upsert of the in-memory `XFloat` object, followed by an
 1. at startup, for each `.meta` file with a usable DAC ID (`XFloat::LoadMetadataFromFiles`);
 2. at startup, for each `--phy-enable`/`--phy-disable` serial number (`XFloat::StartupTasks`);
 3. when an Argo message (0xF0) is assigned to a dive (`XFloatDiveData::AssignArgoData`): gains, offsets, instrument type and X-format version;
-4. when a built-in-test GPS fix moves the start of mission forward (`XFloatDiveData::AssignGps`);
+4. when a built-in-test GPS fix moves the start of mission forward (`XFloatDiveData::AssignGps`), or the metadata sets a start of mission after the launch time back to it (`XFloat::LoadMetadataFromFiles`);
 5. before every `XFloatDive` save (`XFloatDiveData::SaveObjectToDatabase`), so the dive's foreign key is satisfied. This also persists the latest GPS and Iridium positions, which are updated in memory as messages are decoded;
 6. at shutdown, for every cached float (`XFloat::SaveLocalCacheToDatabase`, `src/Main.cpp`). It is skipped if the SQL server is unavailable.
 
 A float gets its first row the first time one of these saves runs for it. Rows are never deleted by the daemon.
 
-The "latest" columns only move forward in time. `start_of_mission_datetime` moves to any later built-in-test fix. None of these are reset by reprocessing (section 11).
+The "latest" columns only move forward in time. `start_of_mission_datetime` moves to any later built-in-test fix, except one after the metadata launch time (a field reset; since 2026-11-08), and is set back to the launch time when it is later. None of these are reset by reprocessing (section 11).
 
 ## 6. Table `XFloatMetadata`
 
@@ -774,7 +774,7 @@ mysql -N -B -e "SELECT HEX(sbd_data) FROM XFloatMail
 5. **Reprocessing does not filter on `msg_is_valid`.** It pushes every stored message of the float to stage 2, which drops those whose SBD data is invalid. The dive reload (section 10.4) filters on `msg_is_valid = 1`. The results are the same, but reprocessing does extra work.
 6. **Duplicate serial numbers in the reprocessing list.** `-r` IDs, `--phy-enable` IDs, the active floats (`-A`, on by default) and all floats (`-R`) are concatenated without removing duplicates. A float given with `-r` that is also active is reprocessed twice. The second pass deletes the float's `XFloatDive`/`XGPS` rows while the first pass may still be decoding. The rows are written again because duplicate messages still trigger a dive save, but the order is timing-dependent [inferred].
 7. **Reprocessing ignores `id_imei`.** Messages are ordered by `id_sbd_momsn` only. If a float's modem was replaced, the two IMEIs' MOMSN sequences interleave. Decoding is keyed by dive and packet, so the effect is limited to which Argo message's gains end up in `XFloat` and the order of retransmission detection [inferred].
-8. **`XFloat` is not reset by reprocessing.** Latest positions and the start of mission are only moved forward. A bad value (for example a wrong built-in-test fix time) survives reprocessing and must be corrected in the table by hand.
+8. **`XFloat` is not reset by reprocessing.** Latest positions and the start of mission are only moved forward. A bad value (for example a wrong built-in-test fix time) survives reprocessing and must be corrected in the table by hand. The exception is a start of mission after the metadata launch time, left by a field reset before 2026-11-08: the daemon sets it back to the launch time when it loads the metadata at startup, before any reprocessing.
 9. **IMEI lookup returning no row.** `SelectValueFromDatabase<int>` returns 0 when no `XFloat` row has the IMEI. Such a message (invalid SBD data and unknown IMEI) fails the serial-number range check and is not saved, although the README says every message received is stored.
 10. **`id_msg` length.** `varchar(128)` is part of the key. A `Message-ID` longer than 128 characters fails the save under strict mode. Iridium's IDs are much shorter.
 11. **Empty-hex read.** `Column_vector_uint8_t::SetObjectValueFromResultSet` loops to `end() - 1`. For an empty or `NULL` `sbd_data` this compares an iterator before `begin()` (undefined behavior, harmless in practice).

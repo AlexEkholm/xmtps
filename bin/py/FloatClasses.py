@@ -51,6 +51,99 @@ def MagneticDeclination(lat: float, lon: float, dt_epoch: float) -> float:
     b_e, b_n, _ = ppigrf.igrf(lon, lat, 0, date)
     return float(np.degrees(np.arctan2(np.ravel(b_e)[0], np.ravel(b_n)[0])))
 
+def ReadLaunchTimes(meta_dir):
+    """Read the launch (deployment) time of each float from the float metadata files.
+
+    Reads every <meta_dir>/*.meta file (not subfolders) as the decoder does: the field name is
+    columns 1-40 of a line and the value starts at column 41. The float is the 'float serial
+    number' field (file names may mask it), the time the 'launch time [dd mm yyyy hh mm (Z)]'
+    field (UTC) with its 'status of launch time'. Files with no DAC ID ('internal ID number' below
+    1, 9999 or above 99998) are skipped, as the decoder skips them. Placeholders such as '99 99 9999 99 99',
+    impossible dates and years outside 2000-2100 are left out, as the decoder leaves them unset.
+
+    Args:
+        meta_dir: Directory of the metadata files, e.g. /data1/alamo/meta/dac.
+
+    Returns:
+        Dict of serial number (int) to (epoch seconds (int), status (str)); empty if the
+        directory does not exist.
+    """
+    import glob
+    import os
+    out = {}
+    if not meta_dir or not os.path.isdir(meta_dir):
+        return out
+    for path in sorted(glob.glob(os.path.join(meta_dir, '*.meta'))):
+        fields = {}
+        try:
+            with open(path, errors='replace') as f:
+                for line in f:
+                    line = line.rstrip('\r\n')
+                    if len(line) > 40:
+                        fields.setdefault(line[:40].strip(), line[40:].strip())
+        except OSError:
+            continue
+        serial = fields.get('float serial number', '')
+        # the decoder skips files without a DAC ID (internal ID number < 1, 9999 or > 99998)
+        dac = fields.get('internal ID number', '')
+        if not dac.isdigit() or not 0 < int(dac) < 99999 or int(dac) == 9999:
+            continue
+        launch = next((v for k, v in fields.items() if k.startswith('launch time')), '')
+        m = re.fullmatch(r'(\d+) (\d+) (\d+) (\d+) (\d+)', launch)
+        if not serial.isdigit() or not m:
+            continue
+        d, mo, y, h, mi = (int(x) for x in m.groups())
+        if not 2000 < y < 2100:
+            continue
+        try:
+            t = datetime.datetime(y, mo, d, h, mi, tzinfo=datetime.timezone.utc)
+        except ValueError:
+            continue
+        out[int(serial)] = (int(t.timestamp()), fields.get('status of launch time', ''))
+    return out
+
+# A startup dive is at least this long after the launch time to be a reset in the field
+# (FieldResetDives): launch times are often rounded or a few hours off.
+FIELD_RESET_MIN_S = 86400
+
+def FieldResetDives(dives, launch_epoch):
+    """Return the startup dives of a float that come from resets in the field.
+
+    For a period, a GPS firmware bug made ALAMO and ALTO floats reset at sea; a reset float sends
+    startup messages (negative dive numbers) again, years after its deployment. A startup dive is
+    taken as such a field reset when its first SBD message is more than FIELD_RESET_MIN_S (a day)
+    after the launch time and the float had already sent a positive dive's message between the
+    launch and it. The conditions keep the real startup of a float whose metadata launch time is
+    a little off: 9029 and 9077 (launch 00:00, startup and dive 0 the next day, before any dive),
+    9090, 9109 and 9138 (startup on the launch day after a test dive). The earliest field reset
+    seen was 2.6 days after launch (11147).
+
+    Args:
+        dives: The float's Dive objects (their sbd messages are used).
+        launch_epoch: Launch time from the metadata (ReadLaunchTimes), or None.
+
+    Returns:
+        Dict of dive number to the epoch of its first SBD message, for the field-reset startup
+        dives; empty without a launch time.
+    """
+    if launch_epoch is None:
+        return {}
+    first, positive = {}, []
+    for dive in dives:
+        t = [ s.dt_epoch for s in getattr(dive, 'sbd', []) if s.dt_epoch > 0 ]
+        if not t:
+            continue
+        if dive.dive_num < 0:
+            first[dive.dive_num] = min(t)
+        else:
+            positive.extend(t)
+    positive.sort()
+    out = {}
+    for dive_num, t0 in first.items():
+        if t0 > launch_epoch + FIELD_RESET_MIN_S and any(launch_epoch <= t < t0 for t in positive):
+            out[dive_num] = t0
+    return out
+
 def RollingAverage(array, N: int ):
     """Return the centred N-point moving average of a 1-D array, rounded to 5 decimals.
 

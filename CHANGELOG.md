@@ -5,7 +5,30 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 ## 2026-11-08
 
+Decoder:
+
+- Resets in the field no longer move the start of mission. For a period, a GPS firmware bug made
+  ALAMO and ALTO floats reset at sea; a reset float sends its startup messages again, with a
+  built-in-test GPS fix that advanced the float's start of mission to the reset. Reprocessing
+  then left out every dive before the last reset (11151: only dives after its 2026-05-21 reset
+  were regenerated, so its SBD data size plot broke down only those), and late packets of earlier
+  dives were ignored. A built-in-test fix after the metadata launch time no longer moves the start
+  of mission, and a stored start of mission after the launch time is set back to it when the
+  daemon loads the metadata. Floats without metadata are unchanged.
+
 Python tools:
+
+- Startup messages from resets in the field are recognized with the metadata launch time
+  (`--meta`, default `/data1/alamo/meta/dac`; `FloatClasses.ReadLaunchTimes`, `FieldResetDives`):
+  a startup dive more than a day after the launch, once the float has sent a dive since the
+  launch (10 floats: 9033, 9245, 10114, 11146-11151, 11340). The summary
+  lists them in a new `field_resets` field and gives the launch time in `launch`; they are no
+  longer the summary's startup, which set the deployment and the age (11151: deployment
+  2026-05-23 and 168 days, now 2022-10-02 and 4.1 years) and the time range of the satcom and
+  cycle timing plots. The deployment is also no earlier than one day before the launch, so test
+  dives before it are not taken. The energy estimate leaves field resets out of the startup
+  voltage and pack, the position maps draw their fixes as red "Field reset GPS" stars, and the
+  startup page leaves out their BITs.
 
 - Remaining-cycles plot: usable energy 68 % of nominal, range 50-95 % (was 80 %, 65-95 %).
   Backtested on the 92 floats that ran out of battery, the old values over-predicted the cycles

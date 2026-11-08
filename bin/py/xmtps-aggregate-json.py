@@ -72,6 +72,7 @@ from yattag import Doc
 
 # local
 from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
+from FloatClasses import FieldResetDives, ReadLaunchTimes
 from geographiclib.geodesic import Geodesic
 from PageStatus import WriteStatusFooter
 
@@ -98,6 +99,17 @@ JSON_VERSION = "0.11"
 
 # NOAA ETOPO 2022 60" surface elevation, converted to classic netCDF for scipy (see README)
 BATHYMETRY_FILE = '/data1/etopo2022/ETOPO_2022_v1_60s_N90W180_surface_classic.nc'
+
+# Float metadata directory (--meta): the launch time of each float, used to tell the startup
+# messages of a reset in the field from the real startup (FieldResetDives), and as the earliest
+# deployment. Read once into launch_times (serial -> (epoch, status)).
+META_DIR = '/data1/alamo/meta/dac'
+
+# A deployment message is at most this long before the metadata launch time (estimated launch
+# times are rounded to the day).
+DEPLOYMENT_BEFORE_LAUNCH_S = 86400
+
+launch_times = {}
 
 bathymetry = None
 
@@ -753,6 +765,9 @@ def EnergyEstimates(float_aggregate_data, float_id=None):
     if df_eng is not None and 'bit.battery_start_v' in df_eng.columns:
         v = df_eng[['dive', 'bit.battery_start_v']].apply(pd.to_numeric, errors='coerce').dropna()
         v = v[(v['bit.battery_start_v'] > 5) & (v['bit.battery_start_v'] < 30)]
+        # a reset in the field is not a startup of the pack: its voltage is of a used pack
+        resets = [ r['dive'] for r in float_aggregate_data.get('summary', {}).get('field_resets', []) ]
+        v = v[~v['dive'].isin(resets)]
         startups = v[v['dive'] < 0]
         v = startups if len(startups) else v
         if len(v):
@@ -1257,7 +1272,25 @@ def AggregateDiveData():
                 }
                 
                 dives = sorted([dive_data.dive_num for dive_data in float_data.dives])
-    
+
+                # Launch time from the metadata, and the startup dives of resets in the field,
+                # which are not the float's startup (summary slots, energy, maps)
+                launch_epoch, launch_status = launch_times.get(float_id, (None, ''))
+                field_resets = FieldResetDives(float_data.dives, launch_epoch)
+                deploy_min_epoch = launch_epoch - DEPLOYMENT_BEFORE_LAUNCH_S if launch_epoch is not None else -1
+                float_aggregate_data['summary']['launch'] = dict(
+                    dt_epoch = launch_epoch if launch_epoch is not None else -1,
+                    dt_str = DateTime().dt_from_epoch(launch_epoch).dt_str if launch_epoch is not None else '',
+                    status = launch_status,
+                    )
+                float_aggregate_data['summary']['field_resets'] = [
+                    dict(dive = int(n), dt_epoch = int(t), dt_str = DateTime().dt_from_epoch(t).dt_str)
+                    for n, t in sorted(field_resets.items(), key=lambda x: x[1]) ]
+                if field_resets:
+                    logger.info('Float {}: startup dive(s) {} are resets in the field (after launch {})'.format(
+                        float_id, ', '.join(str(n) for n in sorted(field_resets, reverse=True)),
+                        float_aggregate_data['summary']['launch']['dt_str']))
+
                 # Aggregate ascent data
                 
                 logger.debug('Aggregating ascent data for float {:04d}...'.format(float_id))
@@ -1580,12 +1613,12 @@ def AggregateDiveData():
                             
                             
                         
-                            # Get startup GPS fix
-                            if dive_num < 0 and gps_fix.dt_epoch > float_aggregate_data['summary']['startup']['gps'].dt_epoch:
+                            # Get startup GPS fix (not of a reset in the field)
+                            if dive_num < 0 and dive_num not in field_resets and gps_fix.dt_epoch > float_aggregate_data['summary']['startup']['gps'].dt_epoch:
                                 float_aggregate_data['summary']['startup']['gps'] = gps_fix
-                            
-                            # Get deployment GPS fix
-                            if dive_num >= 0 and gps_fix.dt_epoch > float_aggregate_data['summary']['startup']['gps'].dt_epoch and (gps_fix.dt_epoch < float_aggregate_data['summary']['deployment']['gps'].dt_epoch or float_aggregate_data['summary']['deployment']['gps'].dt_epoch == -1):
+
+                            # Get deployment GPS fix (not before the metadata launch time)
+                            if dive_num >= 0 and gps_fix.dt_epoch > float_aggregate_data['summary']['startup']['gps'].dt_epoch and gps_fix.dt_epoch >= deploy_min_epoch and (gps_fix.dt_epoch < float_aggregate_data['summary']['deployment']['gps'].dt_epoch or float_aggregate_data['summary']['deployment']['gps'].dt_epoch == -1):
                                 float_aggregate_data['summary']['deployment']['gps'] = gps_fix
                                 
                             # Get latest GPS fix
@@ -1789,12 +1822,12 @@ def AggregateDiveData():
                         
                         for sbd in sbd_data:
                             
-                            # Get startup SBD 
-                            if dive_num < 0 and sbd.dt_epoch > float_aggregate_data['summary']['startup']['sbd'].dt_epoch:
+                            # Get startup SBD (not of a reset in the field)
+                            if dive_num < 0 and dive_num not in field_resets and sbd.dt_epoch > float_aggregate_data['summary']['startup']['sbd'].dt_epoch:
                                 float_aggregate_data['summary']['startup']['sbd'] = sbd
-                            
-                            # Get deployment SBD
-                            if dive_num >= 0 and sbd.dt_epoch > float_aggregate_data['summary']['startup']['sbd'].dt_epoch + 3600 and (sbd.dt_epoch < float_aggregate_data['summary']['deployment']['sbd'].dt_epoch or float_aggregate_data['summary']['deployment']['sbd'].dt_epoch == -1):
+
+                            # Get deployment SBD (not before the metadata launch time)
+                            if dive_num >= 0 and sbd.dt_epoch > float_aggregate_data['summary']['startup']['sbd'].dt_epoch + 3600 and sbd.dt_epoch >= deploy_min_epoch and (sbd.dt_epoch < float_aggregate_data['summary']['deployment']['sbd'].dt_epoch or float_aggregate_data['summary']['deployment']['sbd'].dt_epoch == -1):
                                 float_aggregate_data['summary']['deployment']['sbd'] = sbd
                                 
                             # Get latest SBD
@@ -4062,6 +4095,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
             
             df_gps = ValidGps(float_aggregate_data['gps'])
             df_gps_pre = df_gps[df_gps['dive'] < 0]
+            resets = set(r['dive'] for r in float_aggregate_data['summary'].get('field_resets', []))
             df_iridium = float_aggregate_data['iridium_position']
             df_sbd = float_aggregate_data['sbd']
                                     
@@ -4613,6 +4647,11 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
             
             for dive in df_gps_pre['dive'].values:
                 idx = df_gps_pre['dive'] == dive
+                # a startup from a reset in the field (FieldResetDives) is marked in red
+                reset = int(dive) in resets
+                label = 'Field reset GPS' if reset else 'Startup GPS'
+                star_color = 'rgb(214, 39, 40)' if reset else 'rgb(0, 0, 0)'
+                group = 'Field reset' if reset else 'Startup'
                 figs['position_gps'].add_trace(go.Scattergeo(
                             lat = df_gps_pre['lat'][idx],
                             lon = df_gps_pre['lon'][idx],
@@ -4622,7 +4661,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                                 # ), 
                                 # -1),
                             hovertemplate = '<br>'.join([
-                                'Startup GPS',
+                                label,
                                 df_gps_pre[idx]['dt_str'].values[0],
                                 '%{lat:.4f}°N %{lon:.4f}°E',
                                 'CEP = {:.3f} km'.format(df_gps_pre[idx]['cep_km'].values[0]),
@@ -4631,11 +4670,11 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                             # hoverinfo = None,
                             legendgroup='Startup {}'.format(dive),
                             legendgrouptitle=dict(
-                                text='Startup {}'.format(dive),
+                                text='{} {}'.format(group, dive),
                                 ),
                             opacity = 0.7,
                             marker = dict(
-                                color='rgb(0, 0, 0)',
+                                color=star_color,
                                 line=dict(
                                     color='rgb(0, 0, 0)',
                                     width = 0.5,
@@ -4644,7 +4683,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                                 symbol='star',
                                 ),
                             mode = 'markers',
-                            name = 'Startup GPS',
+                            name = label,
                             ))
                 figs['position_all'].add_trace(go.Scattergeo(
                             lat = df_gps_pre['lat'][idx],
@@ -4655,7 +4694,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                                 # ), 
                                 # -1),
                             hovertemplate = '<br>'.join([
-                                'Startup GPS',
+                                label,
                                 df_gps_pre[idx]['dt_str'].values[0],
                                 '%{lat:.4f}°N %{lon:.4f}°E',
                                 'CEP = {:.3f} km'.format(df_gps_pre[idx]['cep_km'].values[0]),
@@ -4664,11 +4703,11 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                             # hoverinfo = None,
                             legendgroup='{}'.format(dive),
                             legendgrouptitle=dict(
-                                text='Startup <b>{}</b>'.format(dive),
+                                text='{} <b>{}</b>'.format(group, dive),
                                 ),
                             opacity = 0.7,
                             marker = dict(
-                                color='rgb(0, 0, 0)',
+                                color=star_color,
                                 line=dict(
                                     color='rgb(0, 0, 0)',
                                     width = 0.5,
@@ -4677,7 +4716,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                                 symbol='star',
                                 ),
                             mode = 'markers',
-                            name = 'Startup GPS',
+                            name = label,
                             ))
             
             # Add markers to figures -- all positions legend groups
@@ -15470,6 +15509,13 @@ parser.add_argument(
           'an image (default={:d}; 0 disables the watchdog)').format(
         IMAGE_EXPORT_TIMEOUT_PER_IMAGE_S, IMAGE_EXPORT_TIMEOUT_S),
     metavar='S')
+parser.add_argument(
+    '--meta',
+    default=META_DIR,
+    dest='meta_dir',
+    help=('read the float launch times from the metadata files in DIRECTORY, to recognize startup '
+          'messages from resets in the field (default={}; none if it does not exist)').format(META_DIR),
+    metavar='DIRECTORY')
 
 parser.add_argument(
     '-D', '--display-figures',
@@ -15543,6 +15589,9 @@ if not logger.hasHandlers():
     formatter = logging.Formatter('%(asctime)s %(levelname)7s %(message)s', datefmt="%Y%m%dT%H%M%S")
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+
+# Float launch times from the metadata (FieldResetDives, summary deployment)
+launch_times = ReadLaunchTimes(args.meta_dir)
 
 # Check logging args:
 
