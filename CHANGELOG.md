@@ -7,6 +7,8 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- Battery and energy page: the expected time left is colored under 0.25, 0.5 and 1 year (was 0.5, 1
+  and 2 years).
 - Energy model page (`bin/py/html/energy-model.html`, static, installed in `plots2/engineering/`):
   how the energy of each cycle, the battery packs, the controller drain and the cycles left are
   estimated, with the analysis of the 92 floats that ran out of battery (groups, profiling

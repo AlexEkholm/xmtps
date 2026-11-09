@@ -50,10 +50,12 @@ code { font-size: 12px; background: #f4f4f4; padding: 0 3px; }
 estimate the energy each float has used, and how many cycles it has left. The model adds up, dive by
 dive, the energy of every part of the float's cycle from its engineering data and the parts' datasheets.
 It was checked against the 92 floats that ran out of battery, which also gave the controller drain and the
-usable share of a pack.</p>
+usable share of a pack. The full analysis is in the report
+<a href="energy-depletion-report.pdf"><i>Energy use of ALAMO/ALTO floats that ran out of battery</i> (PDF)</a>.</p>
 
 <p class="toc">Contents: <a href="#cycle">Energy of a cycle</a> &middot; <a href="#packs">Battery packs</a> &middot;
 <a href="#drain">Controller drain</a> &middot; <a href="#outlook">Cycles and time left</a> &middot;
+<a href="#prediction">How well the cycles left can be predicted</a> &middot;
 <a href="#depleted">Floats that ran out of battery</a> &middot; <a href="#distance">Profiling distance</a> &middot;
 <a href="#anomalies">Anomalies</a> &middot; <a href="#accuracy">Accuracy</a> &middot;
 <a href="#newalto">Lifetime of a new ALTO</a> &middot; <a href="#sources">Sources</a></p>
@@ -76,6 +78,9 @@ usable share of a pack.</p>
     about 120 deep profiles, ALAMOs in about 500 shallow ones.</li>
   <li><b>Anomaly:</b> ten ALAMOs deployed 2020-09-17/18 died after 0.45&nbsp;MJ, 18% of their packs, which
     points at those packs, not the model.</li>
+  <li><b>The cycles a float has left can be estimated only roughly</b> (<a href="#prediction">below</a>): the
+    estimate is unbiased for normal floats and about three quarters end inside its range, but only about half
+    within &plusmn;30%. A falling pump voltage warned of the end a median 60 dives ahead.</li>
 </ul>
 
 <h2 id="cycle">Energy of a cycle</h2>
@@ -188,8 +193,37 @@ how many cycles the float has left on its current mission:</p>
     dives, 16% of their dives, before the end, and caught the abrupt failures the energy estimate misses.
     Depletion does not always show a gradual fall first: some floats dropped within one or two dives.</li>
 </ul>
-<p>The battery and energy page colors an expected time left under 0.5, 1 and 2 years, a pack used past 95%
+<p>The battery and energy page colors an expected time left under 0.25, 0.5 and 1 year, a pack used past 95%
 and 68%, and a falling pump voltage.</p>
+
+<h2 id="prediction">How well the cycles left can be predicted</h2>
+<p>The estimate was recomputed after every dive of the 92 floats that ran out of battery and compared with
+the dives each actually made afterwards. The table gives the median of predicted / actual cycles left, and the
+share of floats whose actual count fell inside the estimate's range. &ldquo;Normal&rdquo; leaves out the
+September 2020 batch, the redeployed ALAMOs and the ungrouped floats (68 floats).</p>
+<div class="tw"><table>
+  <tr><th>Point in the float's life</th><th class="r">Usable 65/80/95%, all 92</th><th class="r">Usable 50/68/95%, all 92</th><th class="r">Usable 50/68/95%, normal</th></tr>
+  <tr><td>25%</td><td class="r">1.47, 47%</td><td class="r">1.21, 57%</td><td class="r">1.05, 71%</td></tr>
+  <tr><td>50%</td><td class="r">1.57, 50%</td><td class="r">1.19, 65%</td><td class="r">1.02, 78%</td></tr>
+  <tr><td>75%</td><td class="r">1.92, 48%</td><td class="r">1.23, 64%</td><td class="r">1.01, 79%</td></tr>
+  <tr><td>90%</td><td class="r">3.31, 47%</td><td class="r">1.56, 68%</td><td class="r">0.93, 85%</td></tr>
+</table></div>
+<ul>
+  <li><b>The first calibration over-predicted.</b> Taking 80% of nominal as usable (range 65&ndash;95%), the
+    estimate gave 1.5&ndash;3.3 times the cycles the floats had left, more the closer they came to the end,
+    because they died at a median of about 67%. The pages now take 68% (range 50&ndash;95%), which removes the
+    bias for normal floats and puts about three quarters of them inside the range.</li>
+  <li><b>The count is uncertain even so.</b> Only 41&ndash;56% of the normal floats' estimates fall within
+    &plusmn;30% of the actual count through mid-life, because floats die anywhere between about 50 and 99% of
+    nominal; late in life the estimate is mostly the gap between that share and what has been used. The range,
+    not the central number, is the honest answer.</li>
+  <li><b>Anomalies cannot be predicted from energy.</b> The September 2020 batch, the redeployed packs and some
+    alkaline packs died at 18&ndash;40% of nominal, and the estimate over-predicts them several times over.</li>
+  <li><b>A falling pump voltage is the better warning.</b> The flag caught 90 of the 92 depleted floats, a median
+    60 dives (16% of their dives) before the end, the anomalies included. Using it to shorten the count did not
+    make the count more accurate for normal floats (it under-predicted late in life), so the pages keep the
+    energy estimate and mark the flag on the plot. Of the 28 floats reporting in November 2026, 3 were flagged.</li>
+</ul>
 
 <h2 id="depleted">Floats that ran out of battery</h2>
 <p><b>Depletion.</b> A float counts as depleted when it has not reported for over 60 days, made at least 10
@@ -387,7 +421,8 @@ Technol. 39, 491&ndash;502, doi:<a href="https://doi.org/10.1175/JTECH-D-21-0046
 Jayne and Bogue (2017), Oceanography 30(2); WHOI float records and manufacturer correspondence. The model is
 <code>EnergyEstimates</code> in <code>xmtps-aggregate-json.py</code> and <code>EnergyModel.py</code> in the
 <a href="https://github.com/AlexEkholm/xmtps">XMTPS repository</a>; this page summarizes the report
-<i>Energy use of ALAMO/ALTO floats that ran out of battery</i> (A. Ekholm, November 2026).</p>
+<a href="energy-depletion-report.pdf"><i>Energy use of ALAMO/ALTO floats that ran out of battery</i></a> (A. Ekholm,
+November 2026, PDF).</p>
 
 <div id="foot">ALAMO/ALTO float energy model, November 2026.</div>
 

@@ -62,7 +62,7 @@ ENERGY_SHARES = [
     ]
 
 # Expected time left (years) below which the outlook is colored: (limit, class), first match
-TIME_LEFT_CLASSES = ((0.5, 'ebad'), (1.0, 'ewarn'), (2.0, 'elow'))
+TIME_LEFT_CLASSES = ((0.25, 'ebad'), (0.5, 'ewarn'), (1.0, 'elow'))
 
 # Share of the nominal pack energy used, from which the Used cell is colored: (limit, class),
 # first match: the high and central usable shares of the remaining-cycles estimate
