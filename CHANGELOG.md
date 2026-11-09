@@ -11,6 +11,11 @@ Python tools:
   (orange) for a float last seen at WHOI, and the last known location under the status. The
   status and location code moved from the summary page to the new module `FloatStatus.py`, which
   both pages use.
+- Mission parameters page: one table of all floats instead of one per float type. The colors and
+  the footer are computed in the browser over the floats shown, and recomputed when a search
+  changes them: searching `ALTO` or `ALAMO` gives the former per-type comparison exactly, and a
+  search such as `RBR` or a firmware version compares that group. Fewer than three floats shown
+  are not colored. The heading shows how many floats are shown.
 
 ## 2026-11-08
 

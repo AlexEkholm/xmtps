@@ -11,15 +11,17 @@ gives the most recently reported mission parameters: the last dive with any miss
 (floats need not send them every dive). Floats that have not reported any are left out.
 
 Writes <output>/params.html (production: plots2/engineering/, so that the float pages and status
-icons are one level up, see --plots-url) with one table per float type (ALAMO, including WIMS and MM2
-floats, and ALTO), one row per float with its firmware, the dive the parameters come from and a selection
-of important parameters (COLUMNS). Phase-dependent parameters (DTD0-2, PFD0-2, ...) are shown for
-each mission phase, marking the float's current phase and greying out phases its mission does not
-use (MissionPhases). Each value is coloured by how abnormal it is in its group
-(how rare it is, or for MEDIAN_COLUMNS how far from the median), and values that are out of
-range or inconsistent (drift or profile pressure deeper than the maximum depth) are marked as
-errors. Unset values (255, 65535, ...) are shown as unknown, without colour. The output
-directory must exist.
+icons are one level up, see --plots-url) with one table of all the floats (ALAMO, including WIMS
+and MM2 floats, and ALTO), one row per float with its firmware, the dive the parameters come from
+and a selection of important parameters (COLUMNS). Phase-dependent parameters (DTD0-2, PFD0-2,
+...) are shown for each mission phase, marking the float's current phase and greying out phases
+its mission does not use (MissionPhases). In the browser, each value is coloured by how abnormal it
+is among the floats shown (how rare it is, or for MEDIAN_COLUMNS how far from the median), and the
+colours and the footer are recomputed whenever a search changes the floats shown (SCORING_SCRIPT),
+so that searching for a type, CTD or firmware compares that group. Values that are out of range or
+inconsistent (drift or profile pressure deeper than the maximum depth) are marked as errors.
+Unset values (255, 65535, ...) are shown as unknown, without colour. The output directory must
+exist.
 
 Example:
     xmtps-generate-mission-page.py -i"/data1/alamo/data/json/[0-9]+/[0-9]+_summary.json" -o/data1/alamo/data/plots2 /data1/alamo/data/json
@@ -28,7 +30,6 @@ Author: aekholm
 """
 
 import argparse
-import collections
 import datetime
 import itertools
 import json
@@ -37,7 +38,6 @@ import jsonpickle
 import math
 import os
 import re
-import statistics
 from yattag import Doc
 
 from FloatStatus import FloatStatus, LastLocation
@@ -54,7 +54,7 @@ JSON_VERSION = "0.11"
 # and as scaled in the listing (ARR, SAN/SAX, CPN, values in ms listed in s, the signed ICT)
 UNSET_VALUES = (255, 65535, 4294967295, 655.35, 65.535, 6553.5, 4294967.295, -327.68)
 
-# Groups with fewer floats than this are not checked against their most common values
+# With fewer floats shown than this, the values are not checked against their most common values
 MIN_GROUP_SIZE = 3
 
 # Mission phases of phase-dependent parameters
@@ -91,13 +91,13 @@ COLUMNS = [
     ('Other',       'WIMS',      's',       'WST',  'd', 'WST/WMT: WIMS timeout'),
 ]
 
-# The typical range shown in each table's footer: from this percentile to 100 minus it
+# The typical range shown in the table's footer: from this percentile to 100 minus it
 TYPICAL_RANGE_PERCENTILE = 10
 
 # Scores below this are not coloured
 MIN_SCORE = 0.05
 
-# Columns compared with the group's median instead of how common the value is (pump durations
+# Columns compared with the median instead of how common the value is (pump durations
 # are tuned for each float): (relative deviation from the median that is still not coloured,
 # relative deviation that gets the full colour)
 MEDIAN_COLUMNS = {'DFT#': (0.25, 2.0)}
@@ -373,53 +373,133 @@ def CheckValue(mission, param, value, phase=None):
     return ''
 
 
-def Abnormality(param, value, stat):
-    """Return (score, description) of a value against its group: score 0 for a normal value up to
-    1 for the most abnormal.
+# The page's script, after MCFG (ScoringConfig): colours the values against the floats shown and
+# fills the footer, at load and whenever a search changes the rows shown (see SCORING_SCRIPT's
+# description in WriteMissionFile). The functions mirror the former Python ones: mStats (most
+# common value, or median, and the typical range by nearest rank), mScore (abnormality score and
+# its description) and mStyle (white through yellow to red, or white to blue below the most common
+# value or median).
+SCORING_SCRIPT = r"""
+function mG(v) { return String(parseFloat(v.toPrecision(6))); }
+// rounding to an integer with ties to even, as Python's '{:.0f}'
+function mR(x) { var r = Math.round(x); return Math.abs(x % 1) === 0.5 && r % 2 ? r - 1 : r; }
+function mFmt(v, f) {
+  if (v === null || v === undefined || isNaN(v)) return '-';
+  if (f === 'b' && (v === 0 || v === 1)) return v ? 'on' : 'off';
+  if (f === 'h') return mG(Math.round(v / 3600 * 100) / 100);
+  if (f === 'd' && Number.isInteger(v)) return String(v);
+  return mG(v);
+}
+function mStyle(score, low) {
+  if (low) return 'hsl(' + mR(195 + 25 * score) + ', 100%, ' + mR(100 - 32 * score) + '%)';
+  return 'hsl(' + mR(55 * (1 - score)) + ', 100%, ' + mR(100 - 35 * score) + '%)';
+}
+function mStats(values, c) {
+  var counts = new Map(), mode = null, modeCount = 0;
+  values.forEach(function (v) { counts.set(v, (counts.get(v) || 0) + 1); });
+  counts.forEach(function (n, v) { if (n > modeCount) { mode = v; modeCount = n; } });
+  var s = values.slice().sort(function (a, b) { return a - b; }), n = s.length - 1;
+  var ref = mode;
+  if (MCFG.median[c]) ref = n % 2 ? (s[(n - 1) / 2] + s[(n + 1) / 2]) / 2 : s[n / 2];
+  return { ref: ref, refCount: modeCount, n: values.length, counts: counts,
+           low: s[Math.floor(n * MCFG.pct / 100)], high: s[Math.ceil(n * (100 - MCFG.pct) / 100)] };
+}
+function mScore(v, st, c) {
+  var m = MCFG.median[c];
+  if (m) {
+    var dev = st.ref ? Math.abs(v - st.ref) / Math.abs(st.ref) : (v === st.ref ? 0 : 1);
+    return [Math.min(1, Math.max(0, dev - m[0]) / (m[1] - m[0])),
+            mR(100 * dev) + '% from the median ' + mG(st.ref) + ' of the floats shown (' + st.n + ' floats)'];
+  }
+  var count = st.counts.get(v) || 0;
+  return [1 - count / st.refCount,
+          count + ' of ' + st.n + ' floats shown; most common ' + mG(st.ref) + ' (' + st.refCount + ' floats)'];
+}
+var mLast = null;
+function mUpdate(dt) {
+  var idx = dt.rows({ search: 'applied', order: 'index' }).indexes().toArray();
+  var key = idx.join(',');
+  if (key === mLast) return;
+  mLast = key;
+  var vals = MCFG.fmt.map(function () { return []; });
+  idx.forEach(function (i) {
+    dt.row(i).node().querySelectorAll('td[data-c]').forEach(function (td) {
+      if (td.dataset.s !== '0') vals[+td.dataset.c].push(parseFloat(td.dataset.v));
+    });
+  });
+  var stats = vals.map(function (v, c) { return v.length ? mStats(v, c) : null; });
+  var check = idx.length >= MCFG.minGroup;
+  dt.rows().nodes().toArray().forEach(function (tr) {
+    tr.querySelectorAll('td[data-c]').forEach(function (td) {
+      var title = td.dataset.t, c = +td.dataset.c, st = stats[c], styled = false;
+      if (check && td.dataset.s === '2' && st) {
+        var v = parseFloat(td.dataset.v), r = mScore(v, st, c);
+        title += ': ' + r[1];
+        if (r[0] >= MCFG.minScore) {
+          td.style.setProperty('background-color', mStyle(r[0], v < st.ref), 'important');
+          styled = true;
+        }
+      }
+      if (!styled) td.removeAttribute('style');
+      td.title = title;
+    });
+  });
+  document.querySelectorAll('td[data-fc]').forEach(function (td) {
+    var c = +td.dataset.fc, st = stats[c], f = MCFG.fmt[c];
+    td.textContent = '';
+    if (!st) { td.textContent = '-'; return; }
+    if (td.dataset.ft === 'mode') {
+      td.appendChild(document.createTextNode(mFmt(st.ref, f)));
+      if (MCFG.median[c]) {
+        td.appendChild(document.createElement('br'));
+        var small = document.createElement('small');
+        small.textContent = 'median';
+        td.appendChild(small);
+      }
+    } else {
+      td.textContent = st.low === st.high ? mFmt(st.low, f) : mFmt(st.low, f) + ' – ' + mFmt(st.high, f);
+    }
+  });
+  var count = document.getElementById('mcount');
+  if (count) count.textContent = '(' + idx.length + ' of ' + dt.rows().count() + ' floats shown' +
+      (check ? '' : '; too few to compare') + ')';
+}
+$(document).ready(function () {
+  var dt = $('table.mtable').DataTable({ order: [[3, 'desc']], paging: false, info: false, scrollX: false });
+  jQuery('.dataTable').wrap("<div class='tat' />");
+  dt.on('draw', function () { mUpdate(dt); });
+  mUpdate(dt);
+});
+"""
 
-    stat is the group's (reference value, its count, number of values, Counter of the values).
-    For MEDIAN_COLUMNS the score rises linearly from 0 at the column's tolerated deviation from
-    the median (relative to the median) to 1 at its full-scale deviation. Otherwise it is 1 - (floats with this value) / (floats
-    with the most common value): 0 for the most common value, near 1 for a value only one float
-    of a large group has.
-    """
-    ref, ref_count, n, counts = stat
-    if param in MEDIAN_COLUMNS:
-        dev = abs(value - ref) / abs(ref) if ref else (0 if value == ref else 1)
-        tolerance, full = MEDIAN_COLUMNS[param]
-        return min(1, max(0, dev - tolerance) / (full - tolerance)), '{:.0f}% from the group median {:g} ({:d} floats)'.format(100 * dev, ref, n)
-    count = counts.get(value, 0)
-    return 1 - count / ref_count, '{:d} of {:d} floats; most common {} ({:d} floats)'.format(
-        count, n, ref if isinstance(ref, str) else '{:g}'.format(ref), ref_count)
 
-
-def TypicalRange(values):
-    """Return (low, high), the TYPICAL_RANGE_PERCENTILE-th and (100 - TYPICAL_RANGE_PERCENTILE)-th
-    percentiles of values by nearest rank, so that both are values floats actually use."""
-    values = sorted(values)
-    n = len(values) - 1
-    return (values[math.floor(n * TYPICAL_RANGE_PERCENTILE / 100)],
-            values[math.ceil(n * (100 - TYPICAL_RANGE_PERCENTILE) / 100)])
-
-
-def ScoreStyle(score, low=False):
-    """Return the inline style of a cell with abnormality score > 0: from white (near 0) through
-    yellow to red, or for values below the group's most common value (or median), from white to
-    blue, so that values close to typical are nearly white."""
-    if low:
-        return 'background-color: hsl({:.0f}, 100%, {:.0f}%) !important;'.format(195 + 25 * score, 100 - 32 * score)
-    return 'background-color: hsl({:.0f}, 100%, {:.0f}%) !important;'.format(55 * (1 - score), 100 - 35 * score)
+def ScoringConfig():
+    """Return the JSON configuration of SCORING_SCRIPT: the format of each data column (TableCells
+    order), the tolerated and full-scale relative deviations of the MEDIAN_COLUMNS columns by
+    column index, MIN_GROUP_SIZE, MIN_SCORE and TYPICAL_RANGE_PERCENTILE."""
+    cells = list(TableCells())
+    return json.dumps(dict(
+        fmt=[col[4] for col, _ in cells],
+        median={str(i): MEDIAN_COLUMNS[col[3]] for i, (col, _) in enumerate(cells) if col[3] in MEDIAN_COLUMNS},
+        minGroup=MIN_GROUP_SIZE, minScore=MIN_SCORE, pct=TYPICAL_RANGE_PERCENTILE))
 
 
 def WriteMissionFile(dpath):
     """Write the mission parameters page <dpath>/params.html from float_map.
 
-    One DataTables table per float type, most recent report first, with the group's
-    most common value (or median) of each column in the footer. In groups of at least
-    MIN_GROUP_SIZE floats with parameters, each value is coloured by its Abnormality score (from
-    white to red, or white to blue for values below the most common value or median, ScoreStyle); errors found by CheckValue are dark red. The title text of
-    each cell gives the details. Errors are logged, or
-    raised with -H; a failed row is skipped.
+    One DataTables table of all the floats, most recent report first. Each value cell carries its
+    raw value (data-v), its column (data-c, the TableCells index), whether it is compared (data-s:
+    0 for an unset value, a phase the mission does not use or a parameter not sent; 1 for an error
+    found by CheckValue, which counts in the statistics but is shown dark red; 2 otherwise) and its
+    title without the comparison (data-t). SCORING_SCRIPT then computes, over the floats shown,
+    each column's most common value (or median) and typical range for the footer, and colours each
+    value by how abnormal it is, with at least MIN_GROUP_SIZE floats shown: 1 - (floats with this
+    value) / (floats with the most common value), or for MEDIAN_COLUMNS rising linearly from 0 at
+    the column's tolerated relative deviation from the median to 1 at its full-scale deviation;
+    scores of at least MIN_SCORE colour the cell from white to red, or white to blue below the most
+    common value or median. It does this at load and whenever a search changes the floats shown.
+    The title text of each cell gives the details. Errors are logged, or raised with -H; a failed
+    row is skipped.
     """
 
     global float_map
@@ -430,11 +510,9 @@ def WriteMissionFile(dpath):
 
         now = datetime.datetime.now(datetime.UTC).timestamp()
 
-        # Group the floats by type (ALAMO, including WIMS and MM2 floats, and ALTO)
+        # All floats in one table, most recent report first
 
-        groups = collections.defaultdict(list)
-        for float_id, x in float_map.items():
-            groups[x['summary']['type']].append(float_id)
+        float_ids = sorted(float_map, key=lambda i: float_map[i]['summary']['latest']['sbd'].dt_epoch, reverse=True)
 
         # Create document
 
@@ -452,7 +530,7 @@ def WriteMissionFile(dpath):
 
                 doc.asis('<script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>')
                 doc.asis('<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.12.1/datatables.min.css"/>')
-                doc.asis('<script type="text/javascript">$(document).ready(function () { $("table.mtable").DataTable({ order: [[3, \'desc\']], paging: false, info: false, scrollX: false }); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
+                doc.asis('<script type="text/javascript">var MCFG = ' + ScoringConfig() + ';' + SCORING_SCRIPT + '</script>')
 
                 with(tag('style')):
 
@@ -518,224 +596,182 @@ def WriteMissionFile(dpath):
                             with tag('span', klass='mkey munused'):
                                 text('phases its mission does not use')
                             text(' (not reached from phase 0 through MNS, or with MNM 0), which are not compared. ')
-                            text('Floats are compared within their group (groups of at least {:d} floats); the colour shows how abnormal a value is: '.format(MIN_GROUP_SIZE))
+                            text('Each value is compared with those of the floats shown (at least {:d}): search the table, for example for ALTO, RBR or a firmware version, to compare that group, and the colours and the footer are recomputed. The colour shows how abnormal a value is: '.format(MIN_GROUP_SIZE))
                             with tag('span', klass='mkey mscale'):
                                 text('higher: less common \u2192 rare')
                             text(' and ')
                             with tag('span', klass='mkey mscalelow'):
                                 text('lower: less common \u2192 rare')
-                            text(' than the group\'s most common value (first pump: distance from the group median), ')
+                            text(' than the most common value of the floats shown (first pump: distance from their median), ')
                             with tag('span', klass='mkey merr'):
                                 text('out of range or deeper than the maximum pressure')
                             text('. Unset values (sent before a mission is loaded) are shown as unknown. Hover over a header or value for details.')
 
-                        for group in sorted(groups.keys()):
+                        with tag('h2'):
+                            text('Floats ')
+                            with tag('small', id='mcount'):
+                                text('({:d} floats)'.format(len(float_ids)))
 
-                            float_ids = sorted(groups[group], key=lambda i: float_map[i]['summary']['latest']['sbd'].dt_epoch, reverse=True)
+                        with tag('table', klass='mtable stripe'):
 
-                            # Statistics of each column (parameter and phase) over the group's floats
-                            # with set values, in phases their mission uses: (most common value or
-                            # median, its count, number of values, counts), and the typical range
-                            # (TypicalRange)
+                            # Table header: column groups, then the columns, then the phases of
+                            # phase-dependent columns
 
-                            modes, ranges = {}, {}
-                            for col, phase in TableCells():
-                                param = col[3]
-                                values = []
-                                for float_id in float_ids:
-                                    value = CellValue(float_map[float_id], param, phase)[1]
-                                    if phase is not None and phase not in float_map[float_id]['phases'][1]:
-                                        continue
-                                    if value is not None and value not in UNSET_VALUES:
-                                        values.append(value)
-                                if values:
-                                    counts = collections.Counter(values)
-                                    most_common = counts.most_common(1)[0]
-                                    if param in MEDIAN_COLUMNS:
-                                        modes[param, phase] = (statistics.median(values), None, len(values), counts)
-                                    else:
-                                        modes[param, phase] = (most_common[0], most_common[1], len(values), counts)
-                                    ranges[param, phase] = TypicalRange(values)
-
-                            check_group = len(float_ids) >= MIN_GROUP_SIZE
-
-                            with tag('h2'):
-                                text('{} '.format(group))
-                                with tag('small'):
-                                    text('({:d} float{})'.format(len(float_ids), '' if len(float_ids) == 1 else 's'))
-
-                            with tag('table', klass='mtable stripe'):
-
-                                # Table header: column groups, then the columns, then the phases of
-                                # phase-dependent columns
-
-                                with tag('thead'):
-                                    with tag('tr'):
-                                        with tag('th', colspan=6):
-                                            text('Float')
-                                        for header_group, n in [(k, len(list(g))) for k, g in itertools.groupby(c[0] for c, _ in TableCells())]:
-                                            with tag('th', colspan=n):
-                                                text(header_group)
-                                    with tag('tr'):
-                                        for header, units in (('ID', ''), ('Type', ''), ('Firmware', ''), ('Last Report', 'UTC'), ('Status', ''), ('Dive No.', '')):
-                                            with tag('th', rowspan=2):
-                                                text(header)
-                                                if units:
-                                                    doc.stag('br')
-                                                    with tag('small'):
-                                                        text('[' + units + ']')
-                                        for _, header, units, param, _, description in COLUMNS:
-                                            span = ('colspan', len(PHASES)) if param.endswith('#') else ('rowspan', 2)
-                                            with tag('th', span, title=description, klass='mphases' if param.endswith('#') else ''):
-                                                text(header)
+                            with tag('thead'):
+                                with tag('tr'):
+                                    with tag('th', colspan=6):
+                                        text('Float')
+                                    for header_group, n in [(k, len(list(g))) for k, g in itertools.groupby(c[0] for c, _ in TableCells())]:
+                                        with tag('th', colspan=n):
+                                            text(header_group)
+                                with tag('tr'):
+                                    for header, units in (('ID', ''), ('Type', ''), ('Firmware', ''), ('Last Report', 'UTC'), ('Status', ''), ('Dive No.', '')):
+                                        with tag('th', rowspan=2):
+                                            text(header)
+                                            if units:
                                                 doc.stag('br')
                                                 with tag('small'):
-                                                    text(param.replace('#', '') + (' [' + units + ']' if units else ''))
-                                    with tag('tr'):
-                                        for col, phase in TableCells():
-                                            if phase is not None:
-                                                with tag('th', title='{}, mission phase {:d}'.format(col[5], phase)):
-                                                    text('P{:d}'.format(phase))
-
-                                # Table body
-
-                                with tag('tbody'):
-                                    for float_id in float_ids:
-
-                                        try:
-
-                                            x = float_map[float_id]
-                                            summary = x['summary']
-                                            mission = x['mission']
-
-                                            with tag('tr'):
-
-                                                with tag('td'): # id
-                                                    with tag('a', href='{}/{}'.format(args.plots_url, float_id)):
-                                                        text('{}'.format(float_id))
-                                                    if summary['id'].wmo > 1:
-                                                        doc.stag('br')
-                                                        with tag('small'):
-                                                            text('{}'.format(summary['id'].wmo))
-
-                                                with tag('td'): # type
-                                                    text(summary['type'])
-                                                    ctdtype = mission['ctdtype'] if mission is not None and mission.get('ctdtype') else summary['ctdtype']
-                                                    if len(ctdtype) > 0:
-                                                        doc.stag('br')
-                                                        with tag('small'):
-                                                            text(ctdtype)
-
-                                                # firmware
-                                                fwver = mission['fwver'] if mission.get('fwver') else summary['fwver']
-                                                with tag('td'):
-                                                    if FirmwareString(fwver):
-                                                        text(FirmwareString(fwver))
-                                                        doc.stag('br')
-                                                        with tag('small'):
-                                                            text(fwver)
-                                                    else:
-                                                        text('-')
-
-                                                # last report (sorted by epoch)
-                                                sbd = summary['latest']['sbd']
-                                                with tag('td', ('data-order', '{:.0f}'.format(sbd.dt_epoch))):
-                                                    text(sbd.dt_str[0:10] + ' ' + sbd.dt_str[11:16])
-                                                    doc.stag('br')
-                                                    with tag('small'):
-                                                        text('{:.0f} days ago'.format((now - sbd.dt_epoch) / 86400))
-
-                                                # status, and under it the sea or ocean of the last
-                                                # known position (or "WHOI"), as on the summary page
-                                                with tag('td', ('data-order', '{:.0f}'.format(-sbd.dt_epoch))): # status
-                                                    location = LastLocation(summary)
-                                                    status = FloatStatus(summary, location)
-                                                    with tag('div', klass='stimg'):
-                                                        doc.stag('img', src='{}/{}'.format(args.plots_url, status['img']))
-                                                        text(status['name'])
-                                                    if location:
-                                                        with tag('small', klass='sloc'):
-                                                            text(location)
-
-                                                with tag('td'): # dive of the mission parameters
-                                                    text('{}'.format(mission['dive']))
-                                                    if summary['latest']['cycle'] != mission['dive']:
-                                                        doc.stag('br')
-                                                        with tag('small'):
-                                                            text('of {}'.format(summary['latest']['cycle']))
-
-                                                current, used, phase_description = x['phases']
-                                                for col, phase in TableCells():
-
-                                                    param, fmt = col[3], col[4]
-                                                    name, value = CellValue(x, param, phase)
-                                                    stat = modes.get((param, phase))
-                                                    klasses, style, title = [], '', name
-                                                    if value is not None:
-                                                        title += ' = {:g}'.format(value)
-                                                    if param == 'MPS':
-                                                        title += ': ' + phase_description
-                                                    if phase is not None and phase == current:
-                                                        klasses.append('mcur')
-                                                        title += ' (current phase)'
-                                                    error = CheckValue(mission, param, value, phase)
-                                                    if value in UNSET_VALUES:
-                                                        title += ': unknown (unset; the firmware sends {:g} before a mission is loaded)'.format(value)
-                                                    elif phase is not None and phase not in used:
-                                                        klasses.append('munused')
-                                                        title += ': phase {:d} not used by the mission'.format(phase)
-                                                    elif error:
-                                                        klasses.append('merr')
-                                                        title += ': ' + error
-                                                    elif check_group and value is not None and stat is not None:
-                                                        score, description = Abnormality(param, value, stat)
-                                                        title += ': ' + description
-                                                        if score >= MIN_SCORE:
-                                                            style = ScoreStyle(score, value < stat[0])
-                                                    with tag('td', klass=' '.join(klasses), style=style, title=title):
-                                                        text(FormatValue(value, fmt))
-                                                        if param == 'MPS' and value is not None and value not in UNSET_VALUES and mission.get('MPC') is not None:
-                                                            doc.stag('br')
-                                                            with tag('small'):
-                                                                mnm = mission.get('MNM{:d}'.format(int(mission['MPS'])))
-                                                                text('{:.0f}/{:.0f}'.format(mission['MPC'], mnm) if mnm is not None else '')
-
-                                        except:
-                                            errstr = 'Failed to create mission row for float {}'.format(float_id)
-
-                                            if hasattr(args, 'halt') and args.halt:
-                                                raise Exception(errstr)
-                                            logger.error(errstr)
-
-                                # Table footer: the group's most common values and typical ranges
-
-                                with tag('tfoot'):
-                                    with tag('tr'):
-                                        with tag('td', colspan=6, klass='mfoot'):
-                                            text('Most common')
-                                        for col, phase in TableCells():
-                                            param, fmt = col[3], col[4]
-                                            with tag('td'):
-                                                text(FormatValue(modes[param, phase][0], fmt) if (param, phase) in modes else '-')
-                                                if param in MEDIAN_COLUMNS and (param, phase) in modes:
-                                                    doc.stag('br')
-                                                    with tag('small'):
-                                                        text('median')
-                                    with tag('tr'):
-                                        with tag('td', colspan=6, klass='mfoot', title='Range of the middle {:.0f}% of the group\'s values'.format(100 - 2 * TYPICAL_RANGE_PERCENTILE)):
-                                            text('Typical range')
+                                                    text('[' + units + ']')
+                                    for _, header, units, param, _, description in COLUMNS:
+                                        span = ('colspan', len(PHASES)) if param.endswith('#') else ('rowspan', 2)
+                                        with tag('th', span, title=description, klass='mphases' if param.endswith('#') else ''):
+                                            text(header)
                                             doc.stag('br')
                                             with tag('small'):
-                                                text('{:.0f}th-{:.0f}th percentile'.format(TYPICAL_RANGE_PERCENTILE, 100 - TYPICAL_RANGE_PERCENTILE))
-                                        for col, phase in TableCells():
-                                            param, fmt = col[3], col[4]
+                                                text(param.replace('#', '') + (' [' + units + ']' if units else ''))
+                                with tag('tr'):
+                                    for col, phase in TableCells():
+                                        if phase is not None:
+                                            with tag('th', title='{}, mission phase {:d}'.format(col[5], phase)):
+                                                text('P{:d}'.format(phase))
+
+                            # Table body
+
+                            with tag('tbody'):
+                                for float_id in float_ids:
+
+                                    try:
+
+                                        x = float_map[float_id]
+                                        summary = x['summary']
+                                        mission = x['mission']
+
+                                        with tag('tr'):
+
+                                            with tag('td'): # id
+                                                with tag('a', href='{}/{}'.format(args.plots_url, float_id)):
+                                                    text('{}'.format(float_id))
+                                                if summary['id'].wmo > 1:
+                                                    doc.stag('br')
+                                                    with tag('small'):
+                                                        text('{}'.format(summary['id'].wmo))
+
+                                            with tag('td'): # type
+                                                text(summary['type'])
+                                                ctdtype = mission['ctdtype'] if mission is not None and mission.get('ctdtype') else summary['ctdtype']
+                                                if len(ctdtype) > 0:
+                                                    doc.stag('br')
+                                                    with tag('small'):
+                                                        text(ctdtype)
+
+                                            # firmware
+                                            fwver = mission['fwver'] if mission.get('fwver') else summary['fwver']
                                             with tag('td'):
-                                                if (param, phase) not in ranges:
-                                                    text('-')
-                                                elif ranges[param, phase][0] == ranges[param, phase][1]:
-                                                    text(FormatValue(ranges[param, phase][0], fmt))
+                                                if FirmwareString(fwver):
+                                                    text(FirmwareString(fwver))
+                                                    doc.stag('br')
+                                                    with tag('small'):
+                                                        text(fwver)
                                                 else:
-                                                    text(FormatValue(ranges[param, phase][0], fmt) + ' – ' + FormatValue(ranges[param, phase][1], fmt))
+                                                    text('-')
+
+                                            # last report (sorted by epoch)
+                                            sbd = summary['latest']['sbd']
+                                            with tag('td', ('data-order', '{:.0f}'.format(sbd.dt_epoch))):
+                                                text(sbd.dt_str[0:10] + ' ' + sbd.dt_str[11:16])
+                                                doc.stag('br')
+                                                with tag('small'):
+                                                    text('{:.0f} days ago'.format((now - sbd.dt_epoch) / 86400))
+
+                                            # status, and under it the sea or ocean of the last
+                                            # known position (or "WHOI"), as on the summary page
+                                            with tag('td', ('data-order', '{:.0f}'.format(-sbd.dt_epoch))): # status
+                                                location = LastLocation(summary)
+                                                status = FloatStatus(summary, location)
+                                                with tag('div', klass='stimg'):
+                                                    doc.stag('img', src='{}/{}'.format(args.plots_url, status['img']))
+                                                    text(status['name'])
+                                                if location:
+                                                    with tag('small', klass='sloc'):
+                                                        text(location)
+
+                                            with tag('td'): # dive of the mission parameters
+                                                text('{}'.format(mission['dive']))
+                                                if summary['latest']['cycle'] != mission['dive']:
+                                                    doc.stag('br')
+                                                    with tag('small'):
+                                                        text('of {}'.format(summary['latest']['cycle']))
+
+                                            current, used, phase_description = x['phases']
+                                            for k, (col, phase) in enumerate(TableCells()):
+
+                                                param, fmt = col[3], col[4]
+                                                name, value = CellValue(x, param, phase)
+                                                klasses, title, compared = [], name, 0
+                                                if value is not None:
+                                                    title += ' = {:g}'.format(value)
+                                                if param == 'MPS':
+                                                    title += ': ' + phase_description
+                                                if phase is not None and phase == current:
+                                                    klasses.append('mcur')
+                                                    title += ' (current phase)'
+                                                error = CheckValue(mission, param, value, phase)
+                                                if value in UNSET_VALUES:
+                                                    title += ': unknown (unset; the firmware sends {:g} before a mission is loaded)'.format(value)
+                                                elif phase is not None and phase not in used:
+                                                    klasses.append('munused')
+                                                    title += ': phase {:d} not used by the mission'.format(phase)
+                                                elif error:
+                                                    klasses.append('merr')
+                                                    title += ': ' + error
+                                                    compared = 1
+                                                elif value is not None:
+                                                    compared = 2
+                                                with tag('td', ('data-c', k), ('data-s', compared), ('data-v', repr(float(value)) if compared else ''),
+                                                         ('data-t', title), klass=' '.join(klasses), title=title):
+                                                    text(FormatValue(value, fmt))
+                                                    if param == 'MPS' and value is not None and value not in UNSET_VALUES and mission.get('MPC') is not None:
+                                                        doc.stag('br')
+                                                        with tag('small'):
+                                                            mnm = mission.get('MNM{:d}'.format(int(mission['MPS'])))
+                                                            text('{:.0f}/{:.0f}'.format(mission['MPC'], mnm) if mnm is not None else '')
+
+                                    except:
+                                        errstr = 'Failed to create mission row for float {}'.format(float_id)
+
+                                        if hasattr(args, 'halt') and args.halt:
+                                            raise Exception(errstr)
+                                        logger.error(errstr)
+
+                            # Table footer: the most common values and typical ranges of the floats
+                            # shown, filled in by SCORING_SCRIPT
+
+                            with tag('tfoot'):
+                                with tag('tr'):
+                                    with tag('td', colspan=6, klass='mfoot'):
+                                        text('Most common')
+                                    for k in range(len(list(TableCells()))):
+                                        with tag('td', ('data-fc', k), ('data-ft', 'mode')):
+                                            text('-')
+                                with tag('tr'):
+                                    with tag('td', colspan=6, klass='mfoot', title='Range of the middle {:.0f}% of the values of the floats shown'.format(100 - 2 * TYPICAL_RANGE_PERCENTILE)):
+                                        text('Typical range')
+                                        doc.stag('br')
+                                        with tag('small'):
+                                            text('{:.0f}th-{:.0f}th percentile'.format(TYPICAL_RANGE_PERCENTILE, 100 - TYPICAL_RANGE_PERCENTILE))
+                                    for k in range(len(list(TableCells()))):
+                                        with tag('td', ('data-fc', k), ('data-ft', 'range')):
+                                            text('-')
 
                         # Create footer
 

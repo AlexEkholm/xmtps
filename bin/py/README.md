@@ -322,10 +322,14 @@ and the `<sn>_mission.json` next to it. Directories are always searched recursiv
 
 - **Rows:** every deployed float (one with a completed profile) that has sent mission parameters;
   with `--days`, only those that reported within `DAYS` days. Each row shows the parameters from
-  the float's latest dive that has any, with its firmware, last report, status (ACTIVE within 30
-  days, OVERDUE within 180, otherwise ARCHIVED) and the dive.
-- **Tables:** one per float type, ALAMO (including WIMS and MM2) and ALTO; floats are compared only
-  within their table.
+  the float's latest dive that has any, with its firmware, last report, status (as on the summary
+  page: PREDEPLOYMENT when last seen at WHOI, otherwise ACTIVE within 30 days, OVERDUE within 180,
+  otherwise ARCHIVED, with the last known location under it) and the dive.
+- **Table:** one table of all floats, ALAMO (including WIMS and MM2) and ALTO, newest report first.
+  Values are compared with those of the floats shown: typing in the search field, for example
+  `ALTO`, `RBR` or a firmware version, recomputes the colors and the footer for the rows that
+  match (in the browser; sorting does not change them). The heading shows how many floats are
+  shown.
 - **Columns:** phase `MPS`; pressures `DTD`, `PFD`/`PFM`, `MDS`, `CTF`, `ASD`; timing `PTO`, `SGT`,
   `SET`, `APT`; descent `DFT`, `DCM`, `PSM`; ascent `ARR`, `APM`; surface `SSP`, `SAM`, `SAO`; ice
   `ICM`, `ICT`; `PPE` and `WST`/`WMT`.
@@ -333,11 +337,11 @@ and the `<sn>_mission.json` next to it. Directories are always searched recursiv
   phases uses P0). The current phase is `MPS`, or `MNS<MPS>` once `MPC` reaches `MNM<MPS>`; its
   values are bold and underlined, and the Phase column shows `MPC`/`MNM`. Phases the mission
   never reaches, or with `MNM` 0, are gray and left out of the statistics.
-- **Colors:** in groups of three or more floats, each value is colored by how rare it is in its
-  group (1 − its floats / the most common value's floats): yellow to red above the most common
-  value, blue below. `DFT` is colored by its distance from the group median instead (white
-  within 25%, full color at 200%). The footer of each table shows the most common value (`DFT`:
-  the median) and the 10th–90th percentile range.
+- **Colors:** with three or more floats shown, each value is colored by how rare it is among them
+  (1 − its floats / the most common value's floats): yellow to red above the most common value,
+  blue below. `DFT` is colored by its distance from their median instead (white within 25%, full
+  color at 200%). The footer shows the most common value (`DFT`: the median) and the 10th–90th
+  percentile range of the floats shown.
 - **Unset and impossible values:** unset values (255, 65535, ...) are shown as "unknown" and not
   counted. Impossible values (phase outside 0–2, drift pressure outside 0–7000 dBar, drift or
   profile pressure deeper than `MDS`) are dark red.
