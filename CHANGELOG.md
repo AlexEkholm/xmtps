@@ -34,6 +34,9 @@ Python tools:
   are not colored. The heading shows how many floats are shown.
 - Mission parameters page: the mission phase column is no longer colored (its footer still shows
   the most common phase and the range).
+- Mission parameters page: searching `alamo` matched every float, because DataTables searches the
+  HTML of a cell with `data-order` and the Status cell's icon path is `/alamo/img/...`. The Status
+  and Last Report cells now have a plain-text `data-search`.
 
 ## 2026-11-08
 

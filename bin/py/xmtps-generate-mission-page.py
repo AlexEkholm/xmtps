@@ -691,19 +691,25 @@ def WriteMissionFile(dpath):
                                                 else:
                                                     text('-')
 
-                                            # last report (sorted by epoch)
+                                            # last report (sorted by epoch). A cell with data-order is
+                                            # searched as its HTML, so data-search gives its text
                                             sbd = summary['latest']['sbd']
-                                            with tag('td', ('data-order', '{:.0f}'.format(sbd.dt_epoch))):
-                                                text(sbd.dt_str[0:10] + ' ' + sbd.dt_str[11:16])
+                                            report = sbd.dt_str[0:10] + ' ' + sbd.dt_str[11:16]
+                                            ago = '{:.0f} days ago'.format((now - sbd.dt_epoch) / 86400)
+                                            with tag('td', ('data-order', '{:.0f}'.format(sbd.dt_epoch)), ('data-search', report + ' ' + ago)):
+                                                text(report)
                                                 doc.stag('br')
                                                 with tag('small'):
-                                                    text('{:.0f} days ago'.format((now - sbd.dt_epoch) / 86400))
+                                                    text(ago)
 
                                             # status, and under it the sea or ocean of the last
                                             # known position (or "WHOI"), as on the summary page
-                                            with tag('td', ('data-order', '{:.0f}'.format(-sbd.dt_epoch))): # status
-                                                location = LastLocation(summary)
-                                                status = FloatStatus(summary, location)
+                                            # (data-search: the text, not the HTML, whose icon path
+                                            # contains "alamo")
+                                            location = LastLocation(summary)
+                                            status = FloatStatus(summary, location)
+                                            with tag('td', ('data-order', '{:.0f}'.format(-sbd.dt_epoch)),
+                                                     ('data-search', (status['name'] + ' ' + location).strip())): # status
                                                 with tag('div', klass='stimg'):
                                                     doc.stag('img', src='{}/{}'.format(args.plots_url, status['img']))
                                                     text(status['name'])
