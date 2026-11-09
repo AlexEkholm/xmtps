@@ -3641,7 +3641,7 @@ blocks taken while a motor runs (pump) are rejected.
   0x7FC00000) marks records whose blocks were all rejected.
 - **Bands.** `logmap` lists FFT bin ranges `lo-hi`, e.g. `0-0,1-1,2-3,…,289-492`. MAPLe bin k is
   the frequency (k + 1) x effectivesamplerate / nfft: bin 0 is the first bin above DC. The `cf_`
-  column names are the band centres computed that way (e.g. `cf_98.3` for 289-492 at 257.20 Hz).
+  column names are the band centers computed that way (e.g. `cf_98.3` for 289-492 at 257.20 Hz).
 - **Motors, `tm_<ch>_motors.eng`.** ASCII rows `onoff sample`: motor on (1) or off (0) at the sample
   index (absolute, not differenced).
 

@@ -71,19 +71,19 @@ private:
     /* Private Data Members: */
 
 
-    /** The colour palette for instrument paths and placemarks, indexed by style index. */
+    /** The color palette for instrument paths and placemarks, indexed by style index. */
     static const Color32 kml_default_path_colors_[KML_NUM_DFLT_PATH_COLORS];
 
-    /** The KML style IDs of the path (line) styles, one per palette colour. */
+    /** The KML style IDs of the path (line) styles, one per palette color. */
     static const string kml_default_path_style_ids_[KML_NUM_DFLT_PATH_COLORS];
 
-    /** The KML style IDs of the large placemark styles, one per palette colour. */
+    /** The KML style IDs of the large placemark styles, one per palette color. */
     static const string kml_default_placemark_style_ids_[KML_NUM_DFLT_PATH_COLORS];
 
-    /** The KML style IDs of the small placemark styles, one per palette colour. */
+    /** The KML style IDs of the small placemark styles, one per palette color. */
     static const string kml_small_placemark_style_ids_[KML_NUM_DFLT_PATH_COLORS];
 
-    /** The KML style IDs of the triangle placemark styles, one per palette colour. */
+    /** The KML style IDs of the triangle placemark styles, one per palette color. */
     static const string kml_triangle_placemark_style_ids_[KML_NUM_DFLT_PATH_COLORS];
 
     /** The libkml factory used to create KML elements, held per thread.
@@ -127,14 +127,14 @@ public:
         return kml_factory_;
     }
 
-    /** Add the four default styles for one palette colour to a KML document.
+    /** Add the four default styles for one palette color to a KML document.
      *
      *  Adds a 5-pixel path (line) style, a large dot placemark style, a small dot placemark style
-     *  and a triangle placemark style, all in the colour @p style_idx (modulo the palette size).
+     *  and a triangle placemark style, all in the color @p style_idx (modulo the palette size).
      *  The icons are loaded from @c http://argo.whoi.edu/kml/img/. Errors are logged, not thrown.
      *
      *  @param[in]  document    The KML document to add the styles to.
-     *  @param[in]  style_idx   The palette index of the colour.
+     *  @param[in]  style_idx   The palette index of the color.
      */
     static void SetDefaultKmlStyle(const DocumentPtr& document, unsigned int style_idx) {
 
@@ -262,7 +262,7 @@ public:
 
     }
 
-    /** Add the default styles for every palette colour to a KML document.
+    /** Add the default styles for every palette color to a KML document.
      *
      *  @param[in]  document    The KML document to add the styles to.
      *
@@ -298,11 +298,11 @@ public:
 
     }
 
-    /** Get the palette colour for an index (an instrument ID, for example), modulo the palette size.
+    /** Get the palette color for an index (an instrument ID, for example), modulo the palette size.
      *
      *  @param[in]  id      The index.
      *
-     *  @return     The colour.
+     *  @return     The color.
      */
     static const Color32& GetDefaltKmlPathColor(int id) {
         return kml_default_path_colors_[id % KML_NUM_DFLT_PATH_COLORS];

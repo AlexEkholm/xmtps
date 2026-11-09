@@ -18,7 +18,7 @@ voltage and whether it is falling, EnergyModel.PumpVoltageFallDive), its energy 
 per cycle, cycle length, and the shares of pumps, sensors, communication and standby over its
 life) and its outlook on the current mission (cycles and time left with their range,
 EnergyModel.RemainingCycles), as on the float pages' remaining-cycles plot. Little
-time left, much of the pack used and a falling pump voltage are coloured (STATUS_CLASSES).
+time left, much of the pack used and a falling pump voltage are colored (STATUS_CLASSES).
 The output directory must exist.
 
 Example:
@@ -61,10 +61,10 @@ ENERGY_SHARES = [
     ('Standby', ('controller_j', 'self_discharge_j', 'storage_j')),
     ]
 
-# Expected time left (years) below which the outlook is coloured: (limit, class), first match
+# Expected time left (years) below which the outlook is colored: (limit, class), first match
 TIME_LEFT_CLASSES = ((0.5, 'ebad'), (1.0, 'ewarn'), (2.0, 'elow'))
 
-# Share of the nominal pack energy used, from which the Used cell is coloured: (limit, class),
+# Share of the nominal pack energy used, from which the Used cell is colored: (limit, class),
 # first match: the high and central usable shares of the remaining-cycles estimate
 USED_CLASSES = ((ENERGY_USABLE_FRACTION[2], 'ebad'), (ENERGY_USABLE_FRACTION[1], 'ewarn'))
 
@@ -330,7 +330,7 @@ def WriteEnergyFile(dpath):
 
     One DataTables table, one row per float, most recent report first; every column can be sorted,
     and the search field filters the rows (by serial, type, status, location, pack, ...). The
-    outlook columns are coloured by the expected time left (TIME_LEFT_CLASSES), the Used column by
+    outlook columns are colored by the expected time left (TIME_LEFT_CLASSES), the Used column by
     the share of the pack used (USED_CLASSES), and the pump voltage when it is falling, except for
     ARCHIVED floats (no report in 180 days), whose batteries are mostly spent. The title
     text of each cell gives the details. Errors are logged, or raised with -H; a failed row is
@@ -435,7 +435,7 @@ def WriteEnergyFile(dpath):
                                  'drain ±{:.0f}%; time left at the current cycle length. '.format(
                                      ENERGY_REMAINING_RECENT_DIVES, 100 * f_mid, 100 * f_low, 100 * f_high,
                                      100 * ENERGY_CONTROLLER_UNCERTAINTY))
-                            text('Colours: expected time left under ')
+                            text('Colors: expected time left under ')
                             for limit, klass in TIME_LEFT_CLASSES:
                                 with tag('span', klass='mkey ' + klass):
                                     text('{:g} year{}'.format(limit, '' if limit == 1 else 's'))
@@ -450,7 +450,7 @@ def WriteEnergyFile(dpath):
                                 text('falling')
                             text(' (its highest below {:.0f}% of its early median for 3 dives; it came a median 16% of '
                                  'their dives before the end on the floats that ran out of battery). Archived floats are '
-                                 'not coloured. Search the table to '
+                                 'not colored. Search the table to '
                                  'select floats, for example ACTIVE, ALTO or Tadiran; hover over a value for details.'.format(
                                      100 * ENERGY_VOLTAGE_FALL_FRACTION))
 
@@ -515,7 +515,7 @@ def WriteEnergyFile(dpath):
                                             # those cells get their text as data-search
                                             location = LastLocation(summary)
                                             status = FloatStatus(summary, location)
-                                            # archived floats (no report in 180 days) are not coloured
+                                            # archived floats (no report in 180 days) are not colored
                                             alert = status['name'] != 'ARCHIVED'
                                             with tag('td', ('data-order', '{:.0f}'.format(-sbd.dt_epoch)),
                                                      ('data-search', (status['name'] + ' ' + location).strip())): # status

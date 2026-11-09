@@ -622,7 +622,7 @@ class XMaple:
             for(size_t b = 0; b < s->logmap().size(); ++b) {
               const int lo = s->logmap()[b].first, hi = s->logmap()[b].second;
               // MAPLe bin k is the frequency (k + 1) * fsEff / nfft (bin 0 is the first above DC).
-              // Centre frequency from the column name (cf_<Hz>), else the band's mean frequency.
+              // Center frequency from the column name (cf_<Hz>), else the band's mean frequency.
               double fc = ((lo + hi) * 0.5 + 1) * df;
               if(b + 1 < s->columns().size() && s->columns()[b + 1].compare(0, 3, "cf_") == 0)
                 fc = atof(s->columns()[b + 1].c_str() + 3);

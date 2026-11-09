@@ -184,7 +184,7 @@ def BathymetryPressure(lat, lon):
     lon/lat/z, or ETOPO2v2c, with x/y/z) on the first call and caches the open dataset, with the
     grid's name for plot labels, in the global bathymetry; a failure to read it is logged once and
     cached too, so this and all later calls return None. Interpolates the elevation bilinearly
-    between the four surrounding grid cell centres (longitude wraps at the dateline; latitude is
+    between the four surrounding grid cell centers (longitude wraps at the dateline; latitude is
     clamped to the grid) and converts depth to pressure with Saunders (1981).
 
     Args:
@@ -199,7 +199,7 @@ def BathymetryPressure(lat, lon):
         return None
     x, y = bathymetry['x'], bathymetry['y']
     lat, lon = np.asarray(lat, dtype = np.double), np.asarray(lon, dtype = np.double)
-    # Grid spacing from the full span: the coordinates are float32, so neighbouring cells
+    # Grid spacing from the full span: the coordinates are float32, so neighboring cells
     # differ by up to 1e-6 degrees, which over the grid adds up to a third of a cell.
     fx = (lon - x[0]) / ((x[-1] - x[0]) / (len(x) - 1))
     fy = np.clip((lat - y[0]) / ((y[-1] - y[0]) / (len(y) - 1)), 0, len(y) - 1)
@@ -3794,7 +3794,7 @@ def WriteHtmlFile(float_id, runtime_s=None):
 def ContourLines(x, y, z, level):
     """Return the lines where z crosses level, as a list of (xs, ys) arrays (marching squares).
 
-    x, y: increasing cell-centre coordinates; z: shape (len(y), len(x)), NaN cells are skipped.
+    x, y: increasing cell-center coordinates; z: shape (len(y), len(x)), NaN cells are skipped.
     The crossing on each cell edge is interpolated linearly. Segments are joined into lines at
     shared edge points; saddle cells are split so the corner at the high values' diagonal is cut
     off. Replaces Plotly's contour trace, which would store the whole grid once per contour trace.
@@ -3874,10 +3874,10 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
     Plain lon/lat axes (Plotly's geo and tile maps can't hover a raster), with the latitude axis
     scaled by 1/cos(mid-latitude) so shapes are true near the float, over a region square in km:
     the profiles plus a 0.6 degree margin. Layers, bottom up: the bathymetry grid (BathymetryGrid)
-    as a depth heatmap in whole metres, blue at sea and gray on land (0 m), whose hover gives the
+    as a depth heatmap in whole meters, blue at sea and gray on land (0 m), whose hover gives the
     depth at any point ("12m"; "0m" on land); a hillshade (sun from the northwest, 3x vertical
     exaggeration) as a translucent gray heatmap; isobaths every 500 m (1000 m when deeper than
-    6000 m) and the coastline as unlabelled lines (ContourLines);
+    6000 m) and the coastline as unlabeled lines (ContourLines);
     the track; one marker per profile in its dive color (colors, indexed as dives), the last
     profile a star, whose hover gives dive, time, position, fix source and the grid depth there.
 
@@ -3910,7 +3910,7 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
     lon, lat, z = lon[::step], lat[::step], z[::step, ::step]
     depth = -z
 
-    # Depth in whole metres (int16, sent as a compact binary array): 0 on land, at least 1 m at
+    # Depth in whole meters (int16, sent as a compact binary array): 0 on land, at least 1 m at
     # sea, so land is a single value that the color scale paints gray and the hover reads "0m"
     depth_m = np.where(depth > 0, np.maximum(np.round(depth), 1), 0).astype(np.int16)
 
@@ -3947,7 +3947,7 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
         colorscale=[[0, 'rgb(0,0,0)'], [1, 'rgb(255,255,255)']], name='hillshade'))
 
     # Isobaths every 500 m (1000 m when deeper than 6000 m) and the coastline, computed once as
-    # lines (ContourLines), unlabelled
+    # lines (ContourLines), unlabeled
     def polyline(lines):
         xs, ys = [], []
         for lx, ly in lines:
@@ -5798,7 +5798,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
     start of each dive's descent and ending at the start of the last dive's ascent (or its last
     drift sample); dives without mission parameters keep the previous target.
 
-    The bathymetry line, labelled "Bathymetry (ETOPO 2022)", is the seafloor pressure at the GPS
+    The bathymetry line, labeled "Bathymetry (ETOPO 2022)", is the seafloor pressure at the GPS
     fixes of dives 1 and later, interpolated bilinearly from ETOPO (--bathymetry, -b) by
     BathymetryPressure; it is left out if the bathymetry file can't be read.
 
@@ -8999,7 +8999,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
 CASE_VAC_LIMITS_INHG = (3, 7)      # case vacuum range marked on the phase_vac plot
 
 def AddCaseVacLimits(fig):
-    """Draw CASE_VAC_LIMITS_INHG as dashed grey horizontal lines across a vacuum plot (y in inHg).
+    """Draw CASE_VAC_LIMITS_INHG as dashed gray horizontal lines across a vacuum plot (y in inHg).
 
     The lines are layout shapes below the traces, so they are in the background and have no hover.
     """
@@ -9014,7 +9014,7 @@ def PumpOperationTraces(df_pump, col, scale, value_fmt):
     within each dive. Operation k of a dive (1 = first) goes in trace k, stacked bottom up, so the
     bar height is the dive total. col is the column to plot ('time' or 'energy'), scale its
     factor (1/1000 for kJ) and value_fmt the Plotly hover format of the value. All operations are
-    grey, separated by thin white lines. A last, invisible marker trace at the top of each bar
+    gray, separated by thin white lines. A last, invisible marker trace at the top of each bar
     gives the dive total its own line in the (x unified) hover label.
     """
 
@@ -11135,7 +11135,7 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
 
 # Colors of the SBD data size plot, by message type (the ids of the listing's SBT lines). Related
 # types share a hue: binned profile blues, high-resolution profile purples, drift teals, time
-# series greens, waves oranges, mission configuration pinks, engineering greys.
+# series greens, waves oranges, mission configuration pinks, engineering grays.
 SBD_TYPE_COLORS = {
     '0x00-0x05': 'rgb(40,40,40)',
     '0x10-0x1F': 'rgb(8,48,107)',
@@ -12708,7 +12708,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
     """Write the wave plots for one float; return their figure metadata.
 
     Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
-    max_dive) and uses all of them (max_dive for the dive colour scale).
+    max_dive) and uses all of them (max_dive for the dive color scale).
 
     Plots the 'wave' and 'wave_spectra' data (with 'profile_position') as wave_mwm, wave_swh,
     wave_period, wave_direction_mean, the acceleration and displacement spectra
@@ -14480,7 +14480,7 @@ def WriteMicrostructurePlots(float_id, float_aggregate_data, dpath_float, dives,
     - microstructure_profile: the signal variance of each channel against pressure (log scale),
       and one pressure-by-frequency image of log10 of the band-averaged spectrum per channel.
     - microstructure_shear_spectra: the shear channels' band-averaged spectra on log-log axes, one
-      line per record, coloured by pressure (left out without a shear channel).
+      line per record, colored by pressure (left out without a shear channel).
 
     Values are in counts, as the MAPLe board sends them (category 'microstructure'). Returns the
     list of figure metadata dicts from WritePlotImageFiles, empty without microstructure data
@@ -14511,7 +14511,7 @@ def WriteMicrostructurePlots(float_id, float_aggregate_data, dpath_float, dives,
         channels = df[['ch', 'name']].drop_duplicates().sort_values(['ch', 'name'])['name'].tolist()
 
         ink, muted, grid = 'rgb(31,35,40)', 'rgb(89,99,110)', 'rgb(230,232,235)'
-        series = ['rgb(42,111,219)', 'rgb(217,130,43)']     # channel colours, fixed order
+        series = ['rgb(42,111,219)', 'rgb(217,130,43)']     # channel colors, fixed order
         hoverlabel = dict(font=dict(family='Consolas, monospace', size=14))
 
         def channel(name):
@@ -14577,7 +14577,7 @@ def WriteMicrostructurePlots(float_id, float_aggregate_data, dpath_float, dives,
             plot_bgcolor='white', font=dict(color=ink), margin=dict(l=10, r=10, b=20, t=80, pad=4))
         figs['microstructure_profile'] = fig
 
-        # Shear spectra on log-log axes, coloured by pressure
+        # Shear spectra on log-log axes, colored by pressure
 
         shear = [c for c in channels if c.startswith('shear')]
         if shear:
@@ -14596,7 +14596,7 @@ def WriteMicrostructurePlots(float_id, float_aggregate_data, dpath_float, dives,
                                       + '{} {:.0f} dBar'.format(name, p) + '</extra>'),
                         row=1, col=1 + i)
                 fig.update_xaxes(type='log', title_text='{} spectra: frequency [Hz]'.format(name), row=1, col=1 + i)
-            fig.add_trace(go.Scatter(   # colour bar of the pressure
+            fig.add_trace(go.Scatter(   # color bar of the pressure
                 x=[None], y=[None], mode='markers', showlegend=False, hoverinfo='skip',
                 marker=dict(colorscale=[[x, plotly.colors.sample_colorscale(scale, [0.25 + 0.75 * x])[0]]
                                         for x in np.linspace(0, 1, 5)],

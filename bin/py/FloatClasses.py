@@ -145,7 +145,7 @@ def FieldResetDives(dives, launch_epoch):
     return out
 
 def RollingAverage(array, N: int ):
-    """Return the centred N-point moving average of a 1-D array, rounded to 5 decimals.
+    """Return the centerd N-point moving average of a 1-D array, rounded to 5 decimals.
 
     The array is zero padded with N//2 values at each end and averaged with a cumulative sum, so
     the first and last N//2 outputs are biased toward zero. For odd N the result has the length
@@ -393,7 +393,7 @@ class PositionVector:
         """Initialize the vector from pos1 to pos2, computing it now if compute is True.
 
         Attributes:
-            dist_m: geodesic (WGS84) distance in metres, rounded to 1 m.
+            dist_m: geodesic (WGS84) distance in meters, rounded to 1 m.
             azi: initial azimuth at pos1 in degrees clockwise from north, [0, 360), to 0.1.
             duration_s: pos2 time minus pos1 time, in seconds.
             speed_mps: dist_m / duration_s in m/s, rounded to 4 decimals.
@@ -479,7 +479,7 @@ class PresTimeSeries:
         rounded to 0.1 s) is inserted between each pair of samples, so n becomes 2n-1. Rates in
         dBar/s (rounded to 4 decimals; positive when pressure decreases) are:
 
-        - at a midpoint: the difference between its two neighbouring samples;
+        - at a midpoint: the difference between its two neighboring samples;
         - at an original sample: the difference between the midpoints either side of it;
         - NaN at the first and last sample.
 
@@ -1044,7 +1044,7 @@ class FloatId:
 
         Args:
             whoi: WHOI float serial number (the listing's SN).
-            dac: Argo data assembly centre number, as listed on the LIS line.
+            dac: Argo data assembly center number, as listed on the LIS line.
             wmo: WMO platform number.
         """
         self.whoi = whoi
@@ -1947,7 +1947,7 @@ class MicrostructureChannel:
         start_epoch: start in seconds since epoch (NaN if unknown).
         comment: the channel's comment (probe type and serial numbers).
         band_k_lo, band_k_hi: FFT bin range of each band (MAPLe bin k is (k + 1) * fs_eff / nfft).
-        band_freq, band_f_lo, band_f_hi: band centre and edge frequencies, in Hz.
+        band_freq, band_f_lo, band_f_hi: band center and edge frequencies, in Hz.
         mean_t, spec_t: record mid times, in seconds after start; mean_dt_epoch, spec_dt_epoch:
             the same in seconds since epoch (set by PostProcess()).
         mean_pres, spec_pres: pressure at each record, in dBar, interpolated in time from the

@@ -515,7 +515,7 @@ HDOP & 1.5 \\
 \end{itemize}
 
 An invalid fix gets lat 99.99999, lon 999.99999 and no time.
-\item A valid 0x05 fix advances the float's start-of-mission time. Packets sent before the start-of-mission or deployment time are ignored.
+\item A valid 0x05 fix advances the float's start-of-mission time, unless it is after the metadata launch time: floats with a GPS firmware bug reset at sea and send their startup messages again, which must not move the start of mission past the dives before (since 2026-11-08). Packets sent before the start-of-mission or deployment time are ignored.
 \item \textbf{Profile position selection:}
 
 \begin{itemize}
@@ -4728,7 +4728,7 @@ The MAPLe board processes the data in records. A record is 2 navg + 1 FFT blocks
 \begin{itemize}
 \item \textbf{Signal mean, \code{tm\_\allowbreak{}<ch>.\allowbreak{}eng}.} ASCII rows, one per record. Columns \code{sigmean despikepoints} and, for shear channels, \code{shearmask}. Each column holds its first value, then first differences: sum them. \code{sigmean} is the record's mean in counts, \code{despikepoints} the points replaced by despiking, and \code{shearmask} has one bit per FFT block of the record (2 navg + 1 bits; least significant bit first), set when the block was used. On 11491 dive 850, the first set mask bit (block 158 of the ascent) is the block where the motor log says the pump stopped.
 \item \textbf{Band-averaged spectra, \code{tm\_\allowbreak{}<ch>\_\allowbreak{}logavg.\allowbreak{}eng}.} Binary rows, one per record, of the columns \code{sigvar cf\_\allowbreak{}<f1> … cf\_\allowbreak{}<f12>}: the record's variance (counts²) and the spectrum averaged over each band of \code{logmap} (counts²/Hz). Values are little-endian float32 (\code{binaryoutput:\allowbreak{} 16}, no \code{scaleoff}; all production floats). With \code{\%scaleoff:\allowbreak{} (\allowbreak{}scale,\allowbreak{}offset)} (the demonstration float), each value is one byte b standing for 10\textasciicircum{}(b / scale - offset). [verified] The variance equals the sum of the band averages times their bandwidths to within 5-30 \% in both encodings. NaN (float32 0x7FC00000) marks records whose blocks were all rejected.
-\item \textbf{Bands.} \code{logmap} lists FFT bin ranges \code{lo-hi}, e.g. \code{0-0,\allowbreak{}1-1,\allowbreak{}2-3,\allowbreak{}…,\allowbreak{}289-492}. MAPLe bin k is the frequency (k + 1) x effectivesamplerate / nfft: bin 0 is the first bin above DC. The \code{cf\_\allowbreak{}} column names are the band centres computed that way (e.g. \code{cf\_\allowbreak{}98.\allowbreak{}3} for 289-492 at 257.20 Hz).
+\item \textbf{Bands.} \code{logmap} lists FFT bin ranges \code{lo-hi}, e.g. \code{0-0,\allowbreak{}1-1,\allowbreak{}2-3,\allowbreak{}…,\allowbreak{}289-492}. MAPLe bin k is the frequency (k + 1) x effectivesamplerate / nfft: bin 0 is the first bin above DC. The \code{cf\_\allowbreak{}} column names are the band centers computed that way (e.g. \code{cf\_\allowbreak{}98.\allowbreak{}3} for 289-492 at 257.20 Hz).
 \item \textbf{Motors, \code{tm\_\allowbreak{}<ch>\_\allowbreak{}motors.\allowbreak{}eng}.} ASCII rows \code{onoff sample}: motor on (1) or off (0) at the sample index (absolute, not differenced).
 \end{itemize}
 

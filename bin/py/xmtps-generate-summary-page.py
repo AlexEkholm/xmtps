@@ -6,7 +6,7 @@
 Reads the per-float <id>_summary.json files written by xmtps-aggregate-json.py (given as files
 and/or directories, searched recursively and filtered by the -i regular expressions), ignoring
 files whose JSON version is not JSON_VERSION. Writes <output>/index.html with an orthographic
-map of the latest float positions coloured by status (Plotly) and a sortable table (DataTables)
+map of the latest float positions colored by status (Plotly) and a sortable table (DataTables)
 with one row per float: ID, WMO, type and CTD, firmware, deployment date, age, distance
 profiled, status (active, overdue, archived) and the most recent cycle. The page is always
 rebuilt from all matching summary files; the output directory must exist. The table is also
@@ -744,7 +744,7 @@ def WriteSummaryPlots(dpath):
     """Build the position map for the summary page and store its HTML in summary_plot.
 
     Plots the latest valid GPS position of each float on an orthographic globe with the tropics
-    and polar circles, coloured and sized by time since the last report (green within 30 days,
+    and polar circles, colored and sized by time since the last report (green within 30 days,
     blue within 180 days, red otherwise). The HTML is a div that loads plotly.js from the CDN.
     Nothing is written to dpath, which is unused. Errors are logged, or raised with -H.
     """

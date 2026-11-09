@@ -663,7 +663,7 @@ options_description LocalConfiguration::GenerateConfigurationFileOptionsDescript
               ->default_value(120) //
               ->value_name("SEC"),
             "Set the time, in seconds, after which a mail server operation that receives no data "
-            "is cancelled; the connection is then closed and reopened on the next check.\n")
+            "is canceled; the connection is then closed and reopened on the next check.\n")
 
         ("mail.user",
             value<string>(&XFloatMailRetrievalService::mail_server_user_) //

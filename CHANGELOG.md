@@ -7,6 +7,9 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- American spelling throughout (color, gray, center, labeled, canceled, ...): pages, plots, code
+  comments, decoder messages and documentation.
+
 - Float pages: the energy plots (energy per cycle, total energy by component, remaining cycles)
   open the Engineering section, above the vacuum plots.
 
@@ -23,7 +26,7 @@ Python tools:
   battery age, startup and oil-pump voltage (and whether it is falling), the energy used so far
   and per cycle, the cycle length, the shares of pumps, sensors, communication and standby, and
   the cycles and time left on the current mission with their range. Little
-  time left, much of the pack used and a falling pump voltage are coloured, except on archived
+  time left, much of the pack used and a falling pump voltage are colored, except on archived
   floats. The remaining-cycles and falling-pump-voltage code moved from
   `xmtps-aggregate-json.py` to the new module `EnergyModel.py`, which both use, so the page and
   the float pages' remaining-cycles plots agree (checked on 11213: 643 cycles, 427-992).
@@ -347,12 +350,12 @@ Python tools:
 - Float page: the four pump vacuum plots (`pump_vac`, `pump_vac_avg`, `pump_vac_v_time`,
   `pump_vac_v_pres`) moved from the Hydraulic System section to the Engineering section, after
   Case Vacuum through the Dive Cycle.
-- Case Vacuum through the Dive Cycle (`phase_vac`): dashed grey lines at 3 and 7 inHg in the
+- Case Vacuum through the Dive Cycle (`phase_vac`): dashed gray lines at 3 and 7 inHg in the
   background, without hover.
 - GPS CNO plot (`satcom_gps_cno`): not made for floats whose GPS reports a carrier-to-noise ratio
   of 0 in every fix the plot shows; their float page shows the All Positions map in its place.
 - Total Pump Energy and Total Pump Duration per Cycle (`pump_energy_sum`, `pump_time_sum`): the
-  bars are all grey (operations still separated by thin white lines) and there is no legend; the
+  bars are all gray (operations still separated by thin white lines) and there is no legend; the
   hover label ends with a `Total:` line.
 - PNG export: images that Kaleido fails to render within a batch are now retried one at a time
   and their render error is logged. Kaleido 1.x does not raise for them, so the retry never ran and
@@ -393,7 +396,7 @@ Python tools:
 - `xmtps-list2json.py` reads the `SBT` lines into a new per-dive `sbd_types` list (`SbdType`), and
   `xmtps-aggregate-json.py` aggregates them into `<serial>_sbd_type.json`.
 - The SBD Data Size plot is a stacked bar chart by X-message type, as in the `SBT` lines, with
-  any retransmitted bytes on top. Dives listed before build 3352 show one grey "not broken down"
+  any retransmitted bytes on top. Dives listed before build 3352 show one gray "not broken down"
   bar.
 - New plot `satcom_sbd_data_type`: a pie chart of the float's total SBD data by message type.
 - New aggregate `<serial>_energy.json` and plot `energy_per_cycle` (new "Engineering" section of the
@@ -511,7 +514,7 @@ Decoder:
 Python tools:
 
 - Trajectory plots: the bathymetry line comes from ETOPO 2022 (60 arc-second surface elevation,
-  `/data1/etopo2022/`) instead of ETOPO2v2c (2 arc-minute), labelled "Bathymetry (ETOPO 2022)".
+  `/data1/etopo2022/`) instead of ETOPO2v2c (2 arc-minute), labeled "Bathymetry (ETOPO 2022)".
   The reader takes either grid's coordinate names (`lon`/`lat` or `x`/`y`); `--etopo` is a new
   alias of `-b/--bathymetry`.
 

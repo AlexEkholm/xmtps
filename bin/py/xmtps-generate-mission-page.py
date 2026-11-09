@@ -14,13 +14,13 @@ Writes <output>/params.html (production: plots2/engineering/, so that the float 
 icons are one level up, see --plots-url) with one table of all the floats (ALAMO, including WIMS
 and MM2 floats, and ALTO), one row per float with its firmware, the dive the parameters come from
 and a selection of important parameters (COLUMNS). Phase-dependent parameters (DTD0-2, PFD0-2,
-...) are shown for each mission phase, marking the float's current phase and greying out phases
-its mission does not use (MissionPhases). In the browser, each value is coloured by how abnormal it
+...) are shown for each mission phase, marking the float's current phase and graying out phases
+its mission does not use (MissionPhases). In the browser, each value is colored by how abnormal it
 is among the floats shown (how rare it is, or for MEDIAN_COLUMNS how far from the median), and the
-colours and the footer are recomputed whenever a search changes the floats shown (SCORING_SCRIPT),
+colors and the footer are recomputed whenever a search changes the floats shown (SCORING_SCRIPT),
 so that searching for a type, CTD or firmware compares that group. Values that are out of range or
 inconsistent (drift or profile pressure deeper than the maximum depth) are marked as errors.
-Unset values (255, 65535, ...) are shown as unknown, without colour. The output directory must
+Unset values (255, 65535, ...) are shown as unknown, without color. The output directory must
 exist.
 
 Example:
@@ -94,16 +94,16 @@ COLUMNS = [
 # The typical range shown in the table's footer: from this percentile to 100 minus it
 TYPICAL_RANGE_PERCENTILE = 10
 
-# Scores below this are not coloured
+# Scores below this are not colored
 MIN_SCORE = 0.05
 
-# Columns that are not coloured, though their most common value is shown in the footer: the
+# Columns that are not colored, though their most common value is shown in the footer: the
 # current mission phase is not a setting to compare
-UNCOLOURED_COLUMNS = {'MPS'}
+UNCOLORED_COLUMNS = {'MPS'}
 
 # Columns compared with the median instead of how common the value is (pump durations
-# are tuned for each float): (relative deviation from the median that is still not coloured,
-# relative deviation that gets the full colour)
+# are tuned for each float): (relative deviation from the median that is still not colored,
+# relative deviation that gets the full color)
 MEDIAN_COLUMNS = {'DFT#': (0.25, 2.0)}
 
 
@@ -377,7 +377,7 @@ def CheckValue(mission, param, value, phase=None):
     return ''
 
 
-# The page's script, after MCFG (ScoringConfig): colours the values against the floats shown and
+# The page's script, after MCFG (ScoringConfig): colors the values against the floats shown and
 # fills the footer, at load and whenever a search changes the rows shown (see SCORING_SCRIPT's
 # description in WriteMissionFile). The functions mirror the former Python ones: mStats (most
 # common value, or median, and the typical range by nearest rank), mScore (abnormality score and
@@ -495,13 +495,13 @@ def WriteMissionFile(dpath):
     raw value (data-v), its column (data-c, the TableCells index), whether it is compared (data-s:
     0 for an unset value, a phase the mission does not use or a parameter not sent; 1 for an error
     found by CheckValue, which counts in the statistics but is shown dark red, and for the
-    UNCOLOURED_COLUMNS, which count but are never coloured; 2 otherwise) and its
+    UNCOLORED_COLUMNS, which count but are never colored; 2 otherwise) and its
     title without the comparison (data-t). SCORING_SCRIPT then computes, over the floats shown,
-    each column's most common value (or median) and typical range for the footer, and colours each
+    each column's most common value (or median) and typical range for the footer, and colors each
     value by how abnormal it is, with at least MIN_GROUP_SIZE floats shown: 1 - (floats with this
     value) / (floats with the most common value), or for MEDIAN_COLUMNS rising linearly from 0 at
     the column's tolerated relative deviation from the median to 1 at its full-scale deviation;
-    scores of at least MIN_SCORE colour the cell from white to red, or white to blue below the most
+    scores of at least MIN_SCORE color the cell from white to red, or white to blue below the most
     common value or median. It does this at load and whenever a search changes the floats shown.
     The title text of each cell gives the details. Errors are logged, or raised with -H; a failed
     row is skipped.
@@ -602,7 +602,7 @@ def WriteMissionFile(dpath):
                             with tag('span', klass='mkey munused'):
                                 text('phases its mission does not use')
                             text(' (not reached from phase 0 through MNS, or with MNM 0), which are not compared. ')
-                            text('Each value is compared with those of the floats shown (at least {:d}): search the table, for example for ALTO, RBR or a firmware version, to compare that group, and the colours and the footer are recomputed. The colour shows how abnormal a value is: '.format(MIN_GROUP_SIZE))
+                            text('Each value is compared with those of the floats shown (at least {:d}): search the table, for example for ALTO, RBR or a firmware version, to compare that group, and the colors and the footer are recomputed. The color shows how abnormal a value is: '.format(MIN_GROUP_SIZE))
                             with tag('span', klass='mkey mscale'):
                                 text('higher: less common \u2192 rare')
                             text(' and ')
@@ -748,7 +748,7 @@ def WriteMissionFile(dpath):
                                                     title += ': ' + error
                                                     compared = 1
                                                 elif value is not None:
-                                                    compared = 1 if param in UNCOLOURED_COLUMNS else 2
+                                                    compared = 1 if param in UNCOLORED_COLUMNS else 2
                                                 with tag('td', ('data-c', k), ('data-s', compared), ('data-v', repr(float(value)) if compared else ''),
                                                          ('data-t', title), klass=' '.join(klasses), title=title):
                                                     text(FormatValue(value, fmt))

@@ -174,7 +174,7 @@ class XFloatMailRetrievalService:
 
     /** Timeout handler for the mail server connection.
      *
-     *  VMime calls it while it waits for data from the mail server. An operation is cancelled,
+     *  VMime calls it while it waits for data from the mail server. An operation is canceled,
      *  with a vmime::exceptions::operation_timed_out exception, when nothing has been received
      *  for @ref mail_server_timeout_s_ seconds, or at once when termination is signaled, so a
      *  stalled connection cannot block the thread (and the daemon's shutdown) indefinitely.
@@ -202,7 +202,7 @@ class XFloatMailRetrievalService:
 
         if(!termination_signaled_)
           lwrn() << "No response from the mail server for " << mail_server_timeout_s_
-                 << " s: operation cancelled.";
+                 << " s: operation canceled.";
 
         return false;   // Cancel the operation.
       }
@@ -235,7 +235,7 @@ class XFloatMailRetrievalService:
     /* Static Data Members: */
 
     /** The time, in seconds, after which a mail server operation that receives nothing is
-     *  cancelled (see @ref MailTimeoutHandler).
+     *  canceled (see @ref MailTimeoutHandler).
      */
     static unsigned int mail_server_timeout_s_;
 

@@ -753,7 +753,7 @@ Present only when the listing has microstructure lines (micro-ALTO floats; `MSF`
 | `start_epoch` | float | s | `start` in seconds since epoch, with milliseconds; `NaN` if invalid. |
 | `comment` | string | | Probe types and serial numbers. |
 | `band_k_lo`, `band_k_hi` | list of int | | FFT bin range of each band (bin k is (k + 1) × `fs_eff` / `nfft`). |
-| `band_freq`, `band_f_lo`, `band_f_hi` | list of float | Hz | Band centre and edges. |
+| `band_freq`, `band_f_lo`, `band_f_hi` | list of float | Hz | Band center and edges. |
 | `mean_t` | list of float | s | Signal-mean record times (middle of the record), after `start`. |
 | `mean_dt_epoch` | list of float | s | The same, since epoch (0.1 s). |
 | `mean_pres` | list of float | dBar | Pressure at each record, interpolated in time from the ascent pressures (`Ascent.dt_epoch`, `Ascent.pres`, so corrected like them); `NaN` outside the ascent samples or without them. |
@@ -1164,7 +1164,7 @@ One row per frequency bin of each `_wave` dive (245 per dive), sorted by `dive` 
 
 `_microstructure`: one row per spectra record of each MAPLe channel of each dive ≥ 0 (3.16), in dive and channel order. Columns: `dive`, `ch`, `ridx` (int); `name` (channel name); `dt_epoch` (record middle, s since epoch); `pres` (dBar, interpolated from the ascent); `sigvar` (counts²); `S0` … `S<n-1>` (band-averaged spectrum of each band, counts²/Hz; `null` for records rejected while the pump ran).
 
-`_microstructure_bands`: one row per band of each channel and dive: `dive`, `ch`, `band` (int); `name`; `freq`, `f_lo`, `f_hi` (band centre and edges, Hz). Column `S<band>` of `_microstructure` is that band.
+`_microstructure_bands`: one row per band of each channel and dive: `dive`, `ch`, `band` (int); `name`; `freq`, `f_lo`, `f_hi` (band center and edges, Hz). Column `S<band>` of `_microstructure` is that band.
 
 ## 5. Float summary: `<serial>_summary.json`
 

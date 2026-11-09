@@ -927,7 +927,7 @@ sections:
                 - type: paragraph
                   text: "An invalid fix gets lat 99.99999, lon 999.99999 and no time."
               - - type: paragraph
-                  text: "A valid 0x05 fix advances the float's start-of-mission time. Packets sent before the start-of-mission or deployment time are ignored."
+                  text: "A valid 0x05 fix advances the float's start-of-mission time, unless it is after the metadata launch time: floats with a GPS firmware bug reset at sea and send their startup messages again, which must not move the start of mission past the dives before (since 2026-11-08). Packets sent before the start-of-mission or deployment time are ignored."
               - - type: paragraph
                   text: "**Profile position selection:**"
                 - type: list
@@ -12324,7 +12324,7 @@ sections:
               - - type: paragraph
                   text: "**Band-averaged spectra, `tm_<ch>_logavg.eng`.** Binary rows, one per record, of the columns `sigvar cf_<f1> … cf_<f12>`: the record's variance (counts²) and the spectrum averaged over each band of `logmap` (counts²/Hz). Values are little-endian float32 (`binaryoutput: 16`, no `scaleoff`; all production floats). With `%scaleoff: (scale,offset)` (the demonstration float), each value is one byte b standing for 10^(b / scale - offset). [verified] The variance equals the sum of the band averages times their bandwidths to within 5-30 % in both encodings. NaN (float32 0x7FC00000) marks records whose blocks were all rejected."
               - - type: paragraph
-                  text: "**Bands.** `logmap` lists FFT bin ranges `lo-hi`, e.g. `0-0,1-1,2-3,…,289-492`. MAPLe bin k is the frequency (k + 1) x effectivesamplerate / nfft: bin 0 is the first bin above DC. The `cf_` column names are the band centres computed that way (e.g. `cf_98.3` for 289-492 at 257.20 Hz)."
+                  text: "**Bands.** `logmap` lists FFT bin ranges `lo-hi`, e.g. `0-0,1-1,2-3,…,289-492`. MAPLe bin k is the frequency (k + 1) x effectivesamplerate / nfft: bin 0 is the first bin above DC. The `cf_` column names are the band centers computed that way (e.g. `cf_98.3` for 289-492 at 257.20 Hz)."
               - - type: paragraph
                   text: "**Motors, `tm_<ch>_motors.eng`.** ASCII rows `onoff sample`: motor on (1) or off (0) at the sample index (absolute, not differenced)."
           - type: paragraph

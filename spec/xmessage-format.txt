@@ -604,8 +604,10 @@ Decoding notes [D]:
   - (when the fix is assigned) the time is later than the dive's last Iridium session time.
 
   An invalid fix gets lat 99.99999, lon 999.99999 and no time.
-- A valid 0x05 fix advances the float's start-of-mission time. Packets sent before the
-  start-of-mission or deployment time are ignored.
+- A valid 0x05 fix advances the float's start-of-mission time, unless it is after the metadata
+  launch time: floats with a GPS firmware bug reset at sea and send their startup messages again,
+  which must not move the start of mission past the dives before (since 2026-11-08). Packets sent
+  before the start-of-mission or deployment time are ignored.
 - Profile position selection:
 
   - A 0x02 fix of the same dive is the profile position.
@@ -6610,7 +6612,7 @@ taken while a motor runs (pump) are rejected.
   records whose blocks were all rejected.
 - Bands. logmap lists FFT bin ranges lo-hi, e.g. 0-0,1-1,2-3,…,289-492. MAPLe bin k is the frequency
   (k + 1) x effectivesamplerate / nfft: bin 0 is the first bin above DC. The cf_ column names are
-  the band centres computed that way (e.g. cf_98.3 for 289-492 at 257.20 Hz).
+  the band centers computed that way (e.g. cf_98.3 for 289-492 at 257.20 Hz).
 - Motors, tm_<ch>_motors.eng. ASCII rows onoff sample: motor on (1) or off (0) at the sample index
   (absolute, not differenced).
 
