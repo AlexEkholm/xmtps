@@ -3,6 +3,15 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-09
+
+Python tools:
+
+- Mission parameters page: the Status column is the same as on the summary page: PREDEPLOYMENT
+  (orange) for a float last seen at WHOI, and the last known location under the status. The
+  status and location code moved from the summary page to the new module `FloatStatus.py`, which
+  both pages use.
+
 ## 2026-11-08
 
 Decoder:

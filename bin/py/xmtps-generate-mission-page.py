@@ -40,6 +40,7 @@ import re
 import statistics
 from yattag import Doc
 
+from FloatStatus import FloatStatus, LastLocation
 from PageStatus import WriteStatusFooter
 
 """
@@ -101,8 +102,6 @@ MIN_SCORE = 0.05
 # relative deviation that gets the full colour)
 MEDIAN_COLUMNS = {'DFT#': (0.25, 2.0)}
 
-# Status by days since the latest report, as on the summary page: (days, status, image)
-STATUS = ((30, 'ACTIVE', 'img/s2.png'), (180, 'OVERDUE', 'img/s1.png'), (math.inf, 'ARCHIVED', 'img/s0.png'))
 
 # Alternative names of a parameter in other firmware layouts
 ALIASES = {'WST': ('WMT',)}
@@ -477,8 +476,9 @@ def WriteMissionFile(dpath):
                     text('table.mtable th { padding: 6px 4px; } ')
                     text('table.mtable td { padding: 6px 4px; text-align: left; height: 28px; white-space: nowrap; } ')
                     text('table.mtable td small, table.mtable th small { color: #aaa; } ')
-                    text('table.mtable td .stimg { width: 80px; } ')
+                    text('table.mtable td .stimg { min-width: 80px; white-space: nowrap; } ')
                     text('table.mtable td .stimg img { padding-right: 4px; display:inline; padding-bottom: 1px; } ')
+                    text('table.mtable td .sloc { display: block; color: #666; white-space: nowrap; } ')
                     text('table.mtable td[style] small { color: #555; } ')
                     text('table.mtable tfoot td { color: #777; font-style: italic; } ')
                     text('table.mtable tfoot tr:first-child td { border-top: 1px solid #111; } ')
@@ -645,12 +645,17 @@ def WriteMissionFile(dpath):
                                                     with tag('small'):
                                                         text('{:.0f} days ago'.format((now - sbd.dt_epoch) / 86400))
 
-                                                days = (now - sbd.dt_epoch) / 86400
+                                                # status, and under it the sea or ocean of the last
+                                                # known position (or "WHOI"), as on the summary page
                                                 with tag('td', ('data-order', '{:.0f}'.format(-sbd.dt_epoch))): # status
-                                                    _, status, image = next(s for s in STATUS if days < s[0])
+                                                    location = LastLocation(summary)
+                                                    status = FloatStatus(summary, location)
                                                     with tag('div', klass='stimg'):
-                                                        doc.stag('img', src='{}/{}'.format(args.plots_url, image))
-                                                        text(status)
+                                                        doc.stag('img', src='{}/{}'.format(args.plots_url, status['img']))
+                                                        text(status['name'])
+                                                    if location:
+                                                        with tag('small', klass='sloc'):
+                                                            text(location)
 
                                                 with tag('td'): # dive of the mission parameters
                                                     text('{}'.format(mission['dive']))

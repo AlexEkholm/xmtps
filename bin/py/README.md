@@ -15,6 +15,7 @@ directory, what each tool reads and writes, and all of their command-line option
 | [`FloatClasses.py`](#floatclassespy) | module | Data classes for one dive, shared by the converters; wave spectra post-processing |
 | [`RhoLUT.py`](#rholutpy) | module | Seawater density and σ₀ lookup table |
 | [`PageStatus.py`](#pagestatuspy) | module | Page footer: update time, run time, decoder status and version |
+| `FloatStatus.py` | module | A float's status (PREDEPLOYMENT, ACTIVE, OVERDUE, ARCHIVED) and last known location, shared by the summary and mission parameters pages |
 | `SeaNames.py` | module | Names the sea or ocean of a position ("WHOI" near Woods Hole) for the summary page's status column, from `data/marine-areas.json` (Natural Earth marine areas, public domain) |
 | `img/` | assets | The status icons `s0.png` to `s3.png`, served from `<plots>/img/` (copy them there on a new install) |
 
