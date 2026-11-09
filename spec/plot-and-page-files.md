@@ -545,10 +545,11 @@ Written by `bin/py/xmtps-generate-energy-page.py` (since 2026-11-09). It reads e
 | 10 | Cycle [kJ] | energy of a cycle without storage, median of the last 10 dives |
 | 11 | Length [days] | cycle length, median of the last 10 dives |
 | 12–15 | Pumps, Sensors, Comms, Standby [%] | shares of all the energy used (`ENERGY_SHARES`): oil and air pumps with the internal-resistance loss; CTD, WIMS and MAPLe; Iridium and GPS; controller, self-discharge and storage |
-| 16 | Cycles Left | expected (`remaining_mid`), range in small text |
-| 17 | Time Left [years] | cycles left × cycle length, range in small text |
+| 16 | By Component | the float page's Estimated Total Energy plot (`energy_by_component`, 3.10.1): its small image (`<plots-url>/<serial>/<serial>_energy_by_component_small.png`, 780 × 115 px) cropped to its rows 31–78, the bar only, without the title, subtitle, tick labels and x-axis label (`PLOT_CROP_ROWS`; all small images have the bar in rows 32–76), and shown 300 px wide (`PLOT_WIDTH_PX`, 18 px high), linking to the Engineering section of the float page (`<plots-url>/<serial>/#eng`); `loading="lazy"`, hidden if missing; not sortable (since 2026-11-09) |
+| 17 | Cycles Left | expected (`remaining_mid`), range in small text |
+| 18 | Time Left [years] | cycles left × cycle length, range in small text |
 
-Columns 16 and 17 get `ebad` under 0.5 years expected, `ewarn` under 1 year and `elow` under 2 years (`TIME_LEFT_CLASSES`). ARCHIVED floats (no report in 180 days) are not coloured. Cells have `data-order` values for sorting, each with a plain-text `data-search` (DataTables searches a cell with `data-order` as its HTML, where the status icon path `/alamo/img/...` matched every float for "alamo"), and `title` texts with the details. The page footer is section 8.
+Columns 17 and 18 get `ebad` under 0.5 years expected, `ewarn` under 1 year and `elow` under 2 years (`TIME_LEFT_CLASSES`). ARCHIVED floats (no report in 180 days) are not coloured. Cells have `data-order` values for sorting, each with a plain-text `data-search` (DataTables searches a cell with `data-order` as its HTML, where the status icon path `/alamo/img/...` matched every float for "alamo"), and `title` texts with the details. The page footer is section 8.
 
 ## 8. Page footer and decoder status
 

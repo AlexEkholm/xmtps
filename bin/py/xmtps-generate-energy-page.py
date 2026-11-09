@@ -70,6 +70,20 @@ USED_CLASSES = ((ENERGY_USABLE_FRACTION[2], 'ebad'), (ENERGY_USABLE_FRACTION[1],
 
 PACK_NAMES = {'tadiran': 'Tadiran', 'saft': 'Saft', 'alkaline': 'Alkaline'}
 
+# The float pages' Estimated Total Energy plot (energy_by_component, xmtps-aggregate-json.py), shown
+# in the Total Energy column: its small image (PLOT_IMAGE_PX, 780 x 115 px), cropped to its rows
+# PLOT_CROP_ROWS (the bar only, without the title, subtitle, tick labels and x-axis label; the
+# small images all have this layout: bar in rows 32-76) and shown at PLOT_WIDTH_PX wide, linking to the float page's
+# Engineering section (PLOT_LINK)
+PLOT_ID = 'energy_by_component'
+PLOT_IMAGE_PX = (780, 115)
+PLOT_CROP_ROWS = (31, 78)
+PLOT_WIDTH_PX = 300
+PLOT_LINK = '#eng'
+
+# Index of the Total Energy column: after the float (5), battery (4), energy (3) and share columns
+PLOT_COLUMN = 5 + 4 + 3 + len(ENERGY_SHARES)
+
 # The packs whose floats the page shows (PACK_NAMES); floats with another or an unknown pack are left out
 PACKS = ('Tadiran',)
 
@@ -347,7 +361,7 @@ def WriteEnergyFile(dpath):
 
                 doc.asis('<script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>')
                 doc.asis('<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.12.1/datatables.min.css"/>')
-                doc.asis('<script type="text/javascript">$(document).ready(function () { $("table.etable").DataTable({ order: [[3, \'desc\']], ' + TABLE_PAGING + ', scrollX: false }); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
+                doc.asis('<script type="text/javascript">$(document).ready(function () { $("table.etable").DataTable({ order: [[3, \'desc\']], ' + TABLE_PAGING + ', columnDefs: [{ orderable: false, targets: ' + str(PLOT_COLUMN) + ' }], scrollX: false }); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
 
                 with(tag('style')):
 
@@ -373,6 +387,12 @@ def WriteEnergyFile(dpath):
                     text('table.etable td .stimg img { padding-right: 4px; display:inline; padding-bottom: 1px; } ')
                     text('table.etable td .sloc { display: block; color: #666; white-space: nowrap; } ')
                     text('table.etable td.ebad, table.etable td.ewarn, table.etable td.elow { font-weight: bold; } ')
+                    text('table.etable td.eplot { padding: 2px 4px; } ')
+                    scale = PLOT_WIDTH_PX / PLOT_IMAGE_PX[0]
+                    text('table.etable td.eplot .eplotcrop { display: block; overflow: hidden; width: %dpx; height: %.0fpx; } '
+                         % (PLOT_WIDTH_PX, (PLOT_CROP_ROWS[1] - PLOT_CROP_ROWS[0]) * scale))
+                    text('table.etable td.eplot img { display: block; width: %dpx; height: auto; margin-top: -%.1fpx; } '
+                         % (PLOT_WIDTH_PX, PLOT_CROP_ROWS[0] * scale))
                     text('table.etable td.ebad { background-color: #b71c1c !important; color: #fff; } ')
                     text('table.etable td.ebad small { color: #fdd; } ')
                     text('table.etable td.ewarn { background-color: hsl(0, 100%, 80%) !important; } ')
@@ -438,7 +458,7 @@ def WriteEnergyFile(dpath):
 
                             with tag('thead'):
                                 with tag('tr'):
-                                    for header, n in (('Float', 5), ('Battery', 4), ('Energy', 3), ('Shares', len(ENERGY_SHARES)), ('Outlook', 2)):
+                                    for header, n in (('Float', 5), ('Battery', 4), ('Energy', 3), ('Shares', len(ENERGY_SHARES)), ('Total Energy', 1), ('Outlook', 2)):
                                         with tag('th', colspan=n):
                                             text(header)
                                 with tag('tr'):
@@ -452,6 +472,7 @@ def WriteEnergyFile(dpath):
                                                ('Cycle', 'kJ', 'Energy of a cycle, without storage: median of the last {:d} dives'.format(ENERGY_REMAINING_RECENT_DIVES)),
                                                ('Length', 'days', 'Length of a cycle: median of the last {:d} dives'.format(ENERGY_REMAINING_RECENT_DIVES))]
                                     headers += [ (name, '%', 'Share of all the energy used: ' + ', '.join(c[:-2] for c in cols)) for name, cols in ENERGY_SHARES ]
+                                    headers += [('By Component', '', 'The float page\'s Estimated Total Energy plot: the energy used so far, by component; click for the Engineering section of the float page')]
                                     headers += [('Cycles Left', '', 'Expected cycles left on the current mission, and the range'),
                                                 ('Time Left', 'years', 'Expected time left at the current cycle length, and the range')]
                                     for header, units, title in headers:
@@ -576,6 +597,16 @@ def WriteEnergyFile(dpath):
                                                 share = e['shares'][k] if e['shares'] else None
                                                 with tag('td', title='' if share is None else '{:.0f} kJ of {:.0f} kJ'.format(share * e['total_j'] / 1000, e['total_j'] / 1000)):
                                                     text('-' if share is None else '{:.0f}'.format(100 * share))
+
+                                            # the float page's Estimated Total Energy plot, cropped to the
+                                            # bar, linking to the float page's Engineering section; hidden
+                                            # if the image is missing
+                                            plot = '{}/{}/{}_{}'.format(args.plots_url, float_id, float_id, PLOT_ID)
+                                            with tag('td', ('data-search', ''), klass='eplot'):
+                                                with tag('a', klass='eplotcrop', href='{}/{}/{}'.format(args.plots_url, float_id, PLOT_LINK),
+                                                         title='Estimated Total Energy of {}: open the Engineering section of its float page'.format(float_id)):
+                                                    doc.stag('img', src=plot + '_small.png', alt='', loading='lazy',
+                                                             onerror="this.parentNode.style.display='none'")
 
                                             # outlook
 

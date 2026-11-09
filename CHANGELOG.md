@@ -7,6 +7,10 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- Battery and energy page: a Total Energy column with each float page's Estimated Total Energy
+  plot (energy by component), cropped to the bar, linking to the Engineering
+  section of the float page.
+
 - Summary page: URL parameter `n` sets the table's page size (10, 20, 50, 100 or `all`); changing
   the page size in the table updates it in the URL, and leaves it out for 10.
 
