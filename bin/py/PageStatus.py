@@ -153,10 +153,10 @@ def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None, decoder_stat
 
 # The fleet table pages, linked from the top of each: (key, title, path under the plots directory)
 TABLE_PAGES = (
-    ('summary', 'Float Summary', ''),
-    ('startup', 'Float Startup', 'engineering/startup.html'),
-    ('params', 'Mission Parameters', 'engineering/params.html'),
-    ('energy', 'Battery and Energy', 'engineering/energy.html'),
+    ('summary', 'Summary', ''),
+    ('startup', 'Startups', 'engineering/startup.html'),
+    ('params', 'Parameters', 'engineering/params.html'),
+    ('energy', 'Energy', 'engineering/energy.html'),
     )
 
 # DataTables paging of the fleet table pages, as on the summary page

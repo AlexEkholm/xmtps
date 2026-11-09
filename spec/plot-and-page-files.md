@@ -447,7 +447,7 @@ Written by `bin/py/xmtps-generate-summary-page.py` from all `<serial>_summary.js
 
 ### 5.2 Body
 
-1. Heading `ALAMO/ALTO Float Summary`, and under it the links to the table pages, in `<div id="tlinks">` (`WritePageLinks` in `bin/py/PageStatus.py`, since 2026-11-09; `TABLE_PAGES`): "Float Summary" (this page, as plain text), "Float Startup" (`engineering/startup.html`), "Mission Parameters" (`engineering/params.html`) and "Battery and Energy" (`engineering/energy.html`). The paths are relative and assume the production layout of section 11, with the other pages in `engineering/` below the summary page. The startup, mission and energy pages have the same links under their headings, built from `--plots-url` (`/alamo/` and `/alamo/engineering/...` in production).
+1. Heading `ALAMO/ALTO Float Summary`, and under it the links to the table pages, in `<div id="tlinks">` (`WritePageLinks` in `bin/py/PageStatus.py`, since 2026-11-09; `TABLE_PAGES`): "Summary" (this page, as plain text), "Startups" (`engineering/startup.html`), "Parameters" (`engineering/params.html`) and "Energy" (`engineering/energy.html`), separated by " | ". The paths are relative and assume the production layout of section 11, with the other pages in `engineering/` below the summary page. The startup, mission and energy pages have the same links under their headings, built from `--plots-url` (`/alamo/` and `/alamo/engineering/...` in production).
 2. Map (`div#pit`, 390 × 420 px): a Plotly figure embedded as a `div` (`to_html(full_html=False, include_plotlyjs='cdn', div_id='plot')`), so it also loads plotly.js from the Plotly CDN. Orthographic globe centered on 30° N, 45° W; 15°/30° graticule; dashed lines at the tropics and polar circles; equator line. One marker per float at its latest valid GPS position (`latest.gps`), colored by status (`FloatStatus`, as in the table): orange `rgb(255,168,64)` size 6 PREDEPLOYMENT (last seen at WHOI), green `rgb(123,255,123)` size 6 under 30 days since the latest SBD message, blue `rgb(123,123,255)` size 5 under 180 days, red `rgb(255,123,123)` size 4 otherwise. Hover shows the serial. Mode bar hidden. The map includes floats the table leaves out (it does not check the cycle or profiled distance).
 3. Table `#stable` (class `stripe`), one row per float, most recent report first. A float is left out if `latest.cycle` < 1 or its `profdepthsum` is not positive. Production on 2026-10-30: 250 rows (40 ACTIVE, 11 OVERDUE, 199 ARCHIVED).
 4. Footer (section 8) on the left, and an "Auto Refresh" checkbox on the right.
@@ -546,9 +546,8 @@ Written by `bin/py/xmtps-generate-energy-page.py` (since 2026-11-09). It reads e
 | 12–15 | Pumps, Sensors, Comms, Standby [%] | shares of all the energy used (`ENERGY_SHARES`): oil and air pumps with the internal-resistance loss; CTD, WIMS and MAPLe; Iridium and GPS; controller, self-discharge and storage |
 | 16 | Cycles Left | expected (`remaining_mid`), range in small text |
 | 17 | Time Left [years] | cycles left × cycle length, range in small text |
-| 18 | End | latest report + expected time left, `YYYY-MM` |
 
-Columns 16–18 get `ebad` under 0.5 years expected, `ewarn` under 1 year and `elow` under 2 years (`TIME_LEFT_CLASSES`). ARCHIVED floats (no report in 180 days) are not coloured. Cells have `data-order` values for sorting and `title` texts with the details. The page footer is section 8.
+Columns 16 and 17 get `ebad` under 0.5 years expected, `ewarn` under 1 year and `elow` under 2 years (`TIME_LEFT_CLASSES`). ARCHIVED floats (no report in 180 days) are not coloured. Cells have `data-order` values for sorting and `title` texts with the details. The page footer is section 8.
 
 ## 8. Page footer and decoder status
 

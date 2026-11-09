@@ -11,7 +11,7 @@ Python tools:
   the plot service after the startup page): one table of the deployed floats with their pack,
   battery age, startup and oil-pump voltage (and whether it is falling), the energy used so far
   and per cycle, the cycle length, the shares of pumps, sensors, communication and standby, and
-  the cycles and time left on the current mission with their range and the expected end. Little
+  the cycles and time left on the current mission with their range. Little
   time left, much of the pack used and a falling pump voltage are coloured, except on archived
   floats. The remaining-cycles and falling-pump-voltage code moved from
   `xmtps-aggregate-json.py` to the new module `EnergyModel.py`, which both use, so the page and

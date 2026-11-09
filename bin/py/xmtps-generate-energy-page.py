@@ -15,8 +15,8 @@ page, so that the float pages and status icons are one level up, see --plots-url
 DataTables table, one row per float, with its battery (pack, age, startup voltage, oil-pump
 voltage and whether it is falling, EnergyModel.PumpVoltageFallDive), its energy use (used so far,
 per cycle, cycle length, and the shares of pumps, sensors, communication and standby over its
-life) and its outlook on the current mission (cycles and time left with their range, and the
-expected end, EnergyModel.RemainingCycles), as on the float pages' remaining-cycles plot. Little
+life) and its outlook on the current mission (cycles and time left with their range,
+EnergyModel.RemainingCycles), as on the float pages' remaining-cycles plot. Little
 time left, much of the pack used and a falling pump voltage are coloured (STATUS_CLASSES).
 The output directory must exist.
 
@@ -232,13 +232,12 @@ def EnergyStatus(summary, energy, pump):
     dive (latest positive dive), used_j and used_frac (energy used so far, storage included),
     cycle_j and cycle_s (energy without storage and duration of a cycle: medians over the last
     ENERGY_REMAINING_RECENT_DIVES dives), remaining (low, mid, high cycles left; RemainingCycles,
-    as on the float pages' remaining-cycles plot), left_s (low, mid, high time left), end_epoch
-    (latest report plus the expected time left), shares (share of the float's total energy for each
+    as on the float pages' remaining-cycles plot), left_s (low, mid, high time left), shares (share of the float's total energy for each
     ENERGY_SHARES group), total_j.
     """
     s = dict(pack=None, nominal_j=None, age_s=None, start_v=None, v0=None, v_last=None, fall=None,
              dive=None, used_j=None, used_frac=None, cycle_j=None, cycle_s=None, remaining=None,
-             left_s=None, end_epoch=None, shares=None, total_j=None)
+             left_s=None, shares=None, total_j=None)
 
     df, cycle_j = CycleEnergy(energy)
     if len(df) < 1:
@@ -283,7 +282,6 @@ def EnergyStatus(summary, energy, pump):
             s['remaining'] = (float(last['remaining_low']), float(last['remaining_mid']), float(last['remaining_high']))
             if s['cycle_s'] is not None:
                 s['left_s'] = tuple(x * s['cycle_s'] for x in s['remaining'])
-                s['end_epoch'] = summary['latest']['sbd'].dt_epoch + s['left_s'][1]
     return s
 
 
@@ -430,7 +428,7 @@ def WriteEnergyFile(dpath):
 
                             with tag('thead'):
                                 with tag('tr'):
-                                    for header, n in (('Float', 5), ('Battery', 4), ('Energy', 3), ('Shares', len(ENERGY_SHARES)), ('Outlook', 3)):
+                                    for header, n in (('Float', 5), ('Battery', 4), ('Energy', 3), ('Shares', len(ENERGY_SHARES)), ('Outlook', 2)):
                                         with tag('th', colspan=n):
                                             text(header)
                                 with tag('tr'):
@@ -445,8 +443,7 @@ def WriteEnergyFile(dpath):
                                                ('Length', 'days', 'Length of a cycle: median of the last {:d} dives'.format(ENERGY_REMAINING_RECENT_DIVES))]
                                     headers += [ (name, '%', 'Share of all the energy used: ' + ', '.join(c[:-2] for c in cols)) for name, cols in ENERGY_SHARES ]
                                     headers += [('Cycles Left', '', 'Expected cycles left on the current mission, and the range'),
-                                                ('Time Left', 'years', 'Expected time left at the current cycle length, and the range'),
-                                                ('End', '', 'Expected end: the latest report plus the expected time left')]
+                                                ('Time Left', 'years', 'Expected time left at the current cycle length, and the range')]
                                     for header, units, title in headers:
                                         with tag('th', title=title):
                                             text(header)
@@ -583,9 +580,6 @@ def WriteEnergyFile(dpath):
                                                     doc.stag('br')
                                                     with tag('small'):
                                                         text('{}-{}'.format(Years(left[0]), Years(left[2])))
-                                            end = e['end_epoch']
-                                            with tag('td', ('data-order', '{:.0f}'.format(end if end is not None else 0)), klass=klass):
-                                                text('-' if end is None else datetime.datetime.fromtimestamp(end, datetime.UTC).strftime('%Y-%m'))
 
                                     except:
                                         errstr = 'Failed to create energy row for float {}'.format(float_id)
