@@ -272,16 +272,15 @@ Input: `pump` (`WritePumpPlots`); `engineering_data`, `pump` and `mission` (`Wri
 | `pump_curr` | Pump Battery Current | `fig` | Hydraulic | x: "Pump #"; y: "Current [A]". |
 | `pump_power` | Pump Power | `fig` | table | x: "Pump #"; y: "Power [W]". |
 | `pump_energy` | Pump Energy | `fig` | Hydraulic | x: "Pump #"; y: "Energy [J]". |
-| `pump_vac` | Internal Vacuum vs. Pump | `fig` | Engineering | x: "Pump #"; y: "Vacuum [inHg]". |
-| `pump_vac_v_pres` | Internal Vac. vs. Pump Pressure | `fig` | Engineering | x: "Vacuum [inHg]"; y: "Pressure [dBar]". |
-| `pump_vac_v_time` | Internal Vacuum vs. Pump Time | `fig` | Engineering | x: "Cumulative Pump Duration [seconds]"; y: "Vacuum [inHg]". |
-| `pump_vac_avg` | Average Internal Vacuum (Pump) | `fig2` | Engineering | Statistics per dive; y: "Vacuum [inHg]". |
+| `pump_vac` | Internal Vacuum vs. Pump | `fig` | Hydraulic | x: "Pump #"; y: "Vacuum [inHg]". |
+| `pump_vac_v_pres` | Internal Vac. vs. Pump Pressure | `fig` | Hydraulic | x: "Vacuum [inHg]"; y: "Pressure [dBar]". |
+| `pump_vac_v_time` | Internal Vacuum vs. Pump Time | `fig` | Hydraulic | x: "Cumulative Pump Duration [seconds]"; y: "Vacuum [inHg]". |
+| `pump_vac_avg` | Average Internal Vacuum (Pump) | `fig2` | Hydraulic | Statistics per dive; y: "Vacuum [inHg]". |
 | `pump_volt_avg` | Average Pump Battery Voltage | `fig2` | Hydraulic | Statistics per dive; y: "Voltage [V]". |
 | `pump_curr_avg` | Average Pump Battery Current | `fig2` | Hydraulic | Statistics per dive; y: "Current [A]". |
 | `pump_power_avg` | Average Pump Power | `fig2` | table | Statistics per dive; y: "Power [W]". |
-| `pump_energy_sum` | Total Pump Energy per Cycle | `figWideXS` | Hydraulic | Bars stacked by pump operation (1 = the dive's first, in listing order), all gray with thin white lines between operations, so a bar is the dive total; no legend. The hover (`x unified`) lists each operation (`#k: … kJ at … dbar`) and then `Total: …` (an invisible `Total` marker trace at the top of each bar). y: "Energy [kJ]". |
+| `pump_energy_sum` | Total Pump Energy per Cycle | `figWideXS` | Hydraulic | Bars stacked by pump operation (1 = the dive's first, in listing order), so a bar is the dive total. Each segment is colored by the pressure of its pump operation in the blues of `position` (`DEPTH_BLUES`): light blue at the surface to dark blue at the float's deepest pump pressure, rounded up to 100 dbar; gray if the pressure is invalid; faint gray outlines (none above 150 dives). Color bar "Pump pressure [dbar]" with the surface at the top; no legend. Hover (x unified): each operation's value and pressure, and the dive total. y: "Energy [kJ]". |
 | `pump_time_sum` | Total Pump Duration per Cycle | `figWideXS` | Hydraulic | Bars stacked by pump operation, as `pump_energy_sum`; y: "Duration [seconds]". |
-| `pump_num_ops` | No. Pump Operations per Cycle | `figWideXS` | Hydraulic | Bars; y: "Pumps". |
 | `pump_energy_v_max_pres` | Total Pump Energy vs. Max. Pres. | `fig` | Hydraulic | One marker per dive; x: "Max. Pressure [dBar]"; y: "Energy [kJ]". |
 | `phase_vac` | Case Vacuum through the Dive Cycle | `figWide` | Engineering | Case vacuum at the start and end of descent, drift, ascent and surface; x: "Phase" (eight points, "Descent start" … "Surface end"); y: "Vacuum [inHg]"; one line per dive, the latest black. Dashed gray lines at 3 and 7 inHg (`CASE_VAC_LIMITS_INHG`, layout shapes below the traces, no hover). |
 | `pump_first_duration` | First Pump Duration and Seek Adjustment | `figWideS` | Hydraulic | Bars "first pump" (duration of each dive's first pump record), dashed blue step "DFT (configured)" (DFT of the dive's mission phase, drawn across the bar of each dive that transmitted its mission configuration and broken at the others: the float sends it only after an upload or when `APT` = 1, and can change its first pump time itself between transmissions), and on a second y axis "Seek adjustment [seconds]" the lines "descent seek adj." (black) and "drift seek adj." (red); x: "Dive"; y: "First pump [seconds]". |
@@ -414,9 +413,9 @@ Figures shown in each section, in order (rows separated by `/`):
 | Surface Data | `surface_pres`, `surface_pres_avg` / `surface_temp`, `surface_temp_avg` / `surface_sample_count` |
 | Ascent | `ascent`, `ascent_rate_v_pres` / `ascent_rate_v_time`, `ascent_rate_avg` / `ascent_sample_count` |
 | Descent | `descent`, `descent_rate_v_pres` / `descent_rate_v_time`, `descent_rate_avg` / `descent_sample_count` |
-| Hydraulic System | `pump_first_duration` / `pump_pres`, `pump_power_v_pres` / `pump_volt`, `pump_volt_avg` / `pump_curr`, `pump_curr_avg` / `pump_energy`, `pump_energy_v_max_pres` / `pump_num_ops` / `pump_time_sum` / `pump_energy_sum` |
+| Hydraulic System | `pump_first_duration` / `pump_pres`, `pump_power_v_pres` / `pump_volt`, `pump_volt_avg` / `pump_curr`, `pump_curr_avg` / `pump_energy`, `pump_energy_v_max_pres` / `pump_time_sum` / `pump_energy_sum` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` |
 | Air Pump | `air_pump_duration`, `air_pump_pres` |
-| Engineering (only if one of them is written) | `energy_per_cycle` / `energy_by_component` / `energy_remaining_cycles` / `phase_vac` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` (`ENGINEERING_PAGE_ROWS`; the energy plots were last until 2026-11-09) |
+| Engineering (only if one of them is written) | `energy_per_cycle` / `energy_by_component` / `energy_remaining_cycles` / `phase_vac` (`ENGINEERING_PAGE_ROWS`; the energy plots were last until 2026-11-09, and the pump vacuum plots moved to Hydraulic System on 2026-11-09) |
 | Satcom | `satcom` / `position_gps`, `satcom_gps_cno` (or `position_all`) / `satcom_gps_hdop`, `satcom_gps_nsat` / `satcom_gps_ttf`, `satcom_gps_fix_cep` / `satcom_iridium_fix_cep_avg`, `satcom_sbd_data_size_avg` / `satcom_sbd_count` / `satcom_sbd_data_size` / `satcom_sbd_data_type` |
 
 The Hydraulic System section is shown only if the float has `pump` data, so a float without it shows `pump_first_duration` only in the figure table.

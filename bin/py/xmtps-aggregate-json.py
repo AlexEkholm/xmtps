@@ -491,13 +491,16 @@ ENERGY_PACK_OVERRIDES[9062] = 'saft'       # startup 13.2 V, 2014-2016 batch; 13
 # taken as Tadiran read through a VOP11 board's diode, like ALTO 11020-11034.
 ENERGY_PACK_OVERRIDES.update({9179: 'tadiran', 9181: 'tadiran', 9207: 'tadiran'})
 # ENERGY_SECONDS_PER_YEAR, the remaining-cycles and falling-pump-voltage constants: EnergyModel
+# Blues from the deepest (0) to the shallowest (1) value, light blue at the surface: the depth
+# colors of the Profile Positions and Bathymetry plot and the pressure colors of the stacked pump
+# plots. Their color bars both put the shallowest value at the top.
+DEPTH_BLUES = [[0.0, 'rgb(8,38,90)'], [0.2, 'rgb(8,81,156)'], [0.45, 'rgb(66,146,198)'],
+               [0.75, 'rgb(158,202,225)'], [1.0, 'rgb(222,235,247)']]
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
     ['energy_per_cycle'],          # the energy plots first (since 2026-11-09)
     ['energy_by_component'],
     ['energy_remaining_cycles'],
     ['phase_vac'],
-    ['pump_vac', 'pump_vac_avg'],
-    ['pump_vac_v_time', 'pump_vac_v_pres'],
     ]
 ENGINEERING_PAGE_FIGS = [ id for row in ENGINEERING_PAGE_ROWS for id in row ]
 def PumpCurrentInvalid(curr):
@@ -3570,9 +3573,10 @@ def WriteHtmlFile(float_id, runtime_s=None):
                                 'pump_curr', 'pump_curr_avg', '', 
                                 # 'pump_power', 'pump_power_avg', '', 
                                 'pump_energy', 'pump_energy_v_max_pres', '',
-                                'pump_num_ops', '', 
                                 'pump_time_sum', '',
                                 'pump_energy_sum', '',
+                                'pump_vac', 'pump_vac_avg', '',
+                                'pump_vac_v_time', 'pump_vac_v_pres', '',
                                 ]:
                                 
                                 if (len(id) == 0) and (count > 0) :
@@ -3612,8 +3616,9 @@ def WriteHtmlFile(float_id, runtime_s=None):
                                             src=fig_meta['fpath_img_small'])
                                     doc.stag('br')
 
-                        # engineering plots: case vacuum through the cycle and at the pump, estimated
-                        # energy use; rows as in ENGINEERING_PAGE_ROWS
+                        # engineering plots: case vacuum through the cycle and estimated energy use;
+                        # rows as in ENGINEERING_PAGE_ROWS (the pump vacuum plots are in the
+                        # Hydraulic System section)
 
                         if any(id in figs_meta_dict for id in ENGINEERING_PAGE_FIGS):
 
@@ -3919,9 +3924,8 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
     # the top; its tick labels and the hover show positive depths.
     dmax = max(float(depth_m.max()), 2.0)
     f1 = 1.0 / dmax
-    colorscale = [[0.0, 'rgb(8,38,90)'], [0.2, 'rgb(8,81,156)'], [0.45, 'rgb(66,146,198)'],
-                  [0.75, 'rgb(158,202,225)'], [1.0 - f1, 'rgb(222,235,247)'],
-                  [1.0 - f1 * 0.5, 'rgb(190,190,190)'], [1.0, 'rgb(190,190,190)']]
+    colorscale = DEPTH_BLUES[:-1] + [[1.0 - f1, DEPTH_BLUES[-1][1]],
+                                     [1.0 - f1 * 0.5, 'rgb(190,190,190)'], [1.0, 'rgb(190,190,190)']]
     depth_ticks = list(range(0, int(dmax) + 1, 1000))
 
     # Hillshade: cosine of the angle between the surface normal and a sun at azimuth 315 degrees,
@@ -9013,14 +9017,28 @@ def PumpOperationTraces(df_pump, col, scale, value_fmt):
     df_pump is the float's 'pump' aggregate, one row per pump operation in listing (time) order
     within each dive. Operation k of a dive (1 = first) goes in trace k, stacked bottom up, so the
     bar height is the dive total. col is the column to plot ('time' or 'energy'), scale its
-    factor (1/1000 for kJ) and value_fmt the Plotly hover format of the value. All operations are
-    gray, separated by thin white lines. A last, invisible marker trace at the top of each bar
-    gives the dive total its own line in the (x unified) hover label.
+    factor (1/1000 for kJ) and value_fmt the Plotly hover format of the value. Each segment is
+    colored by the pressure of its pump operation in the bathymetry plot's blues (DEPTH_BLUES:
+    light blue at the surface to dark blue at the float's deepest pump pressure, rounded up to
+    100 dbar), gray if the pressure is invalid, outlined in faint gray so the light segments stand
+    out from the background (no outlines above 150 dives, where they would hide the colors). An invisible trace carries the "Pump pressure [dbar]" color bar, with
+    the surface at the top like the depth color bar of the bathymetry plot. A last, invisible marker trace at the top of
+    each bar gives the dive total its own line in the (x unified) hover label.
     """
 
     df = df_pump[['dive', 'pres', col]].copy()
     df['op'] = df.groupby('dive').cumcount() + 1
     n_ops = int(df['op'].max()) if len(df) else 0
+    pres = pd.to_numeric(df['pres'], errors='coerce')
+    pmax = float(np.ceil(max(pres.max(), 1) / 100) * 100) if pres.notna().any() else 100.0
+    valid = pres.notna() & (pres >= -5)
+    df['color'] = 'rgb(140,140,140)'
+    if valid.any():
+        df.loc[valid, 'color'] = plotly.colors.sample_colorscale(
+            DEPTH_BLUES, list(1 - (pres[valid].clip(lower=0) / pmax).clip(0, 1)))
+    # Outlines only while the bars are wide enough to show them (they wash out the colors when a
+    # float has many dives and each bar is a few pixels wide)
+    outline = 0.4 if df['dive'].nunique() <= 150 else 0
     traces = []
     for op in range(1, n_ops + 1):
         d = df[df['op'] == op]
@@ -9030,9 +9048,21 @@ def PumpOperationTraces(df_pump, col, scale, value_fmt):
             customdata=d['pres'].values,
             hovertemplate='#{}: '.format(op) + value_fmt + ' at %{customdata:.0f} dbar<extra></extra>',
             name='operation {}'.format(op),
-            marker=dict(color='rgb(140,140,140)', line=dict(color='rgb(255,255,255)', width=0.3)),
+            showlegend=False,
+            marker=dict(color=list(d['color']), line=dict(color='rgba(90,90,90,0.35)', width=outline)),
             ))
     if n_ops:
+        # Color bar only: an invisible marker carries the pressure scale, drawn as negative
+        # pressure so the surface is at the top; the tick labels show positive pressures
+        step = 100 if pmax <= 500 else 250 if pmax <= 1000 else 500
+        ticks = list(range(0, int(pmax) + 1, step))
+        traces.append(go.Scatter(
+            x=[df['dive'].iloc[0]], y=[0], mode='markers', hoverinfo='skip', showlegend=False,
+            marker=dict(size=0, opacity=0, color=[0], cmin=-pmax, cmax=0, colorscale=DEPTH_BLUES,
+                        showscale=True,
+                        colorbar=dict(title=dict(text='Pump pressure [dbar]'), thickness=12,
+                                      tickvals=[-t for t in ticks], ticktext=[str(t) for t in ticks])),
+            name='pump pressure'))
         total = df.groupby('dive')[col].sum(min_count=1) * scale
         traces.append(go.Scatter(
             x=total.index.values,
@@ -9041,6 +9071,7 @@ def PumpOperationTraces(df_pump, col, scale, value_fmt):
             marker=dict(size=0, opacity=0),
             hovertemplate='Total: <b>' + value_fmt + '</b><extra></extra>',
             name='Total',
+            showlegend=False,
             ))
     return traces
 
@@ -9052,7 +9083,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
 
     Plots the 'pump' data as pump_pres, pump_volt, pump_curr, pump_power, pump_energy, pump_vac,
     pump_power_v_pres, pump_vac_v_pres, pump_vac_v_time, the per-dive pump_vac_avg, pump_volt_avg,
-    pump_curr_avg, pump_power_avg, pump_energy_sum, pump_time_sum and pump_num_ops, and
+    pump_curr_avg, pump_power_avg, pump_energy_sum and pump_time_sum, and
     pump_energy_v_max_pres (category 'pump').
 
     Returns the list of figure metadata dicts from WritePlotImageFiles, empty if there is no 'pump'
@@ -9564,33 +9595,6 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             title='Dive',
                             # font=dict(size=10)
                             ),
-                        plot_bgcolor='white',
-                        margin=dict(l=10,r=10,b=20,t=50,pad=4)
-                        )
-                    ),
-                pump_num_ops = go.Figure(
-                    layout=dict(
-                        showlegend = False,
-                        title = dict(text='{}: No. Pump Operations per Cycle'.format(float_id)),
-                        xaxis=dict(
-                            title='Dive',
-                            # autorange=False,
-                            # range=rng['dt_ref_delta_sec']
-                            ),
-                        yaxis=dict(
-                            title='Pumps',
-                            # ticklabelposition='inside',
-                            # autorange=False,
-                            # range=rng['power'],
-                            ),
-                        bargap=0,
-                        hoverlabel=dict(
-                            font=dict(
-                                family='Consolas, monospace',
-                                size=14,
-                                ),
-                            ),
-                        hovermode='x',
                         plot_bgcolor='white',
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
@@ -10124,23 +10128,6 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             for trace in PumpOperationTraces(df_dives, 'time', 1, '%{y:.0f} s'):
                 figs['pump_time_sum'].add_trace(trace)
 
-            figs['pump_num_ops'].add_trace(go.Bar(
-                x=df_dives_gb.count().index.values,
-                y=df_dives_gb.count()['pres'],
-                hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    '%{y:.0f}',
-                    '<extra></extra>',
-                    ]),
-                marker=dict(
-                    color='rgb(220,220,220)',
-                    line=dict(
-                        color='rgb(188, 188, 188)',
-                        width=0.5,
-                        ),
-                    ),
-                showlegend=False,
-                ))                             
                 
             # Write plot files
             
@@ -10149,7 +10136,6 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 pump_curr_avg = 'fig2',
                 pump_power_avg = 'fig2',
                 pump_vac_avg = 'fig2',
-                pump_num_ops = 'figWideXS',
                 pump_time_sum = 'figWideXS',
                 pump_energy_sum = 'figWideXS',
                 )

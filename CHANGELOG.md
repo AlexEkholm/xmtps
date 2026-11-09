@@ -17,7 +17,17 @@ Python tools:
   comments, decoder messages and documentation.
 
 - Float pages: the energy plots (energy per cycle, total energy by component, remaining cycles)
-  open the Engineering section, above the vacuum plots.
+  open the Engineering section, above the case vacuum plot.
+
+- Float pages: the four pump vacuum plots (`pump_vac`, `pump_vac_avg`, `pump_vac_v_time`,
+  `pump_vac_v_pres`) are back at the end of the Hydraulic System section, after the pump energy
+  and duration totals.
+
+- Total Pump Duration and Total Pump Energy per Cycle: each stacked segment is colored by the
+  pressure of its pump operation (yellow at the surface to dark purple at depth, with a "Pump
+  pressure [dbar]" color bar), instead of all gray.
+
+- Float pages: the No. Pump Operations per Cycle plot (`pump_num_ops`) is no longer made.
 
 - Battery and energy page: a Total Energy column with each float page's Estimated Total Energy
   plot (energy by component), cropped to the bar, linking to the Engineering
