@@ -7,6 +7,9 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- Summary page: URL parameter `n` sets the table's page size (10, 20, 50, 100 or `all`); changing
+  the page size in the table updates it in the URL, and leaves it out for 10.
+
 - New battery and energy page, `engineering/energy.html` (`xmtps-generate-energy-page.py`, run by
   the plot service after the startup page): one table of the deployed floats with Tadiran packs,
   with their pack,

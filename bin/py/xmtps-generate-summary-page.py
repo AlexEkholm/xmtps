@@ -231,7 +231,8 @@ def WriteSummaryFile(dpath):
     (FloatStatus); under the status, the sea or ocean of the last known position (LastLocation).
     Inline JavaScript adds elapsed times ('3 hours ago') to the
     deployment and last-report dates and handles the auto-refresh checkbox (URL parameter 'r',
-    in seconds; 1 means 60, others are at least 10). Errors are logged, or raised with -H; a
+    in seconds; 1 means 60, others are at least 10) and the table's page size (URL parameter 'n':
+    10, 20, 50, 100 or 'all'; kept in the URL when changed, left out for 10). Errors are logged, or raised with -H; a
     failed row is skipped.
     """
     
@@ -337,7 +338,30 @@ function toggleAutoRefresh(cb) {
 }
 $(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
 </script>''')
-                doc.asis('<script type="text/javascript">$(document).ready(function () { $("#stable").DataTable({ order: [[8, \'desc\']], "pageLength": 10, "lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]], scrollX: false }); jQuery(".dataTable").wrap("<div id=\'tat\' />"); });</script>')
+                # The table's page size follows the URL parameter 'n' (10, 20, 50, 100 or 'all';
+                # anything else is dropped), and a page size chosen in the table is written back
+                # to it, without 'n' for the default 10 (replaceState: no history entries)
+                doc.asis('''<script type="text/javascript">
+var PAGE_SIZES = [10, 20, 50, 100, -1];
+function pageSizeUrl(len) {
+    const url = new URL(window.location.href);
+    if (len === 10) url.searchParams.delete("n");
+    else url.searchParams.set("n", len === -1 ? "all" : String(len));
+    window.history.replaceState(window.history.state, '', url.toString());
+}
+function pageSizeFromUrl() {
+    const n = new URL(window.location.href).searchParams.get("n");
+    if (n === null) return 10;
+    const len = n.toLowerCase() === "all" ? -1 : parseInt(n, 10);
+    if (PAGE_SIZES.indexOf(len) < 0) { pageSizeUrl(10); return 10; }
+    return len;
+}
+$(document).ready(function () {
+    $("#stable").DataTable({ order: [[8, 'desc']], "pageLength": pageSizeFromUrl(), "lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]], scrollX: false })
+        .on('length.dt', function (e, settings, len) { pageSizeUrl(len); });
+    jQuery(".dataTable").wrap("<div id='tat' />");
+});
+</script>''')
 
                 # Create styles
                     

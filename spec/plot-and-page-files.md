@@ -476,6 +476,7 @@ The Deployed and Last Report cells carry the same `id` (`deployed`, `last-report
 
 - **Elapsed times.** On load, each Deployed and Last Report cell gets a `<br><small>` with "just now" (< 2 min), "N minutes ago" (< 3 h), "N hours ago" (< 4 days), "N days ago" (< 2 years) or "N years ago". Cells with negative or over-30-year offsets are left alone.
 - **Auto refresh.** URL parameter `r` (seconds): absent or < 1 disables it; 1 means 60 s; values under 10 become 10. The checkbox sets `r=1` (reload every 60 s) or removes `r`. The URL is updated with `history.pushState`.
+- **Page size.** URL parameter `n` (since 2026-11-09): the table's page size, 10, 20, 50, 100 or `all`. Absent means 10; any other value gives 10 and is removed from the URL. Choosing a page size in the table writes it to `n`, or removes `n` for 10, with `history.replaceState` (no history entries); other parameters such as `r` are kept, so an auto refresh keeps the page size.
 - **Footer.** The footer's elapsed-time script (section 8).
 
 ## 6. Mission parameters page: `engineering/params.html`
