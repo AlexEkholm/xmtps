@@ -8,7 +8,8 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 Python tools:
 
 - New battery and energy page, `engineering/energy.html` (`xmtps-generate-energy-page.py`, run by
-  the plot service after the startup page): one table of the deployed floats with their pack,
+  the plot service after the startup page): one table of the deployed floats with Tadiran packs,
+  with their pack,
   battery age, startup and oil-pump voltage (and whether it is falling), the energy used so far
   and per cycle, the cycle length, the shares of pumps, sensors, communication and standby, and
   the cycles and time left on the current mission with their range. Little

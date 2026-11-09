@@ -8,7 +8,8 @@ files whose JSON version is not JSON_VERSION, floats that were never deployed (n
 cycle with a profile, as on the summary page) and, with --days, floats that have not reported
 within that many days. For each remaining float, the <id>_energy.json file next to its summary
 (the energy model, EnergyEstimates in xmtps-aggregate-json.py) and the <id>_pump.json file give
-its battery and energy use; floats without an energy file are left out.
+its battery and energy use; floats without an energy file, and floats whose pack is not one of
+PACKS (Tadiran only), are left out.
 
 Writes <output>/energy.html (production: plots2/engineering/, next to the mission parameters
 page, so that the float pages and status icons are one level up, see --plots-url): one
@@ -68,6 +69,9 @@ TIME_LEFT_CLASSES = ((0.5, 'ebad'), (1.0, 'ewarn'), (2.0, 'elow'))
 USED_CLASSES = ((ENERGY_USABLE_FRACTION[2], 'ebad'), (ENERGY_USABLE_FRACTION[1], 'ewarn'))
 
 PACK_NAMES = {'tadiran': 'Tadiran', 'saft': 'Saft', 'alkaline': 'Alkaline'}
+
+# The packs whose floats the page shows (PACK_NAMES); floats with another or an unknown pack are left out
+PACKS = ('Tadiran',)
 
 """
 Global Variables:
@@ -150,7 +154,8 @@ def ProcessJsonSummaryFile(fpath):
     """Read one <id>_summary.json file and the <id>_energy.json and <id>_pump.json files next to it
     into float_map, as EnergyStatus of the float.
 
-    Floats that were never deployed, floats without an energy file and, with --days, floats whose
+    Floats that were never deployed, floats without an energy file, floats whose pack is not one
+    of PACKS and, with --days, floats whose
     latest SBD message is older than that are ignored, as are summaries with a JSON version other
     than JSON_VERSION (with a warning). Errors are logged, or raised with -H.
     """
@@ -203,7 +208,12 @@ def ProcessJsonSummaryFile(fpath):
             return
         pump = ReadAggregate(os.path.join(dpath, '{}_pump.json'.format(float_id)), ['dive', 'volt'])
 
-        float_map[float_id] = { 'summary': summary, 'energy': EnergyStatus(summary, energy, pump) }
+        status = EnergyStatus(summary, energy, pump)
+        if status['pack'] not in PACKS:
+            logger.info('Ignoring float with pack {}: {}'.format(status['pack'] or 'unknown', float_id))
+            return
+
+        float_map[float_id] = { 'summary': summary, 'energy': status }
 
     except:
 
@@ -391,7 +401,7 @@ def WriteEnergyFile(dpath):
                             WritePageLinks(doc, tag, text, 'energy', args.plots_url)
 
                         with tag('div', id='intro'):
-                            text('The battery and energy use of the deployed floats (with at least one profile)')
+                            text('The battery and energy use of the deployed floats (with at least one profile) with {} packs'.format(' or '.join(PACKS)))
                             if args.days is not None:
                                 text(' that reported in the last {:g} days'.format(args.days))
                             text(', from the float energy model: the energy of each part of a cycle (pumps, sensors, '
@@ -479,11 +489,15 @@ def WriteEnergyFile(dpath):
                                                     with tag('small'):
                                                         text(summary['ctdtype'])
 
-                                            with tag('td', ('data-order', '{:.0f}'.format(-sbd.dt_epoch))): # status
-                                                location = LastLocation(summary)
-                                                status = FloatStatus(summary, location)
-                                                # archived floats (no report in 180 days) are not coloured
-                                                alert = status['name'] != 'ARCHIVED'
+                                            # DataTables searches a cell with data-order as its HTML (the
+                                            # status icon path contains "alamo", titles hold details), so
+                                            # those cells get their text as data-search
+                                            location = LastLocation(summary)
+                                            status = FloatStatus(summary, location)
+                                            # archived floats (no report in 180 days) are not coloured
+                                            alert = status['name'] != 'ARCHIVED'
+                                            with tag('td', ('data-order', '{:.0f}'.format(-sbd.dt_epoch)),
+                                                     ('data-search', (status['name'] + ' ' + location).strip())): # status
                                                 with tag('div', klass='stimg'):
                                                     doc.stag('img', src='{}/{}'.format(args.plots_url, status['img']))
                                                     text(status['name'])
@@ -491,11 +505,13 @@ def WriteEnergyFile(dpath):
                                                     with tag('small', klass='sloc'):
                                                         text(location)
 
-                                            with tag('td', ('data-order', '{:.0f}'.format(sbd.dt_epoch))): # last report
-                                                text(sbd.dt_str[0:10] + ' ' + sbd.dt_str[11:16])
+                                            report = sbd.dt_str[0:10] + ' ' + sbd.dt_str[11:16]
+                                            ago = '{:.0f} days ago'.format((now - sbd.dt_epoch) / 86400)
+                                            with tag('td', ('data-order', '{:.0f}'.format(sbd.dt_epoch)), ('data-search', report + ' ' + ago)): # last report
+                                                text(report)
                                                 doc.stag('br')
                                                 with tag('small'):
-                                                    text('{:.0f} days ago'.format((now - sbd.dt_epoch) / 86400))
+                                                    text(ago)
 
                                             with tag('td'): # dive
                                                 text('-' if e['dive'] is None else '{:d}'.format(e['dive']))
@@ -509,7 +525,8 @@ def WriteEnergyFile(dpath):
                                                     with tag('small'):
                                                         text('{:.2f} MJ'.format(e['nominal_j'] / 1e6))
 
-                                            with tag('td', ('data-order', '{:.0f}'.format(e['age_s'] if e['age_s'] is not None else -1))): # age
+                                            with tag('td', ('data-order', '{:.0f}'.format(e['age_s'] if e['age_s'] is not None else -1)),
+                                                     ('data-search', Years(e['age_s']))): # age
                                                 text(Years(e['age_s']))
 
                                             with tag('td'): # startup voltage
@@ -521,29 +538,33 @@ def WriteEnergyFile(dpath):
                                                 title = 'Latest dive {:.2f} V; early median {:.2f} V ({:.0f}%)'.format(e['v_last'], e['v0'], 100 * e['v_last'] / e['v0'])
                                             if fall is not None:
                                                 title += '; below {:.0f}% of the early median since dive {:d}'.format(100 * ENERGY_VOLTAGE_FALL_FRACTION, fall[0])
+                                            pump = ('-',) if e['v_last'] is None else ('{:.1f}'.format(e['v_last']),
+                                                'falling since {:d}'.format(fall[0]) if fall is not None else 'of {:.1f}'.format(e['v0']))
                                             with tag('td', ('data-order', '{:.3f}'.format(e['v_last'] if e['v_last'] is not None else -1)),
+                                                     ('data-search', ' '.join(pump)),
                                                      klass='ebad' if fall is not None and alert else '', title=title): # pump voltage
-                                                if e['v_last'] is None:
-                                                    text('-')
-                                                else:
-                                                    text('{:.1f}'.format(e['v_last']))
+                                                text(pump[0])
+                                                if len(pump) > 1:
                                                     doc.stag('br')
                                                     with tag('small'):
-                                                        text('falling since {:d}'.format(fall[0]) if fall is not None else 'of {:.1f}'.format(e['v0']))
+                                                        text(pump[1])
 
                                             # energy
 
                                             used = e['used_frac']
+                                            if used is None:
+                                                used_text = ('-' if e['total_j'] is None else '{:.2f}'.format(e['total_j'] / 1e6),)
+                                            else:
+                                                used_text = ('{:.2f}'.format(e['used_j'] / 1e6), '{:.0f}%'.format(100 * used))
                                             with tag('td', ('data-order', '{:.4f}'.format(used if used is not None else -1)),
+                                                     ('data-search', ' '.join(used_text)),
                                                      klass=Class(used, USED_CLASSES, below=False) if alert else '',
                                                      title='' if used is None else '{:.2f} MJ of {:.2f} MJ nominal'.format(e['used_j'] / 1e6, e['nominal_j'] / 1e6)): # used
-                                                if used is None:
-                                                    text('-' if e['total_j'] is None else '{:.2f}'.format(e['total_j'] / 1e6))
-                                                else:
-                                                    text('{:.2f}'.format(e['used_j'] / 1e6))
+                                                text(used_text[0])
+                                                if len(used_text) > 1:
                                                     doc.stag('br')
                                                     with tag('small'):
-                                                        text('{:.0f}%'.format(100 * used))
+                                                        text(used_text[1])
 
                                             with tag('td'): # cycle energy
                                                 text('-' if e['cycle_j'] is None else '{:.1f}'.format(e['cycle_j'] / 1000))
@@ -561,7 +582,8 @@ def WriteEnergyFile(dpath):
                                             years = e['left_s'][1] / ENERGY_SECONDS_PER_YEAR if e['left_s'] else None
                                             klass = Class(years, TIME_LEFT_CLASSES) if alert else ''
                                             rem = e['remaining']
-                                            with tag('td', ('data-order', '{:.1f}'.format(rem[1] if rem else -1)), klass=klass,
+                                            with tag('td', ('data-order', '{:.1f}'.format(rem[1] if rem else -1)),
+                                                     ('data-search', '-' if rem is None else '{:.0f} {:.0f}-{:.0f}'.format(rem[1], rem[0], rem[2])), klass=klass,
                                                      title='' if rem is None else 'Expected {:.0f} cycles, range {:.0f}-{:.0f}'.format(rem[1], rem[0], rem[2])):
                                                 if rem is None:
                                                     text('-')
@@ -571,7 +593,8 @@ def WriteEnergyFile(dpath):
                                                     with tag('small'):
                                                         text('{:.0f}-{:.0f}'.format(rem[0], rem[2]))
                                             left = e['left_s']
-                                            with tag('td', ('data-order', '{:.0f}'.format(left[1] if left else -1)), klass=klass,
+                                            with tag('td', ('data-order', '{:.0f}'.format(left[1] if left else -1)),
+                                                     ('data-search', '-' if left is None else '{} {}-{}'.format(Years(left[1]), Years(left[0]), Years(left[2]))), klass=klass,
                                                      title='' if left is None else 'Expected {:.0f} days, range {:.0f}-{:.0f}'.format(*[ t / 86400 for t in (left[1], left[0], left[2]) ])):
                                                 if left is None:
                                                     text('-')
