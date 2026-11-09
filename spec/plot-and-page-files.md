@@ -531,7 +531,7 @@ The page footer is section 8.
 Written by `bin/py/xmtps-generate-energy-page.py` (since 2026-11-09). It reads each deployed float's `<serial>_summary.json` and, next to it, `<serial>_energy.json` (the energy model, [json-file-format.md](json-file-format.md) 4.17.1) and `<serial>_pump.json` (dive and voltage only). Floats without an energy file, and floats whose `pack_type` is not Tadiran (`PACKS`, since 2026-11-09), are left out; `--days` keeps only floats that reported within that many days. The outlook uses `bin/py/EnergyModel.py`, the same code as the float pages' remaining-cycles plot (3.10.1), so the two agree.
 
 - **Head.** `<meta charset="utf-8">`, title "Float Battery and Energy", DataTables 1.12.1 from the CDN; `table.etable` sorted by column 3 (Last Report) descending, with the summary page's paging (`TABLE_PAGING`) and search field. Inline CSS.
-- **Heading** `ALAMO/ALTO Battery and Energy`, the links to the table pages (`WritePageLinks`), and an introduction explaining the model and the color key: `ebad` (dark red `#b71c1c`, white bold), `ewarn` (light red), `elow` (light yellow).
+- **Heading** `ALAMO/ALTO Battery and Energy`, the links to the table pages (`WritePageLinks`), and an introduction explaining the model and the color key: `ebad` (dark red `#b71c1c`, white bold), `ewarn` (light red), `elow` (light yellow). The words "float energy model" link to the energy model page, `energy-model.html` in the same directory (`MODEL_PAGE`, 7.2).
 - **One table**, one row per float, most recent report first. 2026-11-09: 149 floats (169 others left out: 108 Saft, 40 alkaline, 21 unknown pack).
 
 | # | Header | Contents |
@@ -550,6 +550,10 @@ Written by `bin/py/xmtps-generate-energy-page.py` (since 2026-11-09). It reads e
 | 18 | Time Left [years] | cycles left × cycle length, range in small text |
 
 Columns 17 and 18 get `ebad` under 0.5 years expected, `ewarn` under 1 year and `elow` under 2 years (`TIME_LEFT_CLASSES`). ARCHIVED floats (no report in 180 days) are not colored. Cells have `data-order` values for sorting, each with a plain-text `data-search` (DataTables searches a cell with `data-order` as its HTML, where the status icon path `/alamo/img/...` matched every float for "alamo"), and `title` texts with the details. The page footer is section 8.
+
+### 7.2 Energy model page: `engineering/energy-model.html`
+
+A static page (since 2026-11-09), not generated: `bin/py/html/energy-model.html`, with its five figures in `bin/py/html/energy-model/` (`fig1`–`fig5` PNGs). It is installed by copying both into `<plots>/engineering/` (production `/data1/alamo/data/plots2/engineering/energy-model.html` and `energy-model/`) and has to be copied again when it changes; the plot service does not touch it. It describes the energy model (each component's estimate and source, the battery packs, the controller drain and Bluetooth fault, and the remaining-cycles outlook and falling-pump-voltage flag of `EnergyModel.py`) and summarizes the report *Energy use of ALAMO/ALTO floats that ran out of battery* (November 2026): the depletion criterion, the lifetime energy, profiling distance and controller drain by battery group, the anomalies (September 2020 ALAMO batch, Micro-ALTOs), the accuracy of each term and the expected lifetime of a new ALTO. Its tables and figures are those of the report; its numbers are not updated with the model's constants. Links at the top go to the four table pages (relative: `../`, `startup.html`, `params.html`, `energy.html`); all CSS is inline, with no scripts.
 
 ## 8. Page footer and decoder status
 
@@ -587,6 +591,7 @@ No page uses a local script or stylesheet; all CSS is inline.
 | `img/s1.png` | `<plots>/img/` | as above | 7 × 7 px, blue `rgb(120,120,255)`: OVERDUE. |
 | `img/s2.png` | `<plots>/img/` | as above | 7 × 7 px, green `rgb(120,255,120)`: ACTIVE. |
 | `img/s3.png` | `<plots>/img/` | summary page | 7 × 7 px, orange `rgb(255,168,64)` (`s0.png` recolored): PREDEPLOYMENT. Made 2026-11-08. |
+| `engineering/energy-model/fig*.png` | `<plots>/engineering/energy-model/` | energy model page (7.2) | the report's figures, copied from `bin/py/html/energy-model/` (2026-11-09) |
 | `js/datatables.min.js`, `js/datatables.min.css` | `<plots>/js/` | none (the code that loads them, `/alamo/js/...`, is commented out) | local copy of DataTables, 2025-11-18 |
 | DataTables 1.12.1 + jQuery 3.6.0 | `https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/` | summary, mission, startup pages | CDN |
 | plotly.js | `https://cdn.plot.ly/plotly-<version>.min.js` (production 4.1.1, from plotly 7.1.0) | every plot HTML file and the summary map | CDN, with an `integrity` hash |

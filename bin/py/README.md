@@ -13,6 +13,7 @@ directory, what each tool reads and writes, and all of their command-line option
 | [`xmtps-generate-mission-page.py`](#xmtps-generate-mission-pagepy) | tool | Mission parameters page, `engineering/params.html` |
 | [`xmtps-generate-startup-page.py`](#xmtps-generate-startup-pagepy) | tool | Float startup (BIT) page, `engineering/startup.html` |
 | `xmtps-generate-energy-page.py` | tool | Battery and energy page, `engineering/energy.html`: each float's pack, battery age and voltages, energy used, per cycle and by part, and the cycles and time left on its mission, from the energy model |
+| `html/energy-model.html` | static page | The energy model and the analysis of the floats that ran out of battery, linked from the energy page; copied with its figures (`html/energy-model/`) to `engineering/` by hand, not generated |
 | [`FloatClasses.py`](#floatclassespy) | module | Data classes for one dive, shared by the converters; wave spectra post-processing |
 | [`RhoLUT.py`](#rholutpy) | module | Seawater density and σ₀ lookup table |
 | [`PageStatus.py`](#pagestatuspy) | module | Page footer: update time, run time, decoder status and version; the links between the table pages and their paging |

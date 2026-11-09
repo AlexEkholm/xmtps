@@ -7,6 +7,12 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- Energy model page (`bin/py/html/energy-model.html`, static, installed in `plots2/engineering/`):
+  how the energy of each cycle, the battery packs, the controller drain and the cycles left are
+  estimated, with the analysis of the 92 floats that ran out of battery (groups, profiling
+  distance, anomalies, accuracy, expected lifetime of a new ALTO) and its figures. The battery
+  and energy page links to it from its introduction.
+
 - American spelling throughout (color, gray, center, labeled, canceled, ...): pages, plots, code
   comments, decoder messages and documentation.
 

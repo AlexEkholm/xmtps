@@ -70,6 +70,10 @@ USED_CLASSES = ((ENERGY_USABLE_FRACTION[2], 'ebad'), (ENERGY_USABLE_FRACTION[1],
 
 PACK_NAMES = {'tadiran': 'Tadiran', 'saft': 'Saft', 'alkaline': 'Alkaline'}
 
+# The static page describing the energy model (bin/py/html/energy-model.html, installed next to
+# this page with its figures in energy-model/), linked from the introduction
+MODEL_PAGE = 'energy-model.html'
+
 # The float pages' Estimated Total Energy plot (energy_by_component, xmtps-aggregate-json.py), shown
 # in the Total Energy column: its small image (PLOT_IMAGE_PX, 780 x 115 px), cropped to its rows
 # PLOT_CROP_ROWS (the bar only, without the title, subtitle, tick labels and x-axis label; the
@@ -424,7 +428,10 @@ def WriteEnergyFile(dpath):
                             text('The battery and energy use of the deployed floats (with at least one profile) with {} packs'.format(' or '.join(PACKS)))
                             if args.days is not None:
                                 text(' that reported in the last {:g} days'.format(args.days))
-                            text(', from the float energy model: the energy of each part of a cycle (pumps, sensors, '
+                            text(', from the ')
+                            with tag('a', href=MODEL_PAGE):
+                                text('float energy model')
+                            text(': the energy of each part of a cycle (pumps, sensors, '
                                  'Iridium and GPS, controller and self-discharge), from the engineering data and '
                                  'datasheets, as in each float page\'s energy plots. Used: all the energy used so far, '
                                  'storage before deployment included, of the pack\'s nominal energy. Cycle: medians over the '
