@@ -492,12 +492,12 @@ ENERGY_PACK_OVERRIDES[9062] = 'saft'       # startup 13.2 V, 2014-2016 batch; 13
 ENERGY_PACK_OVERRIDES.update({9179: 'tadiran', 9181: 'tadiran', 9207: 'tadiran'})
 # ENERGY_SECONDS_PER_YEAR, the remaining-cycles and falling-pump-voltage constants: EnergyModel
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
+    ['energy_per_cycle'],          # the energy plots first (since 2026-11-09)
+    ['energy_by_component'],
+    ['energy_remaining_cycles'],
     ['phase_vac'],
     ['pump_vac', 'pump_vac_avg'],
     ['pump_vac_v_time', 'pump_vac_v_pres'],
-    ['energy_per_cycle'],
-    ['energy_by_component'],
-    ['energy_remaining_cycles'],
     ]
 ENGINEERING_PAGE_FIGS = [ id for row in ENGINEERING_PAGE_ROWS for id in row ]
 def PumpCurrentInvalid(curr):

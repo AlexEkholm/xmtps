@@ -7,6 +7,9 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- Float pages: the energy plots (energy per cycle, total energy by component, remaining cycles)
+  open the Engineering section, above the vacuum plots.
+
 - Battery and energy page: a Total Energy column with each float page's Estimated Total Energy
   plot (energy by component), cropped to the bar, linking to the Engineering
   section of the float page.

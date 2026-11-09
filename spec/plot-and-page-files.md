@@ -416,7 +416,7 @@ Figures shown in each section, in order (rows separated by `/`):
 | Descent | `descent`, `descent_rate_v_pres` / `descent_rate_v_time`, `descent_rate_avg` / `descent_sample_count` |
 | Hydraulic System | `pump_first_duration` / `pump_pres`, `pump_power_v_pres` / `pump_volt`, `pump_volt_avg` / `pump_curr`, `pump_curr_avg` / `pump_energy`, `pump_energy_v_max_pres` / `pump_num_ops` / `pump_time_sum` / `pump_energy_sum` |
 | Air Pump | `air_pump_duration`, `air_pump_pres` |
-| Engineering (only if one of them is written) | `phase_vac` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` / `energy_per_cycle` / `energy_by_component` / `energy_remaining_cycles` |
+| Engineering (only if one of them is written) | `energy_per_cycle` / `energy_by_component` / `energy_remaining_cycles` / `phase_vac` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` (`ENGINEERING_PAGE_ROWS`; the energy plots were last until 2026-11-09) |
 | Satcom | `satcom` / `position_gps`, `satcom_gps_cno` (or `position_all`) / `satcom_gps_hdop`, `satcom_gps_nsat` / `satcom_gps_ttf`, `satcom_gps_fix_cep` / `satcom_iridium_fix_cep_avg`, `satcom_sbd_data_size_avg` / `satcom_sbd_count` / `satcom_sbd_data_size` / `satcom_sbd_data_type` |
 
 The Hydraulic System section is shown only if the float has `pump` data, so a float without it shows `pump_first_duration` only in the figure table.
