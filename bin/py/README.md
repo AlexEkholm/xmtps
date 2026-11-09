@@ -342,8 +342,8 @@ and the `<sn>_mission.json` next to it. Directories are always searched recursiv
 - **Colors:** with three or more floats shown, each value is colored by how rare it is among them
   (1 − its floats / the most common value's floats): yellow to red above the most common value,
   blue below. `DFT` is colored by its distance from their median instead (white within 25%, full
-  color at 200%). The footer shows the most common value (`DFT`: the median) and the 10th–90th
-  percentile range of the floats shown.
+  color at 200%). The mission phase column is never colored. The footer shows the most common
+  value (`DFT`: the median) and the 10th–90th percentile range of the floats shown.
 - **Unset and impossible values:** unset values (255, 65535, ...) are shown as "unknown" and not
   counted. Impossible values (phase outside 0–2, drift pressure outside 0–7000 dBar, drift or
   profile pressure deeper than `MDS`) are dark red.

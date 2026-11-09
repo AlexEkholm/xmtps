@@ -32,6 +32,8 @@ Python tools:
   changes them: searching `ALTO` or `ALAMO` gives the former per-type comparison exactly, and a
   search such as `RBR` or a firmware version compares that group. Fewer than three floats shown
   are not colored. The heading shows how many floats are shown.
+- Mission parameters page: the mission phase column is no longer colored (its footer still shows
+  the most common phase and the range).
 
 ## 2026-11-08
 

@@ -97,6 +97,10 @@ TYPICAL_RANGE_PERCENTILE = 10
 # Scores below this are not coloured
 MIN_SCORE = 0.05
 
+# Columns that are not coloured, though their most common value is shown in the footer: the
+# current mission phase is not a setting to compare
+UNCOLOURED_COLUMNS = {'MPS'}
+
 # Columns compared with the median instead of how common the value is (pump durations
 # are tuned for each float): (relative deviation from the median that is still not coloured,
 # relative deviation that gets the full colour)
@@ -490,7 +494,8 @@ def WriteMissionFile(dpath):
     One DataTables table of all the floats, most recent report first. Each value cell carries its
     raw value (data-v), its column (data-c, the TableCells index), whether it is compared (data-s:
     0 for an unset value, a phase the mission does not use or a parameter not sent; 1 for an error
-    found by CheckValue, which counts in the statistics but is shown dark red; 2 otherwise) and its
+    found by CheckValue, which counts in the statistics but is shown dark red, and for the
+    UNCOLOURED_COLUMNS, which count but are never coloured; 2 otherwise) and its
     title without the comparison (data-t). SCORING_SCRIPT then computes, over the floats shown,
     each column's most common value (or median) and typical range for the footer, and colours each
     value by how abnormal it is, with at least MIN_GROUP_SIZE floats shown: 1 - (floats with this
@@ -737,7 +742,7 @@ def WriteMissionFile(dpath):
                                                     title += ': ' + error
                                                     compared = 1
                                                 elif value is not None:
-                                                    compared = 2
+                                                    compared = 1 if param in UNCOLOURED_COLUMNS else 2
                                                 with tag('td', ('data-c', k), ('data-s', compared), ('data-v', repr(float(value)) if compared else ''),
                                                          ('data-t', title), klass=' '.join(klasses), title=title):
                                                     text(FormatValue(value, fmt))
