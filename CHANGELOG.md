@@ -7,6 +7,22 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- New battery and energy page, `engineering/energy.html` (`xmtps-generate-energy-page.py`, run by
+  the plot service after the startup page): one table of the deployed floats with their pack,
+  battery age, startup and oil-pump voltage (and whether it is falling), the energy used so far
+  and per cycle, the cycle length, the shares of pumps, sensors, communication and standby, and
+  the cycles and time left on the current mission with their range and the expected end. Little
+  time left, much of the pack used and a falling pump voltage are coloured, except on archived
+  floats. The remaining-cycles and falling-pump-voltage code moved from
+  `xmtps-aggregate-json.py` to the new module `EnergyModel.py`, which both use, so the page and
+  the float pages' remaining-cycles plots agree (checked on 11213: 643 cycles, 427-992).
+- The summary, startup, mission parameters and energy pages link to each other at the top
+  (`PageStatus.WritePageLinks`), and the startup, mission and energy tables have the summary
+  page's paging (10 rows, up to ALL).
+- Satcom plot: a white circle behind the other markers marks the start of each surface phase
+  (`surface.dt_start` of the surface engineering message), and the failed Iridium transfers have
+  the other markers' size (16, was 24).
+
 - Mission parameters page: the Status column is the same as on the summary page: PREDEPLOYMENT
   (orange) for a float last seen at WHOI, and the last known location under the status. The
   status and location code moved from the summary page to the new module `FloatStatus.py`, which

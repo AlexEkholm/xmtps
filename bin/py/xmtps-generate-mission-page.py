@@ -41,7 +41,7 @@ import re
 from yattag import Doc
 
 from FloatStatus import FloatStatus, LastLocation
-from PageStatus import WriteStatusFooter
+from PageStatus import TABLE_PAGING, WritePageLinks, WriteStatusFooter
 
 """
 Static configuration:
@@ -465,7 +465,7 @@ function mUpdate(dt) {
       (check ? '' : '; too few to compare') + ')';
 }
 $(document).ready(function () {
-  var dt = $('table.mtable').DataTable({ order: [[3, 'desc']], paging: false, info: false, scrollX: false });
+  var dt = $('table.mtable').DataTable({ order: [[3, 'desc']], %%PAGING%%, scrollX: false });
   jQuery('.dataTable').wrap("<div class='tat' />");
   dt.on('draw', function () { mUpdate(dt); });
   mUpdate(dt);
@@ -530,7 +530,7 @@ def WriteMissionFile(dpath):
 
                 doc.asis('<script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>')
                 doc.asis('<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.12.1/datatables.min.css"/>')
-                doc.asis('<script type="text/javascript">var MCFG = ' + ScoringConfig() + ';' + SCORING_SCRIPT + '</script>')
+                doc.asis('<script type="text/javascript">var MCFG = ' + ScoringConfig() + ';' + SCORING_SCRIPT.replace('%%PAGING%%', TABLE_PAGING) + '</script>')
 
                 with(tag('style')):
 
@@ -583,6 +583,7 @@ def WriteMissionFile(dpath):
                         with tag('div', id='tit'):
                             with tag('h1'):
                                 text('ALAMO/ALTO Mission Parameters')
+                            WritePageLinks(doc, tag, text, 'params', args.plots_url)
 
                         with tag('div', id='intro'):
                             text('The most recently reported mission parameters of the deployed floats (with at least one profile)')

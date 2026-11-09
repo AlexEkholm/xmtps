@@ -36,7 +36,7 @@ import os
 import re
 from yattag import Doc
 
-from PageStatus import WriteStatusFooter
+from PageStatus import TABLE_PAGING, WritePageLinks, WriteStatusFooter
 
 """
 Static configuration:
@@ -470,7 +470,7 @@ def WriteStartupFile(dpath):
 
                 doc.asis('<script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>')
                 doc.asis('<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.12.1/datatables.min.css"/>')
-                doc.asis('<script type="text/javascript">$(document).ready(function () { $("table#sfloats").DataTable({ order: [[3, \'desc\']], paging: false, info: false, searching: true }); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
+                doc.asis('<script type="text/javascript">$(document).ready(function () { $("table#sfloats").DataTable({ order: [[3, \'desc\']], ' + TABLE_PAGING + ', searching: true }); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
 
                 with(tag('style')):
 
@@ -515,6 +515,7 @@ def WriteStartupFile(dpath):
                         with tag('div', id='tit'):
                             with tag('h1'):
                                 text('ALAMO/ALTO Float Startup')
+                            WritePageLinks(doc, tag, text, 'startup', args.plots_url)
 
                         with tag('div', id='intro'):
                             text('Floats that started up in the last {:g} days (the start time of their latest built-in test, BIT), '.format(args.days))

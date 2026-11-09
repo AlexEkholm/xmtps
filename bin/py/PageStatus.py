@@ -149,3 +149,37 @@ def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None, decoder_stat
         doc.stag('br')
         text(line)
     doc.asis(ELAPSED_SCRIPT)
+
+
+# The fleet table pages, linked from the top of each: (key, title, path under the plots directory)
+TABLE_PAGES = (
+    ('summary', 'Float Summary', ''),
+    ('startup', 'Float Startup', 'engineering/startup.html'),
+    ('params', 'Mission Parameters', 'engineering/params.html'),
+    ('energy', 'Battery and Energy', 'engineering/energy.html'),
+    )
+
+# DataTables paging of the fleet table pages, as on the summary page
+TABLE_PAGING = '"pageLength": 10, "lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]]'
+
+
+def WritePageLinks(doc, tag, text, current, plots_url):
+    """Write the links to the fleet table pages (TABLE_PAGES) into a yattag document, as a div with
+    id 'tlinks' under the page title; the current page is shown as plain text.
+
+    Args:
+        doc, tag, text: the yattag Doc and its tag and text functions.
+        current: the TABLE_PAGES key of this page.
+        plots_url: the URL of the plots directory relative to this page ('.' for the summary page,
+            '..' or '/alamo' for the pages in engineering/).
+    """
+    with tag('div', id='tlinks', style='margin-top: 6px; font-size: 14px; color: #aaa;'):
+        for i, (key, title, path) in enumerate(TABLE_PAGES):
+            if i:
+                text(' | ')
+            if key == current:
+                with tag('span', style='color: #555;'):
+                    text(title)
+            else:
+                with tag('a', href='{}/{}'.format(plots_url, path)):
+                    text(title)

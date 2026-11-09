@@ -12,9 +12,11 @@ directory, what each tool reads and writes, and all of their command-line option
 | [`xmtps-generate-summary-page.py`](#xmtps-generate-summary-pagepy) | tool | Fleet summary page, `index.html` |
 | [`xmtps-generate-mission-page.py`](#xmtps-generate-mission-pagepy) | tool | Mission parameters page, `engineering/params.html` |
 | [`xmtps-generate-startup-page.py`](#xmtps-generate-startup-pagepy) | tool | Float startup (BIT) page, `engineering/startup.html` |
+| `xmtps-generate-energy-page.py` | tool | Battery and energy page, `engineering/energy.html`: each float's pack, battery age and voltages, energy used, per cycle and by part, and the cycles and time left on its mission, from the energy model |
 | [`FloatClasses.py`](#floatclassespy) | module | Data classes for one dive, shared by the converters; wave spectra post-processing |
 | [`RhoLUT.py`](#rholutpy) | module | Seawater density and σ₀ lookup table |
-| [`PageStatus.py`](#pagestatuspy) | module | Page footer: update time, run time, decoder status and version |
+| [`PageStatus.py`](#pagestatuspy) | module | Page footer: update time, run time, decoder status and version; the links between the table pages and their paging |
+| `EnergyModel.py` | module | The energy model's battery outlook: cycles left on the current mission (`RemainingCycles`), a falling oil-pump voltage (`PumpVoltageFallDive`) and their constants, shared by `xmtps-aggregate-json.py` and the energy page |
 | `FloatStatus.py` | module | A float's status (PREDEPLOYMENT, ACTIVE, OVERDUE, ARCHIVED) and last known location, shared by the summary and mission parameters pages |
 | `SeaNames.py` | module | Names the sea or ocean of a position ("WHOI" near Woods Hole) for the summary page's status column, from `data/marine-areas.json` (Natural Earth marine areas, public domain) |
 | `img/` | assets | The status icons `s0.png` to `s3.png`, served from `<plots>/img/` (copy them there on a new install) |

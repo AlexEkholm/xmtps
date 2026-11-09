@@ -33,6 +33,7 @@ The plot tools form a chain. Each run of the plot service (section 11) runs it o
 | 3 | `bin/py/xmtps-generate-summary-page.py` | `<serial>_summary.json`, systemd, `xmtps --version` | `<plots>/index.html`, `<plots>/summary.json` |
 | 4 | `bin/py/xmtps-generate-mission-page.py` | `<serial>_summary.json`, `<serial>_mission.json`, systemd, `xmtps --version` | `<plots>/engineering/params.html` |
 | 5 | `bin/py/xmtps-generate-startup-page.py` | `<serial>_summary.json`, `<serial>_engineering_data.json`, systemd, `xmtps --version` | `<plots>/engineering/startup.html` |
+| 6 | `bin/py/xmtps-generate-energy-page.py` | `<serial>_summary.json`, `<serial>_energy.json`, `<serial>_pump.json`, systemd, `xmtps --version` | `<plots>/engineering/energy.html` |
 
 Production paths:
 
@@ -322,7 +323,7 @@ Input: `sbd`, `sbd_session`, `gps`, `iridium_position`, summary. Default size `f
 
 | ID | Title | Size | Page | Contents |
 |---|---|---|---|---|
-| `satcom` | Satcom | `figWideXL` | Satcom | x: date (UTC); y: time of day (UTC), plotted on the dummy date 2021-02-12 with a range from 23:00 the day before to 01:00 the day after. Markers, in the colors of fmtps: "Iridium empty" (empty uploads from `_sbd_session`, yellow `rgba(255,220,0,0.8)`), "Iridium failed" (failed transfers, red `rgba(255,69,69,0.7)`), "Iridium TX" (SBD messages with MTMSN 0, purple `rgba(160,69,220,0.7)`; red until 2026-11-07), "Iridium TX+RX" (MTMSN > 0, i.e. a mobile-terminated message was received, blue `rgba(69,69,255,0.7)`), "GPS" (green `rgb(69,255,69)`). The message markers are size 16 and GPS size 8, all with a black 0.5 px outline. The empty and failed markers are drawn first, under the messages with data, and larger (size 24; fmtps uses 16), since a failed transfer is minutes before its retry: they show as a yellow or red ring around it; their hover gives the dive, time, position ± CEP, MOMSN and session status. |
+| `satcom` | Satcom | `figWideXL` | Satcom | x: date (UTC); y: time of day (UTC), plotted on the dummy date 2021-02-12 with a range from 23:00 the day before to 01:00 the day after. Markers, in the colors of fmtps: "Iridium empty" (empty uploads from `_sbd_session`, yellow `rgba(255,220,0,0.8)`), "Iridium failed" (failed transfers, red `rgba(255,69,69,0.7)`), "Iridium TX" (SBD messages with MTMSN 0, purple `rgba(160,69,220,0.7)`; red until 2026-11-07), "Iridium TX+RX" (MTMSN > 0, i.e. a mobile-terminated message was received, blue `rgba(69,69,255,0.7)`), "GPS" (green `rgb(69,255,69)`). Behind them all, "Surface start": a white circle (size 16, black outline) at the start of each surface phase, `surface.dt_start` of `_engineering_data` (since 2026-11-09); hover gives the dive and time. The message markers and the failed transfers are size 16 and GPS size 8, all with a black 0.5 px outline. The empty and failed markers are drawn before the messages with data; the empty ones are larger (size 24), so they show as a yellow ring around the message they go with, while a failed transfer, minutes before its retry, is mostly hidden under it (size 24 until 2026-11-09). Their hover gives the dive, time, position ± CEP, MOMSN and session status. |
 | `satcom_gps_ttf` | GPS Time-to-fix (TTF) | `fig2` | Satcom | x: "Dive"; y: "TTF [seconds]". |
 | `satcom_gps_cno` | GPS Carrier-to-Noise (CNO) Ratio | `fig2` | Satcom | y: "CNO [dBHz]"; average with min./max. lines. Not written when every fix it shows (`idx` 0–2) has a CNO of 0 (unset); the float page then shows `position_all` in its place. |
 | `satcom_gps_nsat` | GPS No. Satellites | `fig2` | Satcom | y: "No. Satellites". |
@@ -446,7 +447,7 @@ Written by `bin/py/xmtps-generate-summary-page.py` from all `<serial>_summary.js
 
 ### 5.2 Body
 
-1. Heading `ALAMO/ALTO Float Summary`, and under it the links "Float Startup" (`engineering/startup.html`) and "Mission Parameters" (`engineering/params.html`), in `<div id="tlinks">`. The paths are relative and assume the production layout of section 11, with both pages in `engineering/` below the summary page.
+1. Heading `ALAMO/ALTO Float Summary`, and under it the links to the table pages, in `<div id="tlinks">` (`WritePageLinks` in `bin/py/PageStatus.py`, since 2026-11-09; `TABLE_PAGES`): "Float Summary" (this page, as plain text), "Float Startup" (`engineering/startup.html`), "Mission Parameters" (`engineering/params.html`) and "Battery and Energy" (`engineering/energy.html`). The paths are relative and assume the production layout of section 11, with the other pages in `engineering/` below the summary page. The startup, mission and energy pages have the same links under their headings, built from `--plots-url` (`/alamo/` and `/alamo/engineering/...` in production).
 2. Map (`div#pit`, 390 × 420 px): a Plotly figure embedded as a `div` (`to_html(full_html=False, include_plotlyjs='cdn', div_id='plot')`), so it also loads plotly.js from the Plotly CDN. Orthographic globe centered on 30° N, 45° W; 15°/30° graticule; dashed lines at the tropics and polar circles; equator line. One marker per float at its latest valid GPS position (`latest.gps`), colored by status (`FloatStatus`, as in the table): orange `rgb(255,168,64)` size 6 PREDEPLOYMENT (last seen at WHOI), green `rgb(123,255,123)` size 6 under 30 days since the latest SBD message, blue `rgb(123,123,255)` size 5 under 180 days, red `rgb(255,123,123)` size 4 otherwise. Hover shows the serial. Mode bar hidden. The map includes floats the table leaves out (it does not check the cycle or profiled distance).
 3. Table `#stable` (class `stripe`), one row per float, most recent report first. A float is left out if `latest.cycle` < 1 or its `profdepthsum` is not positive. Production on 2026-10-30: 250 rows (40 ACTIVE, 11 OVERDUE, 199 ARCHIVED).
 4. Footer (section 8) on the left, and an "Auto Refresh" checkbox on the right.
@@ -481,8 +482,8 @@ The Deployed and Last Report cells carry the same `id` (`deployed`, `last-report
 
 Written by `bin/py/xmtps-generate-mission-page.py`. It reads each float's `<serial>_summary.json` and the `<serial>_mission.json` next to it ([json-file-format.md](json-file-format.md)). README "Python tools" describes the rows, columns, phases and colors in full; this section gives the file structure.
 
-- **Head.** `<meta charset="utf-8">`, title "Float Mission Parameters", DataTables 1.12.1 from the CDN (as 5.1), inline CSS (`#top` max width 1600 px). The `table.mtable` is a DataTable sorted by column 3 (Last Report) descending, without paging or info line, with the search field. An inline script sets `MCFG` (`ScoringConfig`: each data column's format, the `MEDIAN_COLUMNS` tolerances by column index, `MIN_GROUP_SIZE`, `MIN_SCORE`, `TYPICAL_RANGE_PERCENTILE`) and runs `SCORING_SCRIPT`, which scores the values (below).
-- **Heading** `ALAMO/ALTO Mission Parameters` and an introduction (`div#intro`) with a color key: `mcur` (current phase: bold, underlined), `munused` (light gray), `mscale` (yellow to red gradient), `mscalelow` (white to blue gradient), `merr` (dark red `#b71c1c`, white bold text).
+- **Head.** `<meta charset="utf-8">`, title "Float Mission Parameters", DataTables 1.12.1 from the CDN (as 5.1), inline CSS (`#top` max width 1600 px). The `table.mtable` is a DataTable sorted by column 3 (Last Report) descending, with the summary page's paging (`TABLE_PAGING` in `bin/py/PageStatus.py`: 10 rows, choices 10, 20, 50, 100 and ALL; until 2026-11-09 without paging or info line), with the search field. An inline script sets `MCFG` (`ScoringConfig`: each data column's format, the `MEDIAN_COLUMNS` tolerances by column index, `MIN_GROUP_SIZE`, `MIN_SCORE`, `TYPICAL_RANGE_PERCENTILE`) and runs `SCORING_SCRIPT`, which scores the values (below).
+- **Heading** `ALAMO/ALTO Mission Parameters`, the links to the table pages (`WritePageLinks`, as 5.2), and an introduction (`div#intro`) with a color key: `mcur` (current phase: bold, underlined), `munused` (light gray), `mscale` (yellow to red gradient), `mscalelow` (white to blue gradient), `merr` (dark red `#b71c1c`, white bold text).
 - **One table of all floats** (since 2026-11-09; until then one table per float type, ALAMO and ALTO), most recent report first, under `<h2>Floats <small id="mcount">(N of M floats shown)</small></h2>`. 2026-11-09: 232 floats, 112 ALAMO and 120 ALTO.
 - **Header rows.** Row 1: `Float` (colspan 6) and the column groups (Mission, Pressures, Timing, Descent, Ascent, Surface, Ice, Other). Row 2: the six float columns (rowspan 2) and the parameter columns (header, then the parameter name and units in small text; the `title` attribute holds the description). Row 3: `P0`, `P1`, `P2` under each phase-dependent column.
 - **Float columns.** ID (link to `<plots-url>/<serial>`, WMO in small text if above 1), Type (with CTD type), Firmware (`vM.m.p` from `0xMMmmppbb`, raw word in small text), Last Report (`YYYY-MM-DD HH:MM`, "N days ago"; sorted by `data-order` epoch), Status (as on the summary page, 5.3, through `bin/py/FloatStatus.py` since 2026-11-09: icon `<plots-url>/img/s3.png`, `s2.png`, `s1.png` or `s0.png` with PREDEPLOYMENT/ACTIVE/OVERDUE/ARCHIVED, and the last known location, "WHOI" or the sea or ocean, in small grey text under it; sorted by the latest report), Dive No. (the dive the parameters come from, "of N" if not the latest cycle).
@@ -497,8 +498,8 @@ Status icon URLs are absolute in production (`/alamo/img/s2.png`) because the se
 
 Written by `bin/py/xmtps-generate-startup-page.py`. It reads each float's `<serial>_summary.json` and `<serial>_engineering_data.json` (the BIT rows, sections `bit.*`; see [json-file-format.md](json-file-format.md) and [xmessage-format.md](xmessage-format.md) B.2). Floats that started up more than `--days` days ago (default 180; the service does not pass it) are left out. The BITs of the startup dives that the summary lists in `field_resets` (resets in the field, since 2026-11-08) are left out, so a long-deployed float that reset at sea is not shown as a new startup.
 
-- **Head.** `<meta charset="utf-8">`, DataTables 1.12.1 from the CDN; `table#sfloats` sorted by column 3 (Startup) descending, no paging, no info line, search field on. Inline CSS.
-- **Heading** `ALAMO/ALTO Float Startup`; introduction with a key: `bstart` (started, light yellow `#fff3c4`), `bpass` (passed, light green `#c8e6c9`), `bfail` (failed, dark red `#b71c1c`, white bold).
+- **Head.** `<meta charset="utf-8">`, DataTables 1.12.1 from the CDN; `table#sfloats` sorted by column 3 (Startup) descending, with the summary page's paging (`TABLE_PAGING`; until 2026-11-09 no paging and no info line), search field on. Inline CSS.
+- **Heading** `ALAMO/ALTO Float Startup`, the links to the table pages (`WritePageLinks`, as 5.2); introduction with a key: `bstart` (started, light yellow `#fff3c4`), `bpass` (passed, light green `#c8e6c9`), `bfail` (failed, dark red `#b71c1c`, white bold).
 - **Table heading** `<h2>Recent Startups <small>(N)</small></h2>`. Production on 2026-10-30: 65 floats.
 - **Header rows.** Row 1: `Float` (7), `BIT` (4), then the measurement groups CTD (3), Case (1), Battery (1), Air Pump (8), Oil Pump (6). Row 2: the column headers with units in small text.
 - **No status icons** are used on this page.
@@ -523,6 +524,31 @@ Columns:
 A float without BIT messages gets `-` in every BIT cell (DataTables does not allow cells that span columns in the body).
 
 The page footer is section 8.
+
+### 7.1 Battery and energy page: `engineering/energy.html`
+
+Written by `bin/py/xmtps-generate-energy-page.py` (since 2026-11-09). It reads each deployed float's `<serial>_summary.json` and, next to it, `<serial>_energy.json` (the energy model, [json-file-format.md](json-file-format.md) 4.17.1) and `<serial>_pump.json` (dive and voltage only). Floats without an energy file are left out; `--days` keeps only floats that reported within that many days. The outlook uses `bin/py/EnergyModel.py`, the same code as the float pages' remaining-cycles plot (3.10.1), so the two agree.
+
+- **Head.** `<meta charset="utf-8">`, title "Float Battery and Energy", DataTables 1.12.1 from the CDN; `table.etable` sorted by column 3 (Last Report) descending, with the summary page's paging (`TABLE_PAGING`) and search field. Inline CSS.
+- **Heading** `ALAMO/ALTO Battery and Energy`, the links to the table pages (`WritePageLinks`), and an introduction explaining the model and the colour key: `ebad` (dark red `#b71c1c`, white bold), `ewarn` (light red), `elow` (light yellow).
+- **One table**, one row per float, most recent report first. 2026-11-09: 318 floats.
+
+| # | Header | Contents |
+|---|---|---|
+| 0–4 | ID, Type, Status, Last Report [UTC], Dive | as on the mission page (ID with WMO, type with CTD, `FloatStatus` icon and location, last report with "N days ago"), and the latest dive with a positive number |
+| 5 | Pack | `pack_type` (Tadiran, Saft, Alkaline), nominal energy in MJ in small text |
+| 6 | Age [years] | `battery_age_s` of the latest dive |
+| 7 | Startup [V] | `battery_start_v` |
+| 8 | Pump [V] | highest oil-pump voltage of the latest dive; in small text its median over dives 1–10, or "falling since N" (`PumpVoltageFallDive`; class `ebad`) |
+| 9 | Used [MJ] | energy used so far, storage included (`RemainingCycles` `used_frac` × nominal), the share of the nominal energy in small text; `ebad` from 95 %, `ewarn` from 68 % (`USED_CLASSES`, the high and central usable shares) |
+| 10 | Cycle [kJ] | energy of a cycle without storage, median of the last 10 dives |
+| 11 | Length [days] | cycle length, median of the last 10 dives |
+| 12–15 | Pumps, Sensors, Comms, Standby [%] | shares of all the energy used (`ENERGY_SHARES`): oil and air pumps with the internal-resistance loss; CTD, WIMS and MAPLe; Iridium and GPS; controller, self-discharge and storage |
+| 16 | Cycles Left | expected (`remaining_mid`), range in small text |
+| 17 | Time Left [years] | cycles left × cycle length, range in small text |
+| 18 | End | latest report + expected time left, `YYYY-MM` |
+
+Columns 16–18 get `ebad` under 0.5 years expected, `ewarn` under 1 year and `elow` under 2 years (`TIME_LEFT_CLASSES`). ARCHIVED floats (no report in 180 days) are not coloured. Cells have `data-order` values for sorting and `title` texts with the details. The page footer is section 8.
 
 ## 8. Page footer and decoder status
 
@@ -668,6 +694,8 @@ The script activates the venv `/data1/alamo/bin/py/.venv` and loops forever:
    python xmtps-generate-mission-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" \
        --plots-url /alamo --runtime <s> $DJSON
    python xmtps-generate-startup-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" \
+       --plots-url /alamo --runtime <s> $DJSON
+   python xmtps-generate-energy-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" \
        --plots-url /alamo --runtime <s> $DJSON
    ```
 

@@ -73,6 +73,9 @@ from yattag import Doc
 # local
 from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
 from FloatClasses import FieldResetDives, ReadLaunchTimes
+from EnergyModel import (ENERGY_COMPONENTS, ENERGY_PIE_ONLY, ENERGY_SECONDS_PER_YEAR, ENERGY_USABLE_FRACTION,
+                         ENERGY_CONTROLLER_UNCERTAINTY, ENERGY_REMAINING_RECENT_DIVES,
+                         ENERGY_VOLTAGE_FALL_FRACTION, PumpVoltageFallDive, RemainingCycles)
 from geographiclib.geodesic import Geodesic
 from PageStatus import WriteStatusFooter
 
@@ -487,24 +490,7 @@ ENERGY_PACK_OVERRIDES[9062] = 'saft'       # startup 13.2 V, 2014-2016 batch; 13
 # ALAMO 9179, 9181, 9207: startup 11.4-11.9 V, but used 131-135 % of an alkaline (C-cell) pack:
 # taken as Tadiran read through a VOP11 board's diode, like ALTO 11020-11034.
 ENERGY_PACK_OVERRIDES.update({9179: 'tadiran', 9181: 'tadiran', 9207: 'tadiran'})
-ENERGY_SECONDS_PER_YEAR = 365.25 * 86400
-# Remaining-cycles estimate (energy_remaining_cycles): the usable share of the pack's nominal
-# energy, low / central / high, from the floats that ran out of battery: most used 50-95 % of
-# nominal, median about 67 %; backtested on 92 of them, 50 / 68 / 95 % removes the bias that
-# 65 / 80 / 95 % had (predicted / actual cycles left 1.4-1.9) and puts about three quarters of the
-# floats inside the range; the controller drain's uncertainty (+-30 %), applied to each cycle's controller
-# energy; and the number of latest dives whose median gives the energy and duration of a cycle on
-# the current mission.
-ENERGY_USABLE_FRACTION = (0.50, 0.68, 0.95)
-ENERGY_CONTROLLER_UNCERTAINTY = 0.30
-ENERGY_REMAINING_RECENT_DIVES = 10
-# Falling pump voltage, marked on the remaining-cycles plot: a run of ENERGY_VOLTAGE_FALL_DIVES dives
-# whose highest oil-pump voltage is below ENERGY_VOLTAGE_FALL_FRACTION of its median over the first
-# ENERGY_VOLTAGE_EARLY_DIVES dives. On the floats that ran out of battery it came a median 60 dives,
-# 16 % of their dives, before the end, and caught the abrupt failures the energy estimate misses.
-ENERGY_VOLTAGE_FALL_FRACTION = 0.95
-ENERGY_VOLTAGE_FALL_DIVES = 3
-ENERGY_VOLTAGE_EARLY_DIVES = 10
+# ENERGY_SECONDS_PER_YEAR, the remaining-cycles and falling-pump-voltage constants: EnergyModel
 ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
     ['phase_vac'],
     ['pump_vac', 'pump_vac_avg'],
@@ -521,23 +507,7 @@ def PumpCurrentInvalid(curr):
     curr = pd.to_numeric(curr, errors='coerce')
     return (curr <= 0) | (curr >= 100) | curr.isna()
 
-ENERGY_COMPONENTS = [              # (column, label), stacked bottom up
-    ('pump_descent_j', 'Pump-descent'),
-    ('pump_ascent_j', 'Pump-ascent'),
-    ('air_pump_j', 'Air pump'),
-    ('ctd_profile_j', 'CTD-profile'),
-    ('ctd_drift_j', 'CTD-drift'),
-    ('ctd_surface_j', 'CTD-surface'),
-    ('iridium_j', 'Iridium'),
-    ('gps_j', 'GPS'),
-    ('wims_j', 'WIMS'),
-    ('maple_j', 'Microstructure (MAPLe)'),
-    ('internal_res_j', 'Internal Res.'),
-    ('controller_j', 'Controller'),
-    ('self_discharge_j', 'Self-discharge'),
-    ('storage_j', 'Self-discharge (storage)'),
-    ]
-ENERGY_PIE_ONLY = ('storage_j',)  # in the totals and energy_by_component, not in the per-cycle bars
+# ENERGY_COMPONENTS and ENERGY_PIE_ONLY: EnergyModel
 
 def WaveSampleRate(wave_data):
     """Return the true accelerometer sample rate of a FloatClasses.Wave, in Hz, or NaN.
@@ -11775,14 +11745,42 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             
             # Add traces to figures
 
+            # Start of each surface phase, from the surface engineering message (surface.dt_start):
+            # white circles of the Iridium markers' size, drawn first, in the background
+            df_eng = float_aggregate_data.get('engineering_data')
+            if isinstance(df_eng, pd.DataFrame) and len(df_eng) and 'surface.dt_start' in df_eng.columns:
+                d = df_eng[['dive', 'surface.dt_start']].copy()
+                d = d[d['surface.dt_start'].astype(str).str.match(r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d')]
+                if len(d):
+                    figs['satcom'].add_trace(go.Scatter(
+                        x = d['surface.dt_start'],
+                        y = [ dateutil.parser.parse('2021-02-12 '+x[11:19]) for x in d['surface.dt_start'].astype(str).values ],
+                        customdata = d['dive'],
+                        hovertemplate='<br>'.join([
+                            'Dive <b>%{customdata}</b>: surface start',
+                            '%{x|%Y-%m-%d %H:%M:%S}Z',
+                            '<extra></extra>',
+                            ]),
+                        name='Surface start',
+                        marker=dict(
+                            color='rgb(255,255,255)',
+                            line=dict(
+                                color='rgb(0,0,0)',
+                                width=0.5,
+                                ),
+                            size=16,
+                            ),
+                        mode='markers',
+                        ))
+
             # Iridium sessions without SBD data, in the fmtps colors: empty uploads yellow and
-            # failed transfers red, drawn first so the messages with data cover them. A failed
-            # transfer is minutes before its retry, so its marker is larger (24, not 16) and shows
-            # as a ring around the retry's
+            # failed transfers red, drawn before the messages with data. An empty upload's marker
+            # is larger (24, not 16), so it shows as a ring around the message it goes with; a
+            # failed transfer's has the messages' size
             df_ses = float_aggregate_data.get('sbd_session')
             if isinstance(df_ses, pd.DataFrame) and len(df_ses):
-                for kind, label, color in (('empty', 'Iridium empty', 'rgba(255,220,0,0.8)'),
-                                           ('failed', 'Iridium failed', 'rgba(255,69,69,0.7)')):
+                for kind, label, color, size in (('empty', 'Iridium empty', 'rgba(255,220,0,0.8)', 24),
+                                                 ('failed', 'Iridium failed', 'rgba(255,69,69,0.7)', 16)):
                     d = df_ses[df_ses['kind'] == kind]
                     if len(d) < 1:
                         continue
@@ -11816,7 +11814,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                                 color='rgb(0,0,0)',
                                 width=0.5,
                                 ),
-                            size=24,
+                            size=size,
                             ),
                         mode='markers',
                         ))
@@ -14656,62 +14654,7 @@ ENERGY_COLORS = {
     'internal_res_j': 'rgb(150,150,150)',
     }
 
-def RemainingCycles(df, cycle_j):
-    """Return a DataFrame, one row per dive of df (the 'energy' aggregate's positive dives, sorted
-    by dive), of the cycles left on the current mission after that dive: remaining_mid,
-    remaining_low, remaining_high, with used_frac (energy used so far, storage included, over the
-    nominal pack energy), cycle_j (median energy per cycle over the last
-    ENERGY_REMAINING_RECENT_DIVES dives) and cycle_s (their median cycle duration). cycle_j is each
-    dive's energy without storage. None when the pack energy is unknown."""
-    pack_wh = pd.to_numeric(df['pack_wh'], errors='coerce') if 'pack_wh' in df.columns else pd.Series(dtype=float)
-    pack_wh = pack_wh[pack_wh > 0]
-    if len(pack_wh) < 1:
-        return None
-    nominal = float(pack_wh.iloc[-1]) * 3600
-    d = df.sort_values('dive')
-    n = ENERGY_REMAINING_RECENT_DIVES
-    m = min(3, n)                                    # dives needed before a first estimate
-    e_mid = cycle_j.loc[d.index].rolling(n, min_periods=m).median()
-    ctrl = (d['controller_j'] if 'controller_j' in d.columns else 0 * e_mid).rolling(n, min_periods=m).median()
-    e_low = (e_mid - ENERGY_CONTROLLER_UNCERTAINTY * ctrl).clip(lower=1.0)
-    e_high = e_mid + ENERGY_CONTROLLER_UNCERTAINTY * ctrl
-    used = d['total_j'].cumsum()
-    f_low, f_mid, f_high = ENERGY_USABLE_FRACTION
-    cyc_s = d['self_discharge_s'].where(d['self_discharge_s'] > 0) if 'self_discharge_s' in d.columns \
-        else pd.Series(np.nan, index=d.index)
-    return pd.DataFrame({
-        'dive':           d['dive'].values,
-        'remaining_mid':  ((f_mid * nominal - used) / e_mid).clip(lower=0).values,
-        'remaining_low':  ((f_low * nominal - used) / e_high).clip(lower=0).values,
-        'remaining_high': ((f_high * nominal - used) / e_low).clip(lower=0).values,
-        'used_frac':      (used / nominal).values,
-        'cycle_j':        e_mid.values,
-        'cycle_s':        cyc_s.rolling(n, min_periods=1).median().values,
-        'nominal_j':      nominal,
-        })
-
-def PumpVoltageFallDive(df_pump):
-    """Return (dive, v0, v_last) for the first positive dive after dive ENERGY_VOLTAGE_EARLY_DIVES
-    that starts a run of ENERGY_VOLTAGE_FALL_DIVES dives whose highest oil-pump voltage is below
-    ENERGY_VOLTAGE_FALL_FRACTION of its median over dives 1 to ENERGY_VOLTAGE_EARLY_DIVES (v0); v_last
-    is the latest dive's highest voltage. None when the voltage has not fallen or the pump data is
-    missing. On the floats that ran out of battery this flag came a median 16 % of their dives before
-    the end."""
-    if not isinstance(df_pump, pd.DataFrame) or len(df_pump) < 1 or 'volt' not in df_pump.columns:
-        return None
-    p = df_pump[['dive', 'volt']].apply(pd.to_numeric, errors='coerce').dropna()
-    v = p[p['dive'] > 0].groupby('dive')['volt'].max().sort_index()
-    n0 = ENERGY_VOLTAGE_EARLY_DIVES
-    if len(v) <= n0:
-        return None
-    v0 = float(v.iloc[:n0].median())
-    below = (v < ENERGY_VOLTAGE_FALL_FRACTION * v0).values
-    run = 0
-    for i in range(n0, len(v)):
-        run = run + 1 if below[i] else 0
-        if run >= ENERGY_VOLTAGE_FALL_DIVES:
-            return int(v.index[i - run + 1]), v0, float(v.iloc[-1])
-    return None
+# RemainingCycles, PumpVoltageFallDive: EnergyModel
 
 def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float, df_pump=None):
     """Write energy_remaining_cycles (see WriteEnergyPlots) from the 'energy' aggregate's positive
