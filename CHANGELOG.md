@@ -21,8 +21,8 @@ Python tools:
   (`PageStatus.WritePageLinks`), and the startup, mission and energy tables have the summary
   page's paging (10 rows, up to ALL).
 - Satcom plot: a white circle behind the other markers marks the start of each surface phase
-  (`surface.dt_start` of the surface engineering message), and the failed Iridium transfers have
-  the other markers' size (16, was 24).
+  (`surface.dt_start` of the surface engineering message), and the empty uploads and failed
+  Iridium transfers have the other markers' size (16, was 24).
 
 - Mission parameters page: the Status column is the same as on the summary page: PREDEPLOYMENT
   (orange) for a float last seen at WHOI, and the last known location under the status. The

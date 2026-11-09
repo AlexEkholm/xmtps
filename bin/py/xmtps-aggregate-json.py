@@ -11774,12 +11774,11 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         ))
 
             # Iridium sessions without SBD data, in the fmtps colors: empty uploads yellow and
-            # failed transfers red, drawn before the messages with data. An empty upload's marker
-            # is larger (24, not 16), so it shows as a ring around the message it goes with; a
-            # failed transfer's has the messages' size
+            # failed transfers red, drawn before the messages with data, at the other Iridium
+            # markers' size
             df_ses = float_aggregate_data.get('sbd_session')
             if isinstance(df_ses, pd.DataFrame) and len(df_ses):
-                for kind, label, color, size in (('empty', 'Iridium empty', 'rgba(255,220,0,0.8)', 24),
+                for kind, label, color, size in (('empty', 'Iridium empty', 'rgba(255,220,0,0.8)', 16),
                                                  ('failed', 'Iridium failed', 'rgba(255,69,69,0.7)', 16)):
                     d = df_ses[df_ses['kind'] == kind]
                     if len(d) < 1:
