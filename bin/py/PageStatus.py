@@ -170,7 +170,8 @@ TABLE_PAGING = ('"pageLength": pageSizeFromUrl(), "search": { "search": searchFr
 #   n  the table's page size: 10, 20, 50, 100 or 'all'; anything else is dropped; left out for 10.
 #   s  the table's search text, as typed into its search field; left out when empty.
 #   r  auto-refresh, on pages with the Auto Refresh checkbox (WriteAutoRefresh): reload every r
-#      seconds; 1 means 60, others are at least 10. The checkbox sets r=1 or removes it
+#      seconds; 1 means 60, others are at least 10 and at most 86400; anything that is not a
+#      number is dropped. The checkbox sets r=1 or removes it
 #      (pushState, as before on the summary page).
 TABLE_URL_SCRIPT = '''<script type="text/javascript">
 var PAGE_SIZES = [10, 20, 50, 100, -1];
@@ -203,13 +204,15 @@ function BindTableUrl(dt) {
     return dt;
 }
 var reloading;
+var REFRESH_MAX_S = 86400;
 function checkAutoRefresh() {
     const cb = document.getElementById("autorefresh");
     if (!cb) return;
     const url = new URL(window.location.href);
     const urlparams = url.searchParams;
     let r = +urlparams.get("r");
-    if (r < 1) {
+    // Not a number (?r=abc): NaN would make setTimeout reload at once, again and again
+    if (!Number.isFinite(r) || r < 1) {
         if (urlparams.has("r")) {
             urlparams.delete("r");
             window.history.pushState({}, '', url.toString());
@@ -220,6 +223,11 @@ function checkAutoRefresh() {
     } else if (r < 10) {
         r = 10;
         urlparams.set("r", "10");
+        window.history.pushState({}, '', url.toString());
+    } else if (r > REFRESH_MAX_S) {
+        // A delay over 2^31-1 ms would overflow and also reload at once
+        r = REFRESH_MAX_S;
+        urlparams.set("r", String(REFRESH_MAX_S));
         window.history.pushState({}, '', url.toString());
     }
     reloading = setTimeout(function () { window.location.reload(); }, r * 1000);

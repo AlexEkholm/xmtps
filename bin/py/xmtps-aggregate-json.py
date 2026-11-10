@@ -152,11 +152,13 @@ def OpenBathymetry():
             bathymetry = False
     return bathymetry
 
-def BathymetryGrid(lon0, lon1, lat0, lat1):
+def BathymetryGrid(lon0, lon1, lat0, lat1, max_cells=None):
     """Return (lon, lat, elevation) of the bathymetry grid cells in a region, or None.
 
     lon0 < lon1 may extend past +-180 (a region across the dateline): the columns wrap, and the
-    returned longitudes increase continuously. lat is clamped to the grid. The arrays are native
+    returned longitudes increase continuously. lat is clamped to the grid. With max_cells, only
+    every step-th row and column is read, step being the smallest that leaves at most about
+    max_cells a side, so a large region is never read at full resolution. The arrays are native
     float64 (the netCDF data are big-endian); elevation is in m, positive up, shape
     (len(lat), len(lon)). None if the bathymetry file can't be read or the region is empty.
     """
@@ -169,11 +171,15 @@ def BathymetryGrid(lon0, lon1, lat0, lat1):
     ix = np.arange(int(np.ceil((lon0 - x[0]) / dx)), int(np.floor((lon1 - x[0]) / dx)) + 1)
     if len(iy) < 2 or len(ix) < 2:
         return None
+    step = max(1, int(np.ceil(max(len(ix), len(iy)) / max_cells))) if max_cells else 1
+    iy, ix = iy[::step], ix[::step]
+    if len(iy) < 2 or len(ix) < 2:
+        return None
     lon = x[0] + ix * dx
     ix = np.mod(ix, len(x))
-    # Contiguous column runs (one, or two across the dateline), read as slices
-    breaks = np.where(np.diff(ix) != 1)[0] + 1
-    z = np.hstack([np.array(b['z'][iy[0]:iy[-1] + 1, run[0]:run[-1] + 1], dtype = np.float64)
+    # Runs of columns step apart (one, or two across the dateline), each read as a strided slice
+    breaks = np.where(np.diff(ix) != step)[0] + 1
+    z = np.hstack([np.array(b['z'][iy[0]:iy[-1] + 1:step, run[0]:run[-1] + 1:step], dtype = np.float64)
                    for run in np.split(ix, breaks)])
     return lon.astype(np.float64), y[iy].astype(np.float64), z
 
@@ -3906,13 +3912,11 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
     half = max(lat_p.max() - lat_p.min(), (lon_p.max() - lon_p.min()) * coslat) / 2 + 0.6
     region = (clon - half / coslat, clon + half / coslat, max(clat - half, -90), min(clat + half, 90))
 
-    grid = BathymetryGrid(*region)
+    # Very large regions read coarsened, at most about 600 cells a side
+    grid = BathymetryGrid(*region, max_cells = 600)
     if grid is None:
         return None
     lon, lat, z = grid
-    # Coarsen very large regions to at most about 600 cells a side
-    step = max(1, int(np.ceil(max(len(lon), len(lat)) / 600)))
-    lon, lat, z = lon[::step], lat[::step], z[::step, ::step]
     depth = -z
 
     # Depth in whole meters (int16, sent as a compact binary array): 0 on land, at least 1 m at
