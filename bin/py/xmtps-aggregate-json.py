@@ -3930,7 +3930,11 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
     f1 = 1.0 / dmax
     colorscale = DEPTH_BLUES[:-1] + [[1.0 - f1, DEPTH_BLUES[-1][1]],
                                      [1.0 - f1 * 0.5, 'rgb(190,190,190)'], [1.0, 'rgb(190,190,190)']]
-    depth_ticks = list(range(0, int(dmax) + 1, 1000))
+    # Ticks from 0 at a round step (1, 2, 2.5 or 5 times a power of ten, in whole meters) that
+    # gives at most 6 intervals over the full depth range: 100 m to 500 m, 1000 m to 5000 m
+    steps = [ int(m * 10 ** k) for k in range(6) for m in (1, 2, 2.5, 5) if (m * 10 ** k) % 1 == 0 ]
+    step = next((s for s in steps if dmax / s <= 6), steps[-1])
+    depth_ticks = list(range(0, int(dmax) + 1, step))
 
     # Hillshade: cosine of the angle between the surface normal and a sun at azimuth 315 degrees,
     # altitude 45 degrees (rows are latitudes, increasing north)
