@@ -12,6 +12,10 @@ Python tools:
   now on all four pages. The startup page has an Auto Refresh checkbox and the `r` parameter,
   like the summary page. The URL handling is shared (`TABLE_URL_SCRIPT` in `PageStatus.py`).
 
+- Energy model page: the Controller drain, Profiling distance, Anomalies and Lifetime of a new
+  ALTO sections are left out (they stay in the report); the Controller row of the cycle-energy
+  table explains the Bluetooth fault in one line. The unused profiling-distance figure is removed.
+
 ## 2026-11-09
 
 Python tools:

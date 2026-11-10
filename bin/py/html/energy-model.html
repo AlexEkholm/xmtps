@@ -53,11 +53,10 @@ It was checked against the 92 floats that ran out of battery, which also gave th
 usable share of a pack.</p>
 
 <p class="toc">Contents: <a href="#cycle">Energy of a cycle</a> &middot; <a href="#packs">Battery packs</a> &middot;
-<a href="#drain">Controller drain</a> &middot; <a href="#outlook">Cycles and time left</a> &middot;
+<a href="#outlook">Cycles and time left</a> &middot;
 <a href="#prediction">How well the cycles left can be predicted</a> &middot;
-<a href="#depleted">Floats that ran out of battery</a> &middot; <a href="#distance">Profiling distance</a> &middot;
-<a href="#anomalies">Anomalies</a> &middot; <a href="#accuracy">Accuracy</a> &middot;
-<a href="#newalto">Lifetime of a new ALTO</a> &middot; <a href="#sources">Sources</a></p>
+<a href="#depleted">Floats that ran out of battery</a> &middot;
+<a href="#accuracy">Accuracy</a> &middot; <a href="#sources">Sources</a></p>
 
 <h2 id="summary">Summary</h2>
 <ul>
@@ -70,13 +69,6 @@ usable share of a pack.</p>
   <li><b>On long missions the controller drain is the largest use</b>: 66&ndash;68% of an SBE ALTO's lifetime
     energy. A Bluetooth power fault on boards built before mid-2022 adds about 15&nbsp;mW to the 20&nbsp;mW
     baseline.</li>
-  <li><b>A new ALTO with the fixed board should last about 5 years (185 cycles) with an SBE CTD and 6 years
-    (220 cycles) with an RBR CTD</b> on a 10-day, 2000&nbsp;dbar Argo mission, against 3.6 years with the
-    faulty board.</li>
-  <li><b>A long-lived float profiled about 200&nbsp;km</b> (sum of profile depths): 2000&nbsp;dbar ALTOs in
-    about 120 deep profiles, ALAMOs in about 500 shallow ones.</li>
-  <li><b>Anomaly:</b> ten ALAMOs deployed 2020-09-17/18 died after 0.45&nbsp;MJ, 18% of their packs, which
-    points at those packs, not the model.</li>
   <li><b>The cycles a float has left can be estimated only roughly</b> (<a href="#prediction">below</a>): the
     estimate is unbiased for normal floats and about three quarters end inside its range, but only about half
     within &plusmn;30%. A falling pump voltage warned of the end a median 60 dives ahead.</li>
@@ -103,10 +95,9 @@ float's <code>_energy.json</code> file. Their sum is the dive's energy; the floa
     apart form a session, from the first to the last message plus 10&nbsp;s.</td><td>Iridium 9602 developers guide</td></tr>
   <tr><td>GPS</td><td>0.096&nbsp;W (32&nbsp;mA at 3&nbsp;V) over each fix's time to fix.</td><td>u-blox NEO-M8 datasheet</td></tr>
   <tr><td>WIMS</td><td>0.0456&nbsp;W for 590&nbsp;s per dive with wave data.</td><td>WIMS user manual</td></tr>
-  <tr><td>Microstructure (MAPLe)</td><td>0.3&nbsp;W over each ascent, Micro-ALTOs 11491&ndash;11496 only (see
-    <a href="#anomalies">Anomalies</a>).</td><td>Bounded by the depleted Micro-ALTOs</td></tr>
-  <tr><td>Controller</td><td>20&nbsp;mW over the cycle, plus 15&nbsp;mW for a board with the Bluetooth fault (see
-    <a href="#drain">Controller drain</a>).</td><td>Depleted floats</td></tr>
+  <tr><td>Microstructure (MAPLe)</td><td>0.3&nbsp;W over each ascent, Micro-ALTOs 11491&ndash;11496 only.</td><td>Bounded by the depleted Micro-ALTOs</td></tr>
+  <tr><td>Controller</td><td>20&nbsp;mW over the cycle, plus 15&nbsp;mW for a board with the Bluetooth fault
+    (VOP11 and early VOP12 boards, built before mid-2022, also in storage).</td><td>Depleted floats</td></tr>
   <tr><td>Self-discharge</td><td>The pack's yearly rate (1% lithium, 3% alkaline) of its nominal energy, over the time
     since the previous dive.</td><td>Cell datasheets</td></tr>
   <tr><td>Self-discharge (storage)</td><td>The same, plus the faulty board's Bluetooth drain, over the time between
@@ -141,37 +132,6 @@ storage included, as a share of the nominal energy above.</p>
   <figcaption>Figure 1. No-load battery voltage at the earliest startup BIT, by serial number (374 floats).
   Diamonds mark a later startup before dive 1 whose voltage differs by more than 0.7&nbsp;V (a repack).</figcaption>
 </figure>
-
-<h2 id="drain">Controller drain</h2>
-<p><b>The Bluetooth fault.</b> At the end of 2021 the manufacturer found that the VOP11 and early VOP12
-boards left the Bluetooth module powered, whatever its setting. Affected floats draw about 2&nbsp;mA in sleep
-with periodic 15&nbsp;mA spikes, about 30&nbsp;mW at 15&nbsp;V, and the fault drains the pack in storage too:
-9300 and 9301 shipped together in August 2021, and 9301, deployed 14 months later, made 304 profiles against
-9300's 688. Floats shipped from August 2022 have the fixed board; several were sent back for new boards and
-batteries in 2022&ndash;2023. The model takes a board as faulty when the float's first message is before
-July 2022 and its first dive before 2024, unless it was refitted.</p>
-<p><b>Estimate.</b> A depleted float has used its pack's usable energy <i>U</i>, so the drain is
-(<i>U</i> &minus; per-dive terms &minus; self-discharge) / lifetime. The Micro-ALTOs 11491 and 11495 lived
-about 100 days, too short for the drain to matter, and drew 6.4&nbsp;MJ (95% of nominal) with the MAPLe at
-0.3&nbsp;W, or 5.9&nbsp;MJ (88%) without it. Taking that as <i>U</i> for the long-lived ALTOs (over 600 days;
-VOP11 floats corrected for a 20% diode loss):</p>
-<div class="tw"><table>
-  <caption>Controller drain implied by <i>U</i> = 6.4&nbsp;MJ.</caption>
-  <tr><th>Group</th><th class="r">Floats</th><th class="r">Lifetime</th><th>Drain, median (range)</th></tr>
-        <tr><td>ALTO SBE, VOP11, 2017&ndash;2018</td><td class="r">8</td><td class="r">616&ndash;1,085&nbsp;d</td><td>46&nbsp;mW (36&ndash;67)</td></tr>
-        <tr><td>ALTO SBE 12.4&nbsp;V, VOP11, 2018&ndash;2021</td><td class="r">11</td><td class="r">690&ndash;1,074&nbsp;d</td><td>41&nbsp;mW (39&ndash;64)</td></tr>
-        <tr><td>ALTO SBE 15.4&nbsp;V, 2019&ndash;2021</td><td class="r">6</td><td class="r">1,273&ndash;1,385&nbsp;d</td><td>39&nbsp;mW (36&ndash;41)</td></tr>
-        <tr><td>ALTO RBR, 2022</td><td class="r">1</td><td class="r">1,360&nbsp;d</td><td>33&nbsp;mW</td></tr>
-        <tr><td>11340, fixed board</td><td class="r">1</td><td class="r">741&nbsp;d</td><td>54&nbsp;mW</td></tr>
-        <tr><td>11342, fixed board</td><td class="r">1</td><td class="r">1,065&nbsp;d</td><td>26&nbsp;mW</td></tr>
-</table></div>
-<p>The faulty boards give 39&ndash;46&nbsp;mW (35&ndash;42&nbsp;mW with <i>U</i> = 5.9&nbsp;MJ); 11342, the one
-long-lived ALTO with a fixed board, 26&nbsp;mW (21&nbsp;mW), so the fault adds 13&ndash;14&nbsp;mW whatever
-<i>U</i>. 11340, also fixed, died at 62% of nominal on a shallow short-cycle mission, more like a failure. The
-ALAMOs live 1&ndash;15 months, so the drain is a small part of their use and cannot be pinned down from them.
-The model uses 20&nbsp;mW plus 15&nbsp;mW for the fault, set against <i>U</i> = 5.9&nbsp;MJ, the low end of
-the estimate; it keeps every depleted float within its nominal pack energy. Over a year 35&nbsp;mW is about
-1.1&nbsp;MJ, a sixth of an ALTO's packs; self-discharge (about 2&nbsp;mW for an ALTO) does not explain it.</p>
 
 <h2 id="outlook">Cycles and time left</h2>
 <p>The Remaining Cycles plot on the float pages and the Outlook columns of the battery and energy page estimate
@@ -301,75 +261,6 @@ floats fit no group (9095, 9115, 9119, 9132, 9239, 9288, 11143, 11146).</p>
   <figcaption>Figure 4. Estimated lifetime energy as a share of the pack's nominal energy, against lifetime.</figcaption>
 </figure>
 
-<h2 id="distance">Profiling distance</h2>
-<p>The accumulated vertical profiling distance is each float's sum of the maximum pressure of every profile.
-The depleted floats profiled 15,900&nbsp;km in all: 7,100&nbsp;km by the ALTOs and 8,800&nbsp;km by the
-ALAMOs. The 35 that lived more than a year profiled a median 205&nbsp;km (middle half 193&ndash;235&nbsp;km), as
-Jayne et al. (2022) give for an ALAMO, but the spread across groups is wide.</p>
-<div class="tw"><table>
-  <caption>Accumulated vertical profiling distance by group (medians). Pumps and controller: energy per km of
-  profile, in kJ.</caption>
-  <tr><th>Group</th><th class="r">Floats</th><th class="r">Profile depth</th><th class="r">Profiles</th><th>Distance (range)</th><th class="r">Per year</th><th class="r">Pumps</th><th class="r">Controller</th><th class="r">Full estimate per km</th><th class="r">Per MJ of pack</th></tr>
-        <tr><td>ALTO SBE, VOP11, 2017&ndash;2018</td><td class="r">8</td><td class="r">2,000&nbsp;dbar</td><td class="r">114</td><td>198&nbsp;km (119&ndash;240)</td><td class="r">75&nbsp;km</td><td class="r">2.5</td><td class="r">14.6</td><td class="r">21&nbsp;kJ</td><td class="r">30&nbsp;km</td></tr>
-        <tr><td>ALTO SBE 12.4&nbsp;V, VOP11, 2018&ndash;2021</td><td class="r">11</td><td class="r">2,000&nbsp;dbar</td><td class="r">106</td><td>205&nbsp;km (197&ndash;213)</td><td class="r">73&nbsp;km</td><td class="r">2.6</td><td class="r">15.1</td><td class="r">22&nbsp;kJ</td><td class="r">31&nbsp;km</td></tr>
-        <tr><td>ALTO SBE 15.4&nbsp;V, 2019&ndash;2021</td><td class="r">6</td><td class="r">2,000&nbsp;dbar</td><td class="r">136</td><td>264&nbsp;km (159&ndash;282)</td><td class="r">74&nbsp;km</td><td class="r">3.1</td><td class="r">14.9</td><td class="r">22&nbsp;kJ</td><td class="r">39&nbsp;km</td></tr>
-        <tr><td>ALTO RBR, 2022</td><td class="r">1</td><td class="r">2,000&nbsp;dbar</td><td class="r">260</td><td>511&nbsp;km</td><td class="r">137&nbsp;km</td><td class="r">3.7</td><td class="r">8.1</td><td class="r">13&nbsp;kJ</td><td class="r">76&nbsp;km</td></tr>
-        <tr><td>ALTO SBE, fixed board, short-cycle, 2022</td><td class="r">2</td><td class="r">180&nbsp;dbar</td><td class="r">991</td><td>220&nbsp;km (148&ndash;292)</td><td class="r">97&nbsp;km</td><td class="r">15.8</td><td class="r">8.4</td><td class="r">27&nbsp;kJ</td><td class="r">33&nbsp;km</td></tr>
-        <tr><td>Micro-ALTO, 2023</td><td class="r">2</td><td class="r">290&nbsp;dbar</td><td class="r">908</td><td>265&nbsp;km (229&ndash;302)</td><td class="r">946&nbsp;km</td><td class="r">18.4</td><td class="r">0.7</td><td class="r">25&nbsp;kJ</td><td class="r">40&nbsp;km</td></tr>
-        <tr><td>ALAMO, 2015&ndash;2016</td><td class="r">10</td><td class="r">480&nbsp;dbar</td><td class="r">463</td><td>221&nbsp;km (172&ndash;462)</td><td class="r">401&nbsp;km</td><td class="r">1.8</td><td class="r">2.8</td><td class="r">8&nbsp;kJ</td><td class="r">92&nbsp;km</td></tr>
-        <tr><td>ALAMO Saft, 2017&ndash;2018</td><td class="r">4</td><td class="r">310&nbsp;dbar</td><td class="r">524</td><td>168&nbsp;km (11&ndash;181)</td><td class="r">1,155&nbsp;km</td><td class="r">5.4</td><td class="r">1.0</td><td class="r">10&nbsp;kJ</td><td class="r">70&nbsp;km</td></tr>
-        <tr><td>ALAMO alkaline, 2018&ndash;2021</td><td class="r">6</td><td class="r">70&nbsp;dbar</td><td class="r">82</td><td>7&nbsp;km (1&ndash;62)</td><td class="r">25&nbsp;km</td><td class="r">24.6</td><td class="r">69.4</td><td class="r">106&nbsp;kJ</td><td class="r">6&nbsp;km</td></tr>
-        <tr><td>ALAMO Tadiran, VOP11, 2018&ndash;2019</td><td class="r">3</td><td class="r">480&nbsp;dbar</td><td class="r">99</td><td>50&nbsp;km (47&ndash;139)</td><td class="r">49&nbsp;km</td><td class="r">4.2</td><td class="r">22.6</td><td class="r">28&nbsp;kJ</td><td class="r">20&nbsp;km</td></tr>
-        <tr><td>ALAMO redeployed, 2019&ndash;2022</td><td class="r">6</td><td class="r">280&nbsp;dbar</td><td class="r">188</td><td>64&nbsp;km (4&ndash;171)</td><td class="r">678&nbsp;km</td><td class="r">6.0</td><td class="r">1.0</td><td class="r">11&nbsp;kJ</td><td class="r">26&nbsp;km</td></tr>
-        <tr><td>ALAMO RBR, 2020&ndash;2024</td><td class="r">11</td><td class="r">310&nbsp;dbar</td><td class="r">529</td><td>202&nbsp;km (57&ndash;566)</td><td class="r">564&nbsp;km</td><td class="r">4.4</td><td class="r">1.1</td><td class="r">11&nbsp;kJ</td><td class="r">80&nbsp;km</td></tr>
-        <tr><td>ALAMO RBR, Sept. 2020 batch</td><td class="r">10</td><td class="r">250&nbsp;dbar</td><td class="r">322</td><td>82&nbsp;km (61&ndash;100)</td><td class="r">1,145&nbsp;km</td><td class="r">2.9</td><td class="r">1.0</td><td class="r">5&nbsp;kJ</td><td class="r">33&nbsp;km</td></tr>
-        <tr><td>ALAMO RBR with WIMS, 2024&ndash;2025</td><td class="r">4</td><td class="r">270&nbsp;dbar</td><td class="r">452</td><td>125&nbsp;km (46&ndash;234)</td><td class="r">212&nbsp;km</td><td class="r">4.8</td><td class="r">3.0</td><td class="r">10&nbsp;kJ</td><td class="r">50&nbsp;km</td></tr>
-</table></div>
-<ul>
-  <li><b>Profiles trade against depth.</b> The 2000&nbsp;dbar SBE ALTOs made 106&ndash;136 profiles of 2&nbsp;km
-    each; the ALAMOs 450&ndash;530 profiles of 0.3&ndash;0.5&nbsp;km. Both reached about 200&nbsp;km, about
-    75&nbsp;km a year for the SBE ALTOs on 10-day cycles and 400&ndash;1,150&nbsp;km a year for the ALAMOs and
-    Micro-ALTOs cycling every few hours to days.</li>
-  <li><b>Deep profiles are cheaper per km for the pumps.</b> Each cycle costs a roughly fixed amount of pumping
-    to rise from the park depth and fill the air bladder, whatever the profile depth: 2.5&ndash;3.7&nbsp;kJ a
-    km for the 2000&nbsp;dbar ALTOs, 16&ndash;18&nbsp;kJ for ALTOs profiling to 180&ndash;290&nbsp;dbar,
-    1.8&ndash;5.4&nbsp;kJ for the ALAMOs.</li>
-  <li><b>On long missions the controller sets the reach.</b> An SBE ALTO spends about 15&nbsp;kJ a km on the
-    controller, about 70% of its 21&ndash;22&nbsp;kJ a km. The RBR ALTO 11150 profiled 511&nbsp;km to
-    2000&nbsp;dbar, twice an SBE ALTO, because its CTD has no pump and it made 260 profiles in 3.7 years.</li>
-  <li><b>ALAMOs get about twice as far per MJ</b> (70&ndash;92&nbsp;km against 30&ndash;40&nbsp;km for the SBE
-    ALTOs): an ALTO is about twice the size, so the same buoyancy change pumps about twice the oil, and ALAMOs
-    profile shallower and cycle faster, leaving less time for the drain.</li>
-  <li><b>Distance alone predicts energy poorly</b> (28% of the variance across ALAMOs, 57% across ALTOs): park
-    depth, drift sampling and the number of surfacings matter as much.</li>
-</ul>
-<figure>
-  <img src="energy-model/fig5_profiling_distance.png" alt="Profiling distance against lifetime energy as a share of nominal" loading="lazy">
-  <figcaption>Figure 5. Accumulated vertical profiling distance against the estimated lifetime energy as a share
-  of nominal, for the 92 depleted floats. The dotted line marks the 200&nbsp;km Jayne et al. (2022) give for an
-  ALAMO.</figcaption>
-</figure>
-
-<h2 id="anomalies">Anomalies</h2>
-<p><b>The September 2020 ALAMO batch.</b> Ten RBR floats deployed on 2020-09-17/18 (firmware 0x08000101) died
-after 0.37&ndash;0.53&nbsp;MJ. Their voltage was already down to about 13.8&nbsp;V halfway through and fell over
-69% of the dives instead of the usual 17%. 9245, deployed a month earlier with the same firmware, used
-1.69&nbsp;MJ, and the WIMS the batch ran costs only about 2%. The cause is in the packs (a smaller pack, a weak
-cell lot or passivation).</p>
-<p><b>Micro-ALTOs.</b> 11491&ndash;11496 are RBR ALTOs with a Rockland Scientific MAPLe turbulence system
-(shear and FP07 probes), powered from the float's pack while it logs during the ascent; four were deployed on
-2023-11-09 on cycles of about 2.5 hours. No document gives the MAPLe's power. 11491 and 11495 ran out after a
-modeled 6.1&nbsp;MJ without it, so with packs of 6.7&ndash;7.2&nbsp;MJ it drew at most 0.5&ndash;0.8&nbsp;W
-while logging; the model takes 0.3&nbsp;W, 0.35&ndash;0.43&nbsp;MJ per float.</p>
-<div class="tw"><table>
-  <caption>The Micro-ALTOs. Modeled energy includes the MAPLe at 0.3&nbsp;W.</caption>
-  <tr><th>Float</th><th class="r">Dives</th><th>Reporting</th><th class="r">Profiled</th><th>Per dive</th><th>Total</th></tr>
-  <tr><td>11491</td><td class="r">850</td><td>2023-11-09 to 2024-02-14</td><td class="r">229&nbsp;km</td><td>7.6&nbsp;kJ (pump 5.2, MAPLe 0.4)</td><td>6.48&nbsp;MJ (97%)</td></tr>
-  <tr><td>11495</td><td class="r">966</td><td>2023-11-09 to 2024-02-24</td><td class="r">302&nbsp;km</td><td>6.8&nbsp;kJ (pump 4.6, MAPLe 0.4)</td><td>6.55&nbsp;MJ (98%)</td></tr>
-  <tr><td>11492</td><td class="r">332</td><td>2023-11-09 to 2023-12-14</td><td class="r">101&nbsp;km</td><td>6.5&nbsp;kJ</td><td>2.15&nbsp;MJ</td></tr>
-  <tr><td>11494</td><td class="r">136</td><td>2023-11-09 to 2023-11-24</td><td class="r">41&nbsp;km</td><td>6.9&nbsp;kJ</td><td>0.94&nbsp;MJ</td></tr>
-</table></div>
-
 <h2 id="accuracy">Accuracy</h2>
 <div class="tw"><table>
   <tr><th>Term</th><th>Share</th><th>Basis</th><th>Check</th><th>Likely error</th></tr>
@@ -388,27 +279,6 @@ while logging; the model takes 0.3&nbsp;W, 0.35&ndash;0.43&nbsp;MJ per float.</p
 15&ndash;30% for mixed missions. The main systematic uncertainty is the controller drain: &plusmn;30% moves an
 SBE ALTO's total by about 20%, an ALAMO's by under 8%. Regulator losses for the modem and GPS are not counted
 and may add a few percent.</p>
-
-<h2 id="newalto">Lifetime of a new ALTO on an Argo mission</h2>
-<div class="tw"><table>
-  <caption>A new ALTO (four TLP-83121/D packs, fixed controller board) on a 10-day cycle, parking at
-  1000&nbsp;dbar and profiling from 2000&nbsp;dbar.</caption>
-  <tr><th>&nbsp;</th><th class="r">ALTO SBE</th><th class="r">ALTO RBR</th></tr>
-  <tr><td>Oil and air pump, per cycle</td><td class="r">6.5&nbsp;kJ</td><td class="r">6.5&nbsp;kJ</td></tr>
-  <tr><td>CTD, per cycle</td><td class="r">5.7&nbsp;kJ</td><td class="r">0.5&nbsp;kJ</td></tr>
-  <tr><td>Iridium and GPS, per cycle</td><td class="r">0.8&nbsp;kJ</td><td class="r">0.8&nbsp;kJ</td></tr>
-  <tr><td>Controller, 20&nbsp;mW over 9.9 days</td><td class="r">17.1&nbsp;kJ</td><td class="r">17.1&nbsp;kJ</td></tr>
-  <tr><td>Self-discharge, 1% a year of 6.7&nbsp;MJ</td><td class="r">1.8&nbsp;kJ</td><td class="r">1.8&nbsp;kJ</td></tr>
-  <tr class="tot"><td>Total per cycle</td><td class="r">31.9&nbsp;kJ</td><td class="r">26.7&nbsp;kJ</td></tr>
-  <tr class="tot"><td>Expected lifetime (5.9&nbsp;MJ usable)</td><td class="r">185 cycles, 5.0 years</td><td class="r">220 cycles, 6.0 years</td></tr>
-  <tr><td>Range</td><td class="r">135&ndash;220 cycles, 3.7&ndash;6.0 years</td><td class="r">155&ndash;275 cycles, 4.3&ndash;7.4 years</td></tr>
-  <tr><td>Profiling distance at 2&nbsp;km a profile</td><td class="r">370&nbsp;km (270&ndash;440)</td><td class="r">440&nbsp;km (310&ndash;550)</td></tr>
-</table></div>
-<p>The per-dive loads are the medians of the five 2000&nbsp;dbar SBE ALTOs 11044&ndash;11055 (13.0&nbsp;kJ a
-dive); the RBR column replaces the SBE 41CP's 0.264&nbsp;J a scan with RBR's 24&nbsp;mJ a sample. The range
-covers the drain &plusmn;30% and a usable energy of 75&ndash;88% of nominal. With a faulty board's 35&nbsp;mW
-an SBE ALTO makes 132 cycles (3.6 years), as the faulty 15.4&nbsp;V ALTOs did (131&ndash;144). The controller
-is still over half of each cycle's energy, so a shorter cycle gives more profiles.</p>
 
 <h2 id="sources">Sources</h2>
 <p>Sea-Bird SBE 41/41CP datasheet and hardware reference; Martini, Murphy, Schmitt and Larson (2019),
