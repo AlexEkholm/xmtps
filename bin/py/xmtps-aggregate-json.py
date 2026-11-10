@@ -14951,7 +14951,12 @@ def WritePlotFiles():
                 
                 for write_plots in PLOT_WRITERS:
                     t_group = time.monotonic()
-                    new_meta = write_plots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
+                    try:
+                        new_meta = write_plots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
+                    except BaseException:
+                        # Drop the images this group queued, or the next float's flush renders them
+                        image_queue.clear()
+                        raise
                     # Write this group's PNG images in one batch; drop figures whose images failed
                     FlushImageQueue()
                     new_meta = [m for m in new_meta if not m.get('failed')]
@@ -15219,15 +15224,27 @@ def RestartImageServer():
     left behind as a daemon thread: it is marked stopped, so its exit handler does nothing, and a
     new GlobalKaleidoServer replaces kaleido's module-level one, so the old thread and the new
     server share no queues.
+
+    The swap uses Kaleido's private names (checked with kaleido 1.5.0). If they are gone, the hung
+    server can't be replaced: its Chrome is killed and image export gives up for this process (no
+    restarts left), so the remaining images fail at once instead of each waiting out the watchdog.
     """
-    import kaleido
-    from kaleido import _sync_server
-    old = kaleido._global_server
-    old._initialized = False
-    _sync_server.GlobalKaleidoServer._instance = None
-    kaleido._global_server = _sync_server.GlobalKaleidoServer()
-    image_server['running'] = False
     image_server['restarts'] += 1
+    try:
+        import kaleido
+        from kaleido import _sync_server
+        old = kaleido._global_server
+        old._initialized = False
+        _sync_server.GlobalKaleidoServer._instance = None
+        kaleido._global_server = _sync_server.GlobalKaleidoServer()
+    except Exception as e:
+        image_server['restarts'] = IMAGE_EXPORT_MAX_RESTARTS
+        n = KillChildBrowsers()
+        logger.error('Image export hung; killed {} Chrome process{}, but cannot restart the image browser '
+                     '(kaleido internals changed?): {}; no more images are written'.format(
+                         n, '' if n == 1 else 'es', e))
+        return
+    image_server['running'] = False
     n = KillChildBrowsers()
     logger.warning('Image export hung; killed {} Chrome process{}, restarting the image browser ({} of {})'.format(
         n, '' if n == 1 else 'es', image_server['restarts'], IMAGE_EXPORT_MAX_RESTARTS))
