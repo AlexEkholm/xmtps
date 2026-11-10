@@ -11,6 +11,20 @@ Python tools:
   table's search text (filled in on load, kept up to date as you type), and `n` the page size,
   now on all four pages. The startup page has an Auto Refresh checkbox and the `r` parameter,
   like the summary page. The URL handling is shared (`TABLE_URL_SCRIPT` in `PageStatus.py`).
+- Summary and startup pages: an auto refresh parameter `r` that is not a number (`?r=abc`) is
+  removed instead of reloading the page at once, again and again; `r` over 86400 (one day),
+  which did the same, becomes 86400.
+
+- Profile Positions and Bathymetry plot: the "Depth [m]" color bar's ticks are spaced for the
+  region's depth range (1, 2, 2.5 or 5 times a power of ten, at most 6 intervals: every 100 m to
+  600 m, every 1000 m to 6000 m) instead of every 1000 m, which left a shallow region a single
+  tick, 0. A large region is read from the bathymetry file coarsened, about 600 cells a side,
+  instead of in full and thinned afterwards (up to about 1 GB for a track around the globe).
+
+- Float plots, image export: if the hung image browser can't be replaced (Kaleido's private
+  names changed in an upgrade), its Chrome is killed and the rest of the run's images fail at
+  once, instead of each waiting out the watchdog. A plot group that fails drops the images it
+  had queued, which were otherwise rendered with the next float's plots.
 
 - Energy model page: the Controller drain, Profiling distance, Anomalies and Lifetime of a new
   ALTO sections are left out (they stay in the report); the Controller row of the cycle-energy
