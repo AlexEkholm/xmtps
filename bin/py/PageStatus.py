@@ -159,8 +159,96 @@ TABLE_PAGES = (
     ('energy', 'Energy', 'engineering/energy.html'),
     )
 
-# DataTables paging of the fleet table pages, as on the summary page
-TABLE_PAGING = '"pageLength": 10, "lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]]'
+# DataTables paging and search of the fleet table pages: the page size and the search text start
+# from the URL parameters 'n' and 's' (TABLE_URL_SCRIPT, which each page must include, defines
+# pageSizeFromUrl and searchFromUrl); wrap the DataTable in BindTableUrl to write changes back.
+TABLE_PAGING = ('"pageLength": pageSizeFromUrl(), "search": { "search": searchFromUrl() }, '
+                '"lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]]')
+
+# URL parameters of the fleet table pages, kept up to date with replaceState (no history entries)
+# unless noted:
+#   n  the table's page size: 10, 20, 50, 100 or 'all'; anything else is dropped; left out for 10.
+#   s  the table's search text, as typed into its search field; left out when empty.
+#   r  auto-refresh, on pages with the Auto Refresh checkbox (WriteAutoRefresh): reload every r
+#      seconds; 1 means 60, others are at least 10. The checkbox sets r=1 or removes it
+#      (pushState, as before on the summary page).
+TABLE_URL_SCRIPT = '''<script type="text/javascript">
+var PAGE_SIZES = [10, 20, 50, 100, -1];
+function pageSizeUrl(len) {
+    const url = new URL(window.location.href);
+    if (len === 10) url.searchParams.delete("n");
+    else url.searchParams.set("n", len === -1 ? "all" : String(len));
+    window.history.replaceState(window.history.state, '', url.toString());
+}
+function pageSizeFromUrl() {
+    const n = new URL(window.location.href).searchParams.get("n");
+    if (n === null) return 10;
+    const len = n.toLowerCase() === "all" ? -1 : parseInt(n, 10);
+    if (PAGE_SIZES.indexOf(len) < 0) { pageSizeUrl(10); return 10; }
+    return len;
+}
+function searchUrl(s) {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("s") === (s || null)) return;
+    if (s) url.searchParams.set("s", s);
+    else url.searchParams.delete("s");
+    window.history.replaceState(window.history.state, '', url.toString());
+}
+function searchFromUrl() {
+    return new URL(window.location.href).searchParams.get("s") || "";
+}
+function BindTableUrl(dt) {
+    dt.on('length.dt', function (e, settings, len) { pageSizeUrl(len); });
+    dt.on('search.dt', function () { searchUrl(dt.search()); });
+    return dt;
+}
+var reloading;
+function checkAutoRefresh() {
+    const cb = document.getElementById("autorefresh");
+    if (!cb) return;
+    const url = new URL(window.location.href);
+    const urlparams = url.searchParams;
+    let r = +urlparams.get("r");
+    if (r < 1) {
+        if (urlparams.has("r")) {
+            urlparams.delete("r");
+            window.history.pushState({}, '', url.toString());
+        }
+        return;
+    } else if (r == 1) {
+        r = 60;
+    } else if (r < 10) {
+        r = 10;
+        urlparams.set("r", "10");
+        window.history.pushState({}, '', url.toString());
+    }
+    reloading = setTimeout(function () { window.location.reload(); }, r * 1000);
+    cb.checked = true;
+}
+function toggleAutoRefresh(cb) {
+    const url = new URL(window.location.href);
+    const urlparams = url.searchParams;
+    if (cb.checked) {
+        urlparams.set("r", "1");
+        reloading = setTimeout(function () { window.location.reload(); }, 60000);
+    } else {
+        urlparams.delete("r");
+        clearTimeout(reloading);
+    }
+    window.history.pushState({}, '', url.toString());
+}
+$(document).ready(checkAutoRefresh);
+</script>'''
+
+
+def WriteAutoRefresh(doc, tag, text):
+    """Write the "Auto Refresh" checkbox (URL parameter 'r', TABLE_URL_SCRIPT) into a yattag
+    document, as the right-hand part of the footer: a div with id 'rfoot', next to 'lfoot'."""
+    with tag('div', id='rfoot', style='float: right; margin: 0 0 30px 0;'):
+        with tag('label', ('for', 'autorefresh')):
+            text('Auto Refresh ')
+            doc.input(name='autorefresh', type='checkbox', id='autorefresh', value='no',
+                      onclick='toggleAutoRefresh(this);', style='margin: 3px; vertical-align: middle;')
 
 
 def WritePageLinks(doc, tag, text, current, plots_url):

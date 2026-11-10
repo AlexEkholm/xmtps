@@ -30,7 +30,7 @@ import plotly.io as pio
 import re
 from yattag import Doc
 
-from PageStatus import WritePageLinks, WriteStatusFooter
+from PageStatus import TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
 from FloatStatus import FloatStatus, LastLocation
 
 # local
@@ -232,7 +232,9 @@ def WriteSummaryFile(dpath):
     Inline JavaScript adds elapsed times ('3 hours ago') to the
     deployment and last-report dates and handles the auto-refresh checkbox (URL parameter 'r',
     in seconds; 1 means 60, others are at least 10) and the table's page size (URL parameter 'n':
-    10, 20, 50, 100 or 'all'; kept in the URL when changed, left out for 10). Errors are logged, or raised with -H; a
+    10, 20, 50, 100 or 'all'; kept in the URL when changed, left out for 10) and search field (URL
+    parameter 's': the search text; kept in the URL as typed, left out when empty). Errors are
+    logged, or raised with -H; a
     failed row is skipped.
     """
     
@@ -305,60 +307,13 @@ function updateElapsedTimes() {
         elem.append(elapsed_elem);
     });
 }
-var reloading;
-function checkAutoRefresh() {
-    const url = new URL(window.location.href);
-    const urlparams = url.searchParams;  
-    let r = +urlparams.get("r");
-    if(r < 1) { 
-        urlparams.delete("r")
-        window.history.pushState({}, '', url.toString());
-        return;
-    } else if(r == 1) {
-        r = 60;
-    } else if(r < 10) { 
-        r = 10;
-        urlparams.set("r","10");
-        window.history.pushState({}, '', url.toString());
-    }
-    reloading=setTimeout("window.location.reload();", r * 1000);
-    document.getElementById("autorefresh").checked=true;
-}
-function toggleAutoRefresh(cb) {
-    const url = new URL(window.location.href);
-    const urlparams = url.searchParams;
-    if (cb.checked) {
-        urlparams.set("r","1");
-        reloading=setTimeout("window.location.reload();", 60000);
-    } else {
-        urlparams.delete("r");
-        clearTimeout(reloading);
-    }
-    window.history.pushState({}, '', url.toString());
-}
-$(document).ready(function () { updateElapsedTimes(); checkAutoRefresh(); } );
+$(document).ready(function () { updateElapsedTimes(); } );
 </script>''')
-                # The table's page size follows the URL parameter 'n' (10, 20, 50, 100 or 'all';
-                # anything else is dropped), and a page size chosen in the table is written back
-                # to it, without 'n' for the default 10 (replaceState: no history entries)
+                # Page size, search and auto-refresh in the URL (n, s, r): PageStatus.TABLE_URL_SCRIPT
+                doc.asis(TABLE_URL_SCRIPT)
                 doc.asis('''<script type="text/javascript">
-var PAGE_SIZES = [10, 20, 50, 100, -1];
-function pageSizeUrl(len) {
-    const url = new URL(window.location.href);
-    if (len === 10) url.searchParams.delete("n");
-    else url.searchParams.set("n", len === -1 ? "all" : String(len));
-    window.history.replaceState(window.history.state, '', url.toString());
-}
-function pageSizeFromUrl() {
-    const n = new URL(window.location.href).searchParams.get("n");
-    if (n === null) return 10;
-    const len = n.toLowerCase() === "all" ? -1 : parseInt(n, 10);
-    if (PAGE_SIZES.indexOf(len) < 0) { pageSizeUrl(10); return 10; }
-    return len;
-}
 $(document).ready(function () {
-    $("#stable").DataTable({ order: [[8, 'desc']], "pageLength": pageSizeFromUrl(), "lengthMenu": [[ 10, 20, 50, 100, -1 ], [ 10, 20, 50, 100, "ALL" ]], scrollX: false })
-        .on('length.dt', function (e, settings, len) { pageSizeUrl(len); });
+    BindTableUrl($("#stable").DataTable({ order: [[8, 'desc']], ''' + TABLE_PAGING + ''', scrollX: false }));
     jQuery(".dataTable").wrap("<div id='tat' />");
 });
 </script>''')

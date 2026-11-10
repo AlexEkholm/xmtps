@@ -36,7 +36,7 @@ import os
 import re
 from yattag import Doc
 
-from PageStatus import TABLE_PAGING, WritePageLinks, WriteStatusFooter
+from PageStatus import TABLE_PAGING, TABLE_URL_SCRIPT, WriteAutoRefresh, WritePageLinks, WriteStatusFooter
 
 """
 Static configuration:
@@ -470,7 +470,9 @@ def WriteStartupFile(dpath):
 
                 doc.asis('<script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>')
                 doc.asis('<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.12.1/datatables.min.css"/>')
-                doc.asis('<script type="text/javascript">$(document).ready(function () { $("table#sfloats").DataTable({ order: [[3, \'desc\']], ' + TABLE_PAGING + ', searching: true }); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
+                # Page size, search and auto-refresh in the URL (n, s, r): PageStatus.TABLE_URL_SCRIPT
+                doc.asis(TABLE_URL_SCRIPT)
+                doc.asis('<script type="text/javascript">$(document).ready(function () { BindTableUrl($("table#sfloats").DataTable({ order: [[3, \'desc\']], ' + TABLE_PAGING + ', searching: true })); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
 
                 with(tag('style')):
 
@@ -625,6 +627,7 @@ def WriteStartupFile(dpath):
                             with tag('div', id='lfoot'):
                                 with tag('i'):
                                     WriteStatusFooter(doc, tag, text, JSON_VERSION, args.runtime)
+                            WriteAutoRefresh(doc, tag, text)
 
         # Write startup file:
 

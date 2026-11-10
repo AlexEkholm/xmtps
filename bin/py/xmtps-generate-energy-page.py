@@ -45,7 +45,7 @@ from EnergyModel import (ENERGY_REMAINING_RECENT_DIVES, ENERGY_SECONDS_PER_YEAR,
                          ENERGY_CONTROLLER_UNCERTAINTY, ENERGY_VOLTAGE_EARLY_DIVES,
                          ENERGY_VOLTAGE_FALL_FRACTION, CycleEnergy, PumpVoltageFallDive, RemainingCycles)
 from FloatStatus import FloatStatus, LastLocation
-from PageStatus import TABLE_PAGING, WritePageLinks, WriteStatusFooter
+from PageStatus import TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
 
 """
 Constants:
@@ -365,7 +365,9 @@ def WriteEnergyFile(dpath):
 
                 doc.asis('<script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>')
                 doc.asis('<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.12.1/datatables.min.css"/>')
-                doc.asis('<script type="text/javascript">$(document).ready(function () { $("table.etable").DataTable({ order: [[3, \'desc\']], ' + TABLE_PAGING + ', columnDefs: [{ orderable: false, targets: ' + str(PLOT_COLUMN) + ' }], scrollX: false }); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
+                # Page size and search in the URL (n, s): PageStatus.TABLE_URL_SCRIPT
+                doc.asis(TABLE_URL_SCRIPT)
+                doc.asis('<script type="text/javascript">$(document).ready(function () { BindTableUrl($("table.etable").DataTable({ order: [[3, \'desc\']], ' + TABLE_PAGING + ', columnDefs: [{ orderable: false, targets: ' + str(PLOT_COLUMN) + ' }], scrollX: false })); jQuery(".dataTable").wrap("<div class=\'tat\' />"); });</script>')
 
                 with(tag('style')):
 

@@ -3,6 +3,15 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-10
+
+Python tools:
+
+- Fleet table pages (summary, startups, parameters, energy): the URL parameter `s` holds the
+  table's search text (filled in on load, kept up to date as you type), and `n` the page size,
+  now on all four pages. The startup page has an Auto Refresh checkbox and the `r` parameter,
+  like the summary page. The URL handling is shared (`TABLE_URL_SCRIPT` in `PageStatus.py`).
+
 ## 2026-11-09
 
 Python tools:

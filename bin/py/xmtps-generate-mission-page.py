@@ -41,7 +41,7 @@ import re
 from yattag import Doc
 
 from FloatStatus import FloatStatus, LastLocation
-from PageStatus import TABLE_PAGING, WritePageLinks, WriteStatusFooter
+from PageStatus import TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
 
 """
 Static configuration:
@@ -469,7 +469,7 @@ function mUpdate(dt) {
       (check ? '' : '; too few to compare') + ')';
 }
 $(document).ready(function () {
-  var dt = $('table.mtable').DataTable({ order: [[3, 'desc']], %%PAGING%%, scrollX: false });
+  var dt = BindTableUrl($('table.mtable').DataTable({ order: [[3, 'desc']], %%PAGING%%, scrollX: false }));
   jQuery('.dataTable').wrap("<div class='tat' />");
   dt.on('draw', function () { mUpdate(dt); });
   mUpdate(dt);
@@ -535,6 +535,8 @@ def WriteMissionFile(dpath):
 
                 doc.asis('<script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>')
                 doc.asis('<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.12.1/datatables.min.css"/>')
+                # Page size and search in the URL (n, s): PageStatus.TABLE_URL_SCRIPT
+                doc.asis(TABLE_URL_SCRIPT)
                 doc.asis('<script type="text/javascript">var MCFG = ' + ScoringConfig() + ';' + SCORING_SCRIPT.replace('%%PAGING%%', TABLE_PAGING) + '</script>')
 
                 with(tag('style')):
