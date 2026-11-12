@@ -22,8 +22,13 @@ Author: aekholm
 
 import datetime
 import functools
+import json
+import logging
+import os
 import re
 import subprocess
+
+logger = logging.getLogger(__name__)
 
 DECODER_SERVICE = 'xmtps-alamo'
 DECODER_BINARY = '/data1/alamo/bin/xmtps'
@@ -149,6 +154,32 @@ def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None, decoder_stat
         doc.stag('br')
         text(line)
     doc.asis(ELAPSED_SCRIPT)
+
+
+def HasWimsData(summary_fpath, serial):
+    """Return whether a float has valid WIMS wave data, from the aggregate <serial>_wave.json file
+    next to its <serial>_summary.json file (summary_fpath).
+
+    Valid means at least one wave measurement with more than one spectral bin (slen > 1), as the
+    energy estimate counts a WIMS run. A missing or unreadable file means no.
+    """
+    fpath = os.path.join(os.path.dirname(summary_fpath), '{}_wave.json'.format(serial))
+    if not os.path.isfile(fpath):
+        return False
+    try:
+        with open(fpath, 'r', encoding='utf-8') as f:
+            wave = json.load(f)
+        i = wave['columns'].index('slen')
+        return any(isinstance(r[i], (int, float)) and r[i] > 1 for r in wave['data'])
+    except Exception as e:
+        logger.warning('Failed to read WIMS data from {}: {}'.format(fpath, e))
+        return False
+
+
+def FloatSubtype(ctdtype, wims):
+    """Return the subtype shown under the float type in the fleet tables: the CTD type (e.g. RBR),
+    with /WIMS for a float with valid WIMS wave data, e.g. 'RBR/WIMS', 'WIMS', or ''."""
+    return '/'.join([t for t in (ctdtype or '', 'WIMS' if wims else '') if t])
 
 
 # The fleet table pages, linked from the top of each: (key, title, path under the plots directory)

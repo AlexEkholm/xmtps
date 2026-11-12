@@ -36,7 +36,7 @@ import os
 import re
 from yattag import Doc
 
-from PageStatus import TABLE_PAGING, TABLE_URL_SCRIPT, WriteAutoRefresh, WritePageLinks, WriteStatusFooter
+from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WriteAutoRefresh, WritePageLinks, WriteStatusFooter
 
 """
 Static configuration:
@@ -258,6 +258,9 @@ def ProcessJsonSummaryFile(fpath):
             return
 
         float_id = summary['id'].whoi
+
+        # whether the float has valid WIMS wave data, for the type column
+        summary['wims'] = HasWimsData(fpath, float_id)
 
         # BIT rows: the dives whose engineering data has a BIT section, in dive order
 
@@ -572,10 +575,11 @@ def WriteStartupFile(dpath):
 
                                             with tag('td'): # type
                                                 text(summary['type'])
-                                                if len(summary.get('ctdtype', '')) > 0:
+                                                subtype = FloatSubtype(summary.get('ctdtype'), summary.get('wims'))
+                                                if subtype:
                                                     doc.stag('br')
                                                     with tag('small'):
-                                                        text(summary['ctdtype'])
+                                                        text(subtype)
 
                                             # status: started (not yet deployed) or deployed, with the startup number
                                             number = StartupNumber(x)

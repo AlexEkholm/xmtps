@@ -45,7 +45,7 @@ from EnergyModel import (ENERGY_REMAINING_RECENT_DIVES, ENERGY_SECONDS_PER_YEAR,
                          ENERGY_CONTROLLER_UNCERTAINTY, ENERGY_VOLTAGE_EARLY_DIVES,
                          ENERGY_VOLTAGE_FALL_FRACTION, CycleEnergy, PumpVoltageFallDive, RemainingCycles)
 from FloatStatus import FloatStatus, LastLocation
-from PageStatus import TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
+from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
 
 """
 Constants:
@@ -205,6 +205,9 @@ def ProcessJsonSummaryFile(fpath):
         if summary['json_vers'] != JSON_VERSION:
             logger.warning('Ignoring summary file with invalid json version: ' + fpath)
             return
+
+        # whether the float has valid WIMS wave data, for the type column
+        summary['wims'] = HasWimsData(fpath, summary['id'].whoi)
 
         days_since_last = (datetime.datetime.now(datetime.UTC).timestamp() - summary['latest']['sbd'].dt_epoch) / 86400
         if args.days is not None and days_since_last > args.days:
@@ -514,10 +517,11 @@ def WriteEnergyFile(dpath):
 
                                             with tag('td'): # type and CTD
                                                 text(summary['type'])
-                                                if summary['ctdtype']:
+                                                subtype = FloatSubtype(summary['ctdtype'], summary.get('wims'))
+                                                if subtype:
                                                     doc.stag('br')
                                                     with tag('small'):
-                                                        text(summary['ctdtype'])
+                                                        text(subtype)
 
                                             # DataTables searches a cell with data-order as its HTML (the
                                             # status icon path contains "alamo", titles hold details), so

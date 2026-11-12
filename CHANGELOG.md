@@ -14,6 +14,12 @@ Decoder:
   every 10 minutes, and goes on once the server answers. A stop signal during the wait releases
   the run-time lock and exits cleanly. Nothing changes without the database (`sql.enable = 0`).
 
+Python tools:
+
+- Startup, parameters and energy pages: the Type column shows `/WIMS` after the CTD type
+  (`RBR/WIMS`, `SBE/WIMS`) for floats with valid WIMS wave data, as the summary page does. The
+  check (`HasWimsData`) and the label (`FloatSubtype`) are shared in `PageStatus.py`.
+
 ## 2026-11-10
 
 Python tools:

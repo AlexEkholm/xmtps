@@ -30,7 +30,7 @@ import plotly.io as pio
 import re
 from yattag import Doc
 
-from PageStatus import TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
+from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
 from FloatStatus import FloatStatus, LastLocation
 
 # local
@@ -129,23 +129,6 @@ def ProcessDirectory(dpath):
             raise Exception(errstr)
         logger.error(errstr)
               
-def HasWimsData(fpath):
-    """Return whether an aggregate <serial>_wave.json file has valid WIMS data.
-
-    Valid means at least one wave measurement with more than one spectral bin (slen > 1), as the
-    energy estimate counts a WIMS run. A missing or unreadable file means no.
-    """
-    if not os.path.isfile(fpath):
-        return False
-    try:
-        with open(fpath, 'r', encoding='utf-8') as f:
-            wave = json.load(f)
-        i = wave['columns'].index('slen')
-        return any(isinstance(r[i], (int, float)) and r[i] > 1 for r in wave['data'])
-    except Exception as e:
-        logger.warning('Failed to read WIMS data from {}: {}'.format(fpath, e))
-        return False
-
 def ProcessJsonSummaryFile(fpath):
     """Decode one <id>_summary.json file with jsonpickle and store it in float_map.
 
@@ -209,7 +192,7 @@ def ProcessJsonSummaryFile(fpath):
             
             
         # whether the float has valid WIMS wave data, from the <serial>_wave.json next to it
-        summary['wims'] = HasWimsData(os.path.join(os.path.dirname(fpath), '{}_wave.json'.format(summary['id'].whoi)))
+        summary['wims'] = HasWimsData(fpath, summary['id'].whoi)
 
         float_map[summary['id'].whoi] = summary
         
@@ -502,7 +485,7 @@ $(document).ready(function () {
                                                 # the CTD type, with /WIMS for a float with valid
                                                 # WIMS wave data
                                                 row['wims'] = bool(x.get('wims', False))
-                                                subtype = '/'.join([ t for t in (x['ctdtype'], 'WIMS' if row['wims'] else '') if t ])
+                                                subtype = FloatSubtype(x['ctdtype'], row['wims'])
                                                 if subtype:
                                                     doc.stag('br')
                                                     with tag('small'):

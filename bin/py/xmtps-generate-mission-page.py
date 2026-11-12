@@ -41,7 +41,7 @@ import re
 from yattag import Doc
 
 from FloatStatus import FloatStatus, LastLocation
-from PageStatus import TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
+from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
 
 """
 Static configuration:
@@ -223,6 +223,9 @@ def ProcessJsonSummaryFile(fpath):
             return
 
         float_id = summary['id'].whoi
+
+        # whether the float has valid WIMS wave data, for the type column
+        summary['wims'] = HasWimsData(fpath, float_id)
 
         # Latest dive with any mission parameter. The rows are the dives with mission data, in
         # dive order; a row may carry only the firmware words ("Incomplete mission parameters").
@@ -677,10 +680,11 @@ def WriteMissionFile(dpath):
                                             with tag('td'): # type
                                                 text(summary['type'])
                                                 ctdtype = mission['ctdtype'] if mission is not None and mission.get('ctdtype') else summary['ctdtype']
-                                                if len(ctdtype) > 0:
+                                                subtype = FloatSubtype(ctdtype, summary.get('wims'))
+                                                if subtype:
                                                     doc.stag('br')
                                                     with tag('small'):
-                                                        text(ctdtype)
+                                                        text(subtype)
 
                                             # firmware
                                             fwver = mission['fwver'] if mission.get('fwver') else summary['fwver']
