@@ -34,6 +34,8 @@ namespace cfg = util::config;
 
 static const util::config::LocalConfiguration& Initialize(int argc, char** argv) ATTR_NO_EXCEPTIONS;
 
+static void WaitForSqlServer() ATTR_NO_EXCEPTIONS;
+
 static void StartWorkerThreads() ATTR_NO_EXCEPTIONS;
 
 static void TerminateWorkerThreads() ATTR_NO_EXCEPTIONS;

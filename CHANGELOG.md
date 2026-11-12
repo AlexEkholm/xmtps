@@ -3,6 +3,17 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-12
+
+Decoder:
+
+- At startup, the decoder waits for the SQL server instead of aborting. Loading the cached
+  instrument data needs the server; when it was down (as after the unattended MySQL 8.4.13
+  upgrade on 2026-11-12, which left it stopped), the decoder aborted within a second and systemd
+  restarted it every 30 s. It now checks the server every 30 s, logs the wait when it starts and
+  every 10 minutes, and goes on once the server answers. A stop signal during the wait releases
+  the run-time lock and exits cleanly. Nothing changes without the database (`sql.enable = 0`).
+
 ## 2026-11-10
 
 Python tools:

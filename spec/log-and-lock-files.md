@@ -179,6 +179,15 @@ Startup (thread `daemon`), in order:
 
 The configuration, lock and logger steps come before this and are not logged to file (section 3). A start is best found by `Registering system signal handlers...`.
 
+If the SQL server does not answer, the daemon waits for it before `Loading persistent instrument data...` (`WaitForSqlServer()` in `src/Main.cpp`), checking every 30 s. It logs the wait when it starts and every 10 minutes, flushing the log each time, and logs the end of the wait (the second line shows the format [inferred from the code]):
+
+```
+2026-11-12T14:27:19.273686       daemon warning -------------------------- ---------- ---------------------- ---------- SQL server unavailable: waiting for it before loading the instrument data (0 minutes so far)...
+2026-11-12T14:37:19.401002       daemon    info -------------------------- ---------- ---------------------- ---------- SQL server available after 10 minutes, 0 seconds.
+```
+
+A stop signal during the wait is logged as `Caught signal 15 while waiting for the SQL server! Shutting down...`, followed by the release of the run-time lock and a clean exit. Before 2026-11-12, the daemon aborted here instead, and systemd restarted it every 30 s until the server was back.
+
 Shutdown (thread `daemon`):
 
 ```

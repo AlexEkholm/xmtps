@@ -190,6 +190,10 @@ const util::config::LocalConfiguration& Initialize(int argc, char** argv) ATTR_N
       }
     }CATCH_BLOCK("Invalid configuration!")
 
+    /* Wait for the SQL Server: (after an upgrade or reboot, it may come up after the decoder) */
+
+    WaitForSqlServer();
+
     /* Load Cached Instrument Data: */
 
     try {
@@ -211,6 +215,68 @@ const util::config::LocalConfiguration& Initialize(int argc, char** argv) ATTR_N
   }CATCH_BLOCK("Failed to initialize the application!")
 
   return LocalConfiguration::configuration();
+}
+
+/** Wait until the SQL server answers, before anything is loaded from it.
+ *
+ *  Loading the cached instrument data at startup needs the SQL server; without it the decoder
+ *  used to abort, and systemd restarted it every 30 s until the server was back. Instead, the
+ *  server is checked every XMTPS_SQL_WAIT_SEC seconds. The wait is logged when it starts, every
+ *  XMTPS_SQL_WAIT_LOG_SEC seconds while it lasts, and when it ends, and the log is flushed each
+ *  time so the messages can be seen while waiting. A termination signal (systemctl stop) during
+ *  the wait releases the run-time lock and exits cleanly. Without the SQL database
+ *  (sql.enable = 0), there is nothing to wait for.
+ *
+ *  @exception  None. Never throws.
+ */
+void WaitForSqlServer() ATTR_NO_EXCEPTIONS {
+
+  using boost::posix_time::millisec;
+  using boost::this_thread::sleep;
+  using util::config::LocalConfiguration;
+  using util::log::Log;
+  using util::mysql::LocalMysqlConfiguration;
+  using util::sig::SignalHandler;
+
+  static const int XMTPS_SQL_WAIT_SEC = 30;
+  static const int XMTPS_SQL_WAIT_LOG_SEC = 600;
+
+  try {
+
+    if(!LocalMysqlConfiguration::is_sql_enabled() || LocalMysqlConfiguration::isSqlServerAvailable())
+      return;
+
+    int waited_sec = 0;
+
+    for(;;) {
+
+      if(waited_sec % XMTPS_SQL_WAIT_LOG_SEC == 0) {
+        lwrn() << "SQL server unavailable: waiting for it before loading the instrument data ("
+               << waited_sec / 60 << " minutes so far)...";
+        Log::FlushGlobalLogger();
+      }
+
+      // Sleep in short steps, so that a termination signal is seen at once.
+      for(int ms = 0; ms < XMTPS_SQL_WAIT_SEC * 1000; ms += XFLT_THREAD_SLEEP_MS) {
+        if(SignalHandler::caught_signal()) {
+          lout() << "Caught signal " << SignalHandler::caught_signal()
+                 << " while waiting for the SQL server! Shutting down...";
+          try { LocalConfiguration::ReleaseRuntimeLock(); } catch(...) { /* Do nothing. */ }
+          Log::FlushGlobalLogger();
+          exit(EXIT_SUCCESS);
+        }
+        sleep(millisec(XFLT_THREAD_SLEEP_MS));
+      }
+      waited_sec += XMTPS_SQL_WAIT_SEC;
+
+      if(LocalMysqlConfiguration::isSqlServerAvailable()) {
+        lout() << "SQL server available after " << waited_sec / 60 << " minutes, "
+               << waited_sec % 60 << " seconds.";
+        return;
+      }
+    }
+
+  }CATCH_BLOCK("Failed while waiting for the SQL server!")
 }
 
 /** Start worker threads.
