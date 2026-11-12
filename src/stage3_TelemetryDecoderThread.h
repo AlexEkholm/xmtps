@@ -548,8 +548,12 @@ public:
                             }
 #                           endif // defined(BUILD_DEBUG) && BUILD_DEBUG
 
-                            // Reprocess the previous dive if it is complete.
-                            if((previous_dive_data = (xfloat->GetDiveData(msg_id_dive - 1, true)))
+                            // Reprocess the previous dive if it is not yet complete. It is read
+                            // from the database if it is not in memory (a float not reprocessed
+                            // at startup), and skipped if it has no data at all: an empty dive
+                            // created here would overwrite the dive's listing file and database
+                            // row (the "phantom dive" bug, fixed 2026-11-12).
+                            if((previous_dive_data = (xfloat->GetDiveData(msg_id_dive - 1, false, false)))
                                     && !previous_dive_data->is_complete())
 
                                 // Reprocess incomplete dive data.

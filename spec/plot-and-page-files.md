@@ -558,12 +558,13 @@ A static page (since 2026-11-09), not generated: `bin/py/html/energy-model.html`
 
 ## 8. Page footer and decoder status
 
-The summary, mission and startup pages, and the float plot pages (without the decoder status line; section 4), share a footer written by `WriteStatusFooter` in `bin/py/PageStatus.py`, inside `<div id="foot"><div id="lfoot"><i>`. Production example (summary page, 2026-10-30):
+The summary, mission, startup and energy pages, and the float plot pages (without the decoder and database status lines; section 4), share a footer written by `WriteStatusFooter` in `bin/py/PageStatus.py`, inside `<div id="foot"><div id="lfoot"><i>`. Production example (summary page, 2026-10-30):
 
 ```
 Page last updated 2026-10-30T18:25Z <span class="page-updated" epoch="1793384720" runtime="55 seconds">(runtime: 55 seconds)</span>
 <br />Python utility version 0.11
 <br />Decoder status: active (uptime: 1 day, 20 hours)
+<br />Database status: active (uptime: 6 days, 2 hours)
 <br />XMTPS version 1.0.3336b (built 2026-10-29)
 <script type="text/javascript">...</script>
 ```
@@ -574,13 +575,14 @@ Page last updated 2026-10-30T18:25Z <span class="page-updated" epoch="1793384720
 | span `page-updated` | `epoch`: the same time as Unix seconds; `runtime`: `--runtime SECONDS` formatted ("55 seconds", "3 minutes", "3 hours, 4 minutes", "2 days, 5 hours"), empty without `--runtime` |
 | Python utility version | the JSON format version (`0.11`) |
 | Decoder status | `systemctl show xmtps-alamo --timestamp=unix --property=ActiveState,ActiveEnterTimestamp,StateChangeTimestamp` (no privileges needed): `active (uptime: <ActiveEnterTimestamp to now>)`, or `<state> (for <StateChangeTimestamp to now>)`; `unknown` if systemctl fails |
+| Database status | the same for the MySQL service, `systemctl show mysql ...` (`DatabaseStatus()`; since 2026-11-12) |
 | XMTPS version | `/data1/alamo/bin/xmtps --version`, matched by `\bv(\S+) \(built (\d{4}-\d\d-\d\d)`; `unknown` if it does not match |
 
-The service name `xmtps-alamo` and the binary path are constants (`DECODER_SERVICE`, `DECODER_BINARY`) in `bin/py/PageStatus.py`. `--runtime` is the time from the start of the service loop's run to the start of the page generators (section 11), so it covers the JSON and plot updates but not the pages.
+The service names `xmtps-alamo` and `mysql` and the binary path are constants (`DECODER_SERVICE`, `DATABASE_SERVICE`, `DECODER_BINARY`) in `bin/py/PageStatus.py`. `--runtime` is the time from the start of the service loop's run to the start of the page generators (section 11), so it covers the JSON and plot updates but not the pages.
 
 The footer script (`ELAPSED_SCRIPT`) replaces the span's text on page load with "(N minutes ago, runtime: ...)": "just now" (< 2 min), minutes (< 3 h), hours (< 4 days), days. Without JavaScript the span keeps "(runtime: ...)".
 
-The float page (section 4) uses this footer with `decoder_status=False`, so it has no "Decoder status" line, and its runtime is the time spent writing that float's plots.
+The float page (section 4) uses this footer with `decoder_status=False`, so it has no "Decoder status" or "Database status" line, and its runtime is the time spent writing that float's plots.
 
 ## 9. Static assets and external scripts
 

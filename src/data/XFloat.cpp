@@ -1362,10 +1362,16 @@ vector<shared_ptr<XFloatDiveData> > XFloat::GetAllDiveData() {
  *  @param[in]  local_only  If TRUE, then the dive data object will only be loaded from the local
  *                          cache. Otherwise, the dive data object will be fetched from the SQL
  *                          database if necessary.
+ *  @param[in]  create      If TRUE (the default), a new, empty dive data object is created and
+ *                          cached when the dive is neither cached nor (unless local_only) in the
+ *                          database. If FALSE, NULL is returned instead: use this to look at a
+ *                          dive that should already exist, such as a preceding dive, since an
+ *                          empty object that is then processed overwrites the dive's listing file
+ *                          and database row.
  *
- *  @return     The dive data object for a given dive.
+ *  @return     The dive data object for a given dive, or NULL (create = FALSE, or an error).
  */
-shared_ptr<XFloatDiveData> XFloat::GetDiveData(int dive, bool local_only) {
+shared_ptr<XFloatDiveData> XFloat::GetDiveData(int dive, bool local_only, bool create) {
 
   namespace attr = blg::attributes;
 
@@ -1383,10 +1389,12 @@ shared_ptr<XFloatDiveData> XFloat::GetDiveData(int dive, bool local_only) {
 
     ldbg() << "Loading dive data object...";
 
-    // Check if this dive data object exists in the local cache.
-    if(dive2data_map_[dive]) {
+    // Check if this dive data object exists in the local cache. (find, not [], so that a lookup
+    // with create = FALSE leaves no empty entry behind.)
+    auto cached = dive2data_map_.find(dive);
+    if(cached != dive2data_map_.end() && cached->second) {
       dbg1() << "Loaded dive data object from local cache.";
-      return dive2data_map_[dive];
+      return cached->second;
     }
 
     // Get the parent float object
@@ -1420,6 +1428,12 @@ shared_ptr<XFloatDiveData> XFloat::GetDiveData(int dive, bool local_only) {
 
         return (dive2data_map_[dive] = x);
       }
+    }
+
+    // Not cached and not in the database.
+    if(!create) {
+      dbg1() << "No dive data object for this dive.";
+      return shared_ptr<XFloatDiveData>();
     }
 
     // Create a new dive data object.
@@ -4167,7 +4181,7 @@ float XFloatDiveData::ComputePressureOffsetFromSurfaceTimeSeries(unsigned int ma
       ldbg() << "Acquiring minimum surface pressure for dive " << dive_idx << "...";
 
       // Get data for dive.
-      dive = parent_instrument()->GetDiveData(dive_idx, false);
+      dive = parent_instrument()->GetDiveData(dive_idx, false, false);   // never an empty dive
 
       // Check surface pressure data validity.
       if(!dive || !dive->is_surface_pres_valid()

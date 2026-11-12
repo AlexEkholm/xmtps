@@ -210,6 +210,7 @@ The decoder status, uptime and version shown in the footer of the summary, missi
 | Footer item | Source (`bin/py/PageStatus.py`) |
 |---|---|
 | Decoder status and uptime | `systemctl show xmtps-alamo --timestamp=unix --property=ActiveState,ActiveEnterTimestamp,StateChangeTimestamp` (`DecoderStatus()`). `active` gives the uptime since `ActiveEnterTimestamp`; another state gives the time since `StateChangeTimestamp`. |
+| Database status and uptime | The same for the MySQL service, `systemctl show mysql ...` (`DatabaseStatus()`). |
 | XMTPS version | `/data1/alamo/bin/xmtps --version`, parsed for `v<version> (built <date>` (`DecoderVersion()`). |
 | Python utility version | The tools' JSON format version (`JSON_VERSION`). |
 

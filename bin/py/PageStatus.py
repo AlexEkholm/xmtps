@@ -6,14 +6,16 @@ The footer reads, for example (one item per line):
     Page last updated 2026-10-26T17:40Z (105 minutes ago, runtime: 3 minutes)
     Python utility version 0.11
     Decoder status: active (uptime: 3 hours, 4 minutes)
+    Database status: active (uptime: 6 days, 2 hours)
     XMTPS version 1.0.3318b (built 2026-10-26)
 
-The float plot pages leave out the decoder status line, and their runtime is the time spent
-writing that float's plots.
+The float plot pages leave out the decoder and database status lines, and their runtime is the
+time spent writing that float's plots.
 
 The time since the update ("105 minutes ago") is filled in by the browser when the page is viewed
-(see ELAPSED_SCRIPT); everything else is fixed when the page is written. The decoder status and
-uptime come from systemd (`systemctl show`, which needs no privileges), the decoder version from
+(see ELAPSED_SCRIPT); everything else is fixed when the page is written. The decoder and database
+(MySQL) status and uptime come from systemd (`systemctl show`, which needs no privileges), the
+decoder version from
 `xmtps --version`, which prints its version and exits without touching the running daemon.
 Anything that cannot be determined is shown as "unknown".
 
@@ -31,6 +33,7 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 DECODER_SERVICE = 'xmtps-alamo'
+DATABASE_SERVICE = 'mysql'
 DECODER_BINARY = '/data1/alamo/bin/xmtps'
 
 # Fills each <span class="page-updated" epoch="..." runtime="..."> with "(N minutes ago" plus
@@ -92,8 +95,8 @@ def _SystemdTime(value):
 
 
 @functools.lru_cache(maxsize=None)
-def DecoderStatus(service=DECODER_SERVICE):
-    """Return the decoder service's status text, e.g. 'active (uptime: 3 hours, 4 minutes)' or
+def ServiceStatus(service):
+    """Return a systemd service's status text, e.g. 'active (uptime: 3 hours, 4 minutes)' or
     'failed (for 2 hours, 1 minute)', or 'unknown'."""
     try:
         out = subprocess.run(
@@ -112,6 +115,16 @@ def DecoderStatus(service=DECODER_SERVICE):
         return 'active (uptime: {})'.format(FormatDuration(now - since)) if since else 'active'
     since = _SystemdTime(props.get('StateChangeTimestamp', ''))
     return '{} (for {})'.format(state, FormatDuration(now - since)) if since else state
+
+
+def DecoderStatus(service=DECODER_SERVICE):
+    """Return the decoder service's status text (ServiceStatus)."""
+    return ServiceStatus(service)
+
+
+def DatabaseStatus(service=DATABASE_SERVICE):
+    """Return the database (MySQL) service's status text (ServiceStatus)."""
+    return ServiceStatus(service)
 
 
 @functools.lru_cache(maxsize=None)
@@ -134,8 +147,8 @@ def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None, decoder_stat
         json_version: the Python tools' JSON format version, shown as the Python utility version.
         runtime_s: the duration of the JSON and plot update run in seconds, or None to leave the
             runtime out.
-        decoder_status: whether to include the "Decoder status" line. The float plot pages
-            (xmtps-aggregate-json.py) leave it out.
+        decoder_status: whether to include the "Decoder status" and "Database status" lines. The
+            float plot pages (xmtps-aggregate-json.py) leave them out.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
     runtime = FormatDuration(runtime_s) if runtime_s is not None else ''
@@ -149,6 +162,7 @@ def WriteStatusFooter(doc, tag, text, json_version, runtime_s=None, decoder_stat
     lines = ['Python utility version ' + json_version]
     if decoder_status:
         lines.append('Decoder status: ' + DecoderStatus())
+        lines.append('Database status: ' + DatabaseStatus())
     lines.append('XMTPS version ' + DecoderVersion())
     for line in lines:
         doc.stag('br')

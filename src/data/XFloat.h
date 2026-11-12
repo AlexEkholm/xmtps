@@ -649,7 +649,8 @@ class XFloat:
 
     vector<shared_ptr<XFloatDiveData> > GetAllDiveData();
 
-    shared_ptr<XFloatDiveData> GetDiveData(int dive, bool load_from_local_cache_only = false);
+    shared_ptr<XFloatDiveData> GetDiveData(int dive, bool load_from_local_cache_only = false,
+                                           bool create = true);
 
     shared_ptr<XFloatDiveData> GetCachedDiveData(int dive) const;
 

@@ -13,6 +13,12 @@ Decoder:
   restarted it every 30 s. It now checks the server every 30 s, logs the wait when it starts and
   every 10 minutes, and goes on once the server answers. A stop signal during the wait releases
   the run-time lock and exits cleanly. Nothing changes without the database (`sql.enable = 0`).
+- Phantom dives fixed: when a start-of-dive GPS message arrived and the previous dive was not in
+  memory (a float not reprocessed at startup, as with `-A 0` or a float silent for 90 days), an
+  empty previous dive was created and processed, overwriting that dive's listing file and
+  database row. The previous dive is now read from the database, and skipped if it has no data
+  (`GetDiveData(dive, local_only, create)`); the pressure offset's look-back no longer creates
+  empty dives either.
 - Placeholder metadata files (`internal ID number` -99, -1 or 9999) are used instead of dropped,
   for floats with no file that has a DAC ID: their launch time and position and the other fields
   apply, and the float keeps its DAC and WMO IDs (normally none). Files with a DAC ID come first.
@@ -22,7 +28,7 @@ Decoder:
 Metadata files (`/data1/alamo/meta/dac` on argus; originals in `/data1/alamo/tmp/meta-backup-2026-11-12`):
 
 - Missing launch times and positions estimated from each float's first GPS fix in the field
-  (status `estimated from the first GPS fix in the field`); see float-metadata-format.md,
+  (status `estimated`); see float-metadata-format.md,
   section 9, item 9. Wrong values corrected for 9091, 9100, 9190-9193, 9195, 9207 and 9209.
 - Conflicting files moved to the new, unread `ignored/`: `9999_9244`, `8470_011047`,
   `8471_011059` and the 8 RTF placeholders (`9999_9122`, `9123`, `9237`-`9243`), which ends the
@@ -31,6 +37,9 @@ Metadata files (`/data1/alamo/meta/dac` on argus; originals in `/data1/alamo/tmp
 
 Python tools:
 
+- Summary, startup, parameters and energy pages: a "Database status" footer line after the
+  decoder status, with the MySQL service's state and uptime from systemd (`DatabaseStatus` in
+  `PageStatus.py`).
 - Startup, parameters and energy pages: the Type column shows `/WIMS` after the CTD type
   (`RBR/WIMS`, `SBE/WIMS`) for floats with valid WIMS wave data, as the summary page does. The
   check (`HasWimsData`) and the label (`FloatSubtype`) are shared in `PageStatus.py`.
