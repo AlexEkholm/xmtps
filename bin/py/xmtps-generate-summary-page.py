@@ -240,7 +240,9 @@ def WriteSummaryFile(dpath):
         # Create head
             
             with tag('head'):
-            
+
+                doc.stag('meta', charset='utf-8')
+
                 with tag('title'):
                     text('Float Summary')
                     

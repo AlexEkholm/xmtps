@@ -37,6 +37,14 @@ Metadata files (`/data1/alamo/meta/dac` on argus; originals in `/data1/alamo/tmp
 
 Python tools:
 
+- Float pages: figure titles that contain a second `: ` are no longer cut short in the Figure
+  Files table and the image tooltips. The `<id>: ` prefix was removed with a greedy `.*: `, which
+  reduced the remaining-cycles title to the end of its subtitle (`usable 50–95%, controller
+  ±30%`); now only the leading `<id>: ` is removed.
+- Float pages and the summary page declare `<meta charset="utf-8">`. The web server sends no
+  charset, so browsers read these UTF-8 pages as Windows-1252 and showed `–` as `â€“` (for
+  example `(1â€“54)` in titles). The startup, parameters and energy pages and the plot files
+  already declared it.
 - Summary, startup, parameters and energy pages: a "Database status" footer line after the
   decoder status, with the MySQL service's state and uptime from systemd (`DatabaseStatus` in
   `PageStatus.py`).

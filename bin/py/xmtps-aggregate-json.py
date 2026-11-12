@@ -3179,7 +3179,11 @@ def WriteHtmlFile(float_id, runtime_s=None):
             # Create head
             
             with tag('head'):
-            
+
+                # the web server sends no charset, so without this browsers read the UTF-8 page as
+                # Windows-1252 and show an en dash as 'â€“'
+                doc.stag('meta', charset='utf-8')
+
                 with tag('title'):
                     text('{}'.format(float_id))
                     
@@ -14979,7 +14983,8 @@ def WritePlotFiles():
                     fig_meta['fpath_img_thumb']         = re.sub('.*/', '', fig_meta['fpath_img_thumb']) 
                     fig_meta['fpath_svg']               = re.sub('.*/', '', fig_meta['fpath_svg']) 
                     fig_meta['fpath_svg_small']         = re.sub('.*/', '', fig_meta['fpath_svg_small']) 
-                    fig_meta['title']                   = re.sub('.*: ', '',fig_meta['title'])
+                    # only the leading "<id>: ": a greedy '.*: ' also cut titles with a later ': '
+                    fig_meta['title']                   = re.sub(r'^\s*\d+: ', '', fig_meta['title'] or '', count=1)
                     figs_meta_dict[fig_meta['id_str']]  = fig_meta
                     
                 float_aggregate_data['figures'] = figs_meta_dict
