@@ -160,8 +160,8 @@ libraries are the Ubuntu packages; other versions may work but are not tested.
 | `-r`, `--reprocess ID ...` | none | Reprocess all stored mail messages for the given instrument serial numbers before normal operation: their dive data is deleted and rebuilt from the database. Repeatable, and accepts several IDs. |
 | `-R`, `--reprocess-all` | off | Reprocess the stored mail messages of every cached instrument at startup. |
 | `-A`, `--reprocess-active 0\|1` | `1` | Reprocess every instrument that reported in the last 90 days at startup. **On by default.** |
-| `--phy-enable ID` | none | Enable PHY file generation for an instrument (repeatable). The instrument is also reprocessed at startup. |
-| `--phy-disable ID` | none | Disable PHY file generation for an instrument (repeatable). |
+| `--phy-enable ID` | none | Deprecated: PHY files are no longer written. Still reprocesses the instrument at startup. |
+| `--phy-disable ID` | none | Deprecated: PHY files are no longer written. |
 
 With no logging option, the normal log level is used: operational messages, warnings and errors.
 
@@ -185,7 +185,7 @@ General:
 | `dir.lis` | `lis` | Intermediate listing files. |
 | `dir.log` | `log` | Log files. |
 | `dir.meta` | `meta` | Float metadata (`.meta`) files. |
-| `dir.phy` | `phy` | PHY listing files. |
+| `dir.phy` | `phy` | PHY listing files (no longer written; deprecated). |
 | `dir.raw` | `raw` | RAW mail message output files. |
 | `dir.mail` | `raw/incoming` | RAW mail input files (file-system fetch mode): `*.raw` or `*.txt` files, each holding one email as received (headers and MIME body). |
 | `dir.mail.processed` | `raw/processed` | RAW mail input files are moved here once queued for processing (a file of the same name already here is kept). If set empty, they are deleted instead. |

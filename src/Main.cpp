@@ -376,12 +376,14 @@ options_description LocalConfiguration::GenerateCommandLineOptionsDescription() 
         ("phy-enable",
             value<vector<unsigned int> >(&XFloat::instrument_ids_to_enable_phy_generation_)
               ->value_name("ID"),
-            "Enable PHY file generation for specified instrument.\n")
+            "Enable PHY file generation for specified instrument. Deprecated: PHY files are no "
+            "longer written.\n")
 
         ("phy-disable",
             value<vector<unsigned int> >(&XFloat::instrument_ids_to_disable_phy_generation_)
               ->value_name("ID"),
-            "Disable PHY file generation for specified instrument.\n")
+            "Disable PHY file generation for specified instrument. Deprecated: PHY files are no "
+            "longer written.\n")
 
         ("debug,d",
             "Enable debug output.\n")
@@ -629,9 +631,7 @@ options_description LocalConfiguration::GenerateConfigurationFileOptionsDescript
             value<bool>(&XFloatDiveData::phy_file_generation_is_enabled_) //
               ->default_value(true) //
               ->value_name("0|1"),
-            "Generate ALAMO PHY listing files. If TRUE, PHY listing files will be generated and "
-            "written to the PHY listing files directory on the local filesystem. Otherwise, PHY "
-            "listing files will not be generated or written to the local filesystem.\n")
+            "Deprecated and ignored: PHY listing files are no longer written (since 2026-11-12).\n")
 
         ("gen.raw",
             value<bool>(&XFloatMailMessage::raw_file_generation_is_enabled_) //

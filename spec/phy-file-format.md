@@ -2,6 +2,8 @@
 
 A PHY file is a short text listing of one completed profile of one ALAMO or ALTO float: identifiers, metadata, one profile position and the profile's pressure, temperature and (if measured) salinity. The XMTPS telemetry decoder (stage 3) writes it when a dive is complete. It was the file uploaded to the Argo data center at AOML for GTS distribution; in production no float has PHY generation enabled any more, and the last PHY files were written on 2021-01-29.
 
+**Deprecated (2026-11-12):** the decoder no longer writes PHY files. `XFloatDiveData::WritePhyFile()` returns at once, whatever `gen.phy`, `--phy-enable` and the floats' PHY flags say; the code is kept until PHY support is removed. The rest of this document describes the format as it was written.
+
 Status: compiled on 2026-10-30 from the decoder source and the production files on argus (`/data1/alamo/data/phy`).
 
 ## Contents

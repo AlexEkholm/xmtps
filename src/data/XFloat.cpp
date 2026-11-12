@@ -49,6 +49,8 @@
 
 // header
 #include "XFloat.h"
+#include <algorithm>
+#include <set>
 
 namespace argo {
 namespace iridium {
@@ -659,10 +661,14 @@ void XFloat::LoadLocalCacheFromDatabase() {
  *  @exception  util::log::MessageException if an error occurs while loading the instrument
  *              metadata from the files on the local file system.
  *
- *  @note       Metadata files that specify a DAC identifier of 9999 or -99 are used as place
- *              holders for instruments that have not yet been assigned a DAC identifier.
- *              Therefore, metadata files or objects specifying a DAC id less than 1, equal
- *              to 9999, or greater than 99998 will be discarded.
+ *  @note       Metadata files that specify a DAC identifier of 9999 or -99 (or any DAC identifier
+ *              less than 1 or greater than 99998) are placeholders for instruments that have
+ *              not yet been assigned a DAC identifier. Files with a DAC identifier are used
+ *              first. A placeholder is then used for each float with a serial number that has
+ *              no file with a DAC identifier, so that its deployment time and position,
+ *              deployer and the other fields are used; the float keeps the DAC and WMO
+ *              identifiers it already has (normally none), unless the placeholder gives a WMO
+ *              identifier.
  */
 void XFloat::LoadMetadataFromFiles() {
 
@@ -672,17 +678,41 @@ void XFloat::LoadMetadataFromFiles() {
 
     lout() << "Loading metadata from the local metadata files...";
 
-    // Load metadata and assign to corresponding XFloat object.
+    auto has_dac = [](const shared_ptr<XFloatMetadata>& meta) {
+      return meta->id_dac() > 0 && meta->id_dac() != 9999 && meta->id_dac() < 99999;
+    };
+
+    // Load metadata: files with a DAC identifier first, then the placeholders of floats that
+    // have no such file (the serial numbers in with_dac).
     vector<shared_ptr<XFloatMetadata> > md(XFloatMetadata::LoadMetadataFromFiles());
-    for_each(md.begin(), md.end(), [](shared_ptr<XFloatMetadata>& meta) {
+    md.erase(std::remove(md.begin(), md.end(), shared_ptr<XFloatMetadata>()), md.end());
+    std::stable_partition(md.begin(), md.end(), has_dac);
+    std::set<int> with_dac;
+    for(const shared_ptr<XFloatMetadata>& meta : md)
+      if(has_dac(meta))
+        with_dac.insert(meta->id_instrument());
 
-      if(meta && meta->id_dac() > 0 && meta->id_dac() != 9999 && meta->id_dac() < 99999) {
+    for_each(md.begin(), md.end(), [&](shared_ptr<XFloatMetadata>& meta) {
 
+      bool placeholder = !has_dac(meta);
+      if(placeholder && (meta->id_instrument() < 1 || with_dac.count(meta->id_instrument())))
+        return;
+
+      shared_ptr<XFloat> parent(GetFloat(meta->id_instrument()));
+
+      // A placeholder keeps the float's identifiers (normally unknown), and its WMO identifier
+      // only if it gives one.
+      if(placeholder) {
+        meta->set_id_dac(parent->id_dac() > 0 ? parent->id_dac() : (int) XFLT_ID_UNKNOWN);
+        if(meta->id_wmo() < 1)
+          meta->set_id_wmo(parent->id_wmo() > 0 ? parent->id_wmo() : (int) XFLT_ID_UNKNOWN);
+      }
+
+      {
         BOOST_LOG_SCOPED_THREAD_ATTR("WhoiID", attr::constant<int>(meta->id_instrument()));
         BOOST_LOG_SCOPED_THREAD_ATTR("DacID", attr::constant<int>(meta->id_dac()));
         BOOST_LOG_SCOPED_THREAD_ATTR("WmoID", attr::constant<int>(meta->id_wmo()));
 
-        shared_ptr<XFloat> parent(GetFloat(meta->id_instrument()));
         parent->set_metadata(meta);
 
         // A field reset after deployment (a GPS firmware bug made floats restart at sea) moved
@@ -698,7 +728,10 @@ void XFloat::LoadMetadataFromFiles() {
         }
 
         parent->SaveObjectToDatabase();
-        lout() << "Loaded instrument metadata.";
+        if(placeholder)
+          lout() << "Loaded placeholder instrument metadata (no DAC ID): " << meta->local_path() << ".";
+        else
+          lout() << "Loaded instrument metadata.";
 
       }
 
@@ -4498,10 +4531,16 @@ void XFloatDiveData::ArchiveStartupListingFile() {
 
 /** Write the PHY file for this dive.
  *
+ *  PHY files are no longer written (since 2026-11-12; PHY file support is being deprecated):
+ *  this function returns at once, whatever gen.phy, --phy-enable and the floats' PHY flags say.
+ *  The code is kept until PHY support is removed.
+ *
  *  @throw          util::log::MessageException if an error occurs while writing the PHY file.
  *
  */
 void XFloatDiveData::WritePhyFile() {
+
+  static const bool PHY_FILES_DEPRECATED = true;
 
   path target_directory;
 
@@ -4510,7 +4549,7 @@ void XFloatDiveData::WritePhyFile() {
     // Get an exclusive lock.
     lock_guard<recursive_mutex> guard(mutex_);
 
-    if(!phy_file_generation_is_enabled_ || !parent_instrument_
+    if(PHY_FILES_DEPRECATED || !phy_file_generation_is_enabled_ || !parent_instrument_
         || !parent_instrument_->phy_file_generation_is_enabled() || !parent_instrument_->metadata()
         || !is_complete())
       return;

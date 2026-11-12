@@ -39,7 +39,7 @@ Consequences:
 
 - The name only selects the file. The DAC ID and serial number that the decoder uses come from the file's contents (`internal ID number`, `float serial number`), not from the name.
 - Names such as `alamo_template.meta`, `NEWTemplate_6XXX_9XXX.meta`, `6062_9130.meta.sb-a0222412-1hD9O1` and the macOS resource files `._6008_9030.meta` do not match and are skipped.
-- Files in subdirectories (`defunct/`, `recycled_ids/` in production) are not read.
+- Files in subdirectories (`defunct/`, `recycled_ids/`, `ignored/` in production) are not read.
 - The order in which files are read is the directory order, which is unspecified.
 
 Files are read once, at startup (`XFloat::LoadMetadataFromFiles()`, called from `Initialize()` in `src/Main.cpp`). Changes take effect at the next restart.
@@ -154,17 +154,19 @@ Every line whose field name matches none of the patterns in section 3 is ignored
 
 ## 5. Placeholder files and acceptance rules
 
-A metadata object is used only if its DAC ID (from `internal ID number`) satisfies `0 < DAC ID < 99999` and `DAC ID != 9999` (`XFloat::LoadMetadataFromFiles()` in `src/data/XFloat.cpp`). Otherwise it is dropped without a message.
+A file whose DAC ID (from `internal ID number`) satisfies `0 < DAC ID < 99999` and `DAC ID != 9999` is a file with a DAC ID; any other is a placeholder. Since 2026-11-12 both are used (`XFloat::LoadMetadataFromFiles()` in `src/data/XFloat.cpp`): first the files with a DAC ID, then one placeholder for each float that has a parsable `float serial number` and no file with a DAC ID. A placeholder gives the float its launch time and position, deployer and the other fields; the float keeps the DAC and WMO IDs it already has (normally none, shown as `?????` and `???????` in the log), and takes the placeholder's WMO ID only if it gives one. It is logged as `Loaded placeholder instrument metadata (no DAC ID): <path>.` Before 2026-11-12, placeholders were dropped without a message.
+
+A placeholder's launch time matters as much as any other: messages more than 15 minutes before it are dropped (section 7). Missing launch times and positions were therefore estimated on 2026-11-12 (section 9, item 9).
 
 Placeholders mark floats that have no DAC ID yet. Production uses two conventions:
 
 | Convention | Seen in production | Effect |
 |---|---|---|
-| File name `9999_<serial>.meta`, `internal ID number -99`, `WMO ID number -1` | 55 of the 66 `9999_*` files (current template) | Dropped: DAC ID < 1. |
-| File name `9999_<serial>.meta`, `internal ID number -1` | 2 files (`9999_9162`, `9999_9181`) | Dropped: DAC ID < 1. |
-| File name `9999_<serial>.meta`, saved as RTF | 8 files (`9999_9122`, `9999_9123`, `9999_9237` to `9999_9243`) | Dropped: the first field line carries the RTF prefix `\f0\fs22 \cf0 ` and its name no longer matches, so the DAC ID stays −1. |
+| File name `9999_<serial>.meta`, `internal ID number -99`, `WMO ID number -1` | 55 of the 66 `9999_*` files (current template) | Placeholder, used since 2026-11-12. |
+| File name `9999_<serial>.meta`, `internal ID number -1` | 2 files (`9999_9162`, `9999_9181`) | Placeholder, used since 2026-11-12. |
+| File name `9999_<serial>.meta`, saved as RTF | formerly 8 files (`9999_9122`, `9999_9123`, `9999_9237` to `9999_9243`) | Moved to `ignored/` on 2026-11-12: those floats never reported, and the DAC and WMO IDs in the files were later given to floats 9265, 9266 and 9268 to 9273. |
 
-Only the `internal ID number` decides, not the file name. Production has one counter-example: `9999_9244.meta` contains `internal ID number 6088` and is used (logged as `Float[09244|06088|4903308] ... Loaded instrument metadata.`). A file with a valid name but `internal ID number -99` would be dropped.
+Only the `internal ID number` decides, not the file name. (`9999_9244.meta`, which contained float 9267's `internal ID number 6088`, was moved to `ignored/` on 2026-11-12.)
 
 For an accepted file:
 
@@ -206,7 +208,7 @@ Dynamic exception type: boost::wrapexcept<boost::bad_lexical_cast>
 std::exception::what: bad lexical cast: source type value could not be interpreted as target
 ```
 
-Each daemon start logs 32 such error entries (2026-10-28: 128 entries over 4 starts), nearly all from the 8 RTF placeholder files. They are harmless, since those files are dropped anyway.
+Until 2026-11-12, each daemon start logged 32 such error entries, all from the 8 RTF placeholder files; those files are now in `ignored/`.
 
 ## 7. What the metadata is used for
 
@@ -219,7 +221,7 @@ Each daemon start logs 32 such error entries (2026-10-28: 128 entries over 4 sta
 | Recognizing startup messages from resets in the field, and the earliest deployment in the summary (`launch`, `field_resets`; [json-file-format.md](json-file-format.md) section 5). Read directly from the files (columns 1-40 field, value from column 41, the float by `float serial number`). | `launch time`, `status of launch time`, `float serial number` | `bin/py/FloatClasses.py` `ReadLaunchTimes`, used by `xmtps-aggregate-json.py --meta` |
 | Deployment placemark in the KML file, only if the position is valid | `launch position` | `XFloat` KML writer; see [kml-file-format.md](kml-file-format.md) |
 | Status file `DEPLOYMENT_*`, `DEPLOYER*`, `WMO_INSTRUMENT_TYPE`, `WMO_RECORDER_TYPE` lines | launch, deployer, deployment and WMO fields | `XFloat::GenerateStatusString()`; see [status-file-format.md](status-file-format.md) |
-| PHY file header (`INSTRUMENT TYPE`, `WMO INSTRUMENT TYPE (TABLE 1770)`, `WMO RECORDER TYPE (TABLE 4770)`, `PI`, ...). A PHY file is written only for floats with metadata. | `instrument type`, WMO types, `PI` | `src/data/XFloat.cpp`; see [phy-file-format.md](phy-file-format.md) |
+| PHY file header (`INSTRUMENT TYPE`, `WMO INSTRUMENT TYPE (TABLE 1770)`, `WMO RECORDER TYPE (TABLE 4770)`, `PI`, ...). PHY files are no longer written (deprecated 2026-11-12). | `instrument type`, WMO types, `PI` | `src/data/XFloat.cpp`; see [phy-file-format.md](phy-file-format.md) |
 | Database table `XFloatMetadata` | all stored fields, plus `local_path` (the file path) and the IMEI | `XFloatMetadata::sql_table_description_` |
 
 ## 8. Examples
@@ -367,7 +369,8 @@ It is parsed and then dropped, because its DAC ID is −99.
 2. **README says DAC ID 9999 marks a placeholder.** True for the file names, but the current placeholder template writes `internal ID number -99`, and only the internal ID decides. The code comment in `XFloat::LoadMetadataFromFiles()` mentions both 9999 and −99; README.md mentions only 9999.
 3. **Invalid-longitude constant.** In the branch where the launch position does not match the pattern, the longitude is set to `XFLT_POS_INVALID_LON`, which is defined as `IRI_POS_INVALID_LAT` (99.99999) in `src/data/XFloatDefinitions.h`; `IRI_POS_INVALID_LON` in `src/data/IridiumDefinitions.h` is also defined as `UTIL_POS_INVALID_LAT`. The out-of-range branch uses the correct `UTIL_POS_INVALID_LON` (999.99999). The position is flagged invalid in both branches, so the effect is limited to the stored longitude value (99.99999 instead of 999.99999).
 4. **DAC IDs of 10000 and above in log prefixes.** The log formatter shows the DAC ID only if 1000 ≤ DAC < 10000 (`src/utility/Log.h`). Floats with five-digit DAC IDs (10293 and up) appear as `Float[11682|?????|1902778]` although their metadata loaded correctly. See [log-and-lock-files.md](log-and-lock-files.md).
-5. **File name and contents disagree in production.** `6062_9130.meta` contains `float serial number 9119`, so its metadata is attached to float 9119 (logged as `Float[09119|06062|4902960]`); float 9130 has no metadata file. `6112_9298.meta` contains `internal ID number 6122`. The decoder uses the contents in both cases; whether the files or the names are wrong was not checked.
-6. **Non-ASCII files in production.** Besides the 8 RTF placeholders, `6011_9034.meta` contains NUL bytes (line 61); `file` reports it as `data`. Its lines before the NULs parse normally [inferred]. `SylviaCole_template.meta` is RTF but does not match the file-name pattern.
+5. **File name and contents disagreed in production (fixed 2026-11-12).** `6062_9130.meta` contained float 9119's metadata (`float serial number 9119`, `transmission ID number 9119`, WMO 4902960) and is now `6062_9119.meta`; float 9130 never reported and has no metadata file. `6112_9298.meta` contained `internal ID number 6122` (DAC 6112 belongs to 9288) and is now `6122_9298.meta`. The decoder always used the contents, so the renames change nothing it decodes. The same day, three stale files were moved to the new subdirectory `ignored/` (not read): `9999_9244.meta`, which repeated float 9267's DAC ID 6088 and WMO 4903308 for a float that never reported, and `8470_011047.meta` and `8471_011059.meta`, left from an earlier deployment of floats 11047 and 11059. `8470_011047.meta` was being read after `9415_011047.meta`, giving float 11047 the old WMO 4903273 instead of 1902507.
+6. **Non-ASCII files in production.** The 8 RTF placeholders are in `ignored/` since 2026-11-12. `6011_9034.meta` contains NUL bytes (line 61); `file` reports it as `data`. Its lines before the NULs parse normally [inferred]. `SylviaCole_template.meta` is RTF but does not match the file-name pattern.
 7. **Launch time year range.** The check `yr > 2000` rejects a launch in the year 2000. No ALAMO/ALTO float was launched then, so this has no effect.
 8. **`\d` in POSIX-extended patterns.** The launch time and launch position patterns use `\d` with `regex::extended`, which POSIX leaves undefined. The production libstdc++ (GCC 15.2) treats it as a digit class; production status files confirm that both values parse. See [configuration-file-format.md](configuration-file-format.md), section 9, item 2.
+9. **Launch times and positions estimated (2026-11-12).** For every plain-text file whose launch time or position was missing or a placeholder value (`99 99 9999 99 99`, `99. 99. 999. 999.`), an estimate was written from the float's GPS fixes (`<serial>_gps.json`), with the status `estimated from the first GPS fix in the field`. The float's track is split where it moves more than 30 km at more than 8 km/h within its first 45 days of fixes (a flight or a shipment after lab, port or airport fixes), pieces of 1 or 2 fixes are dropped as bad fixes, and the start of the last piece is the estimate, if that piece has a profile and is not at Woods Hole. A missing position was estimated only if the given launch time is no more than 72 h before and 1 h after that start. About 100 files were changed. Corrected the same day: `9999_9207` and `9999_9209` (launch time 10:00 and 10:40, likely local time UTC+8, 8 h after the first fix at sea; set to the first fix), `9999_9100` (longitude 97 for 87), `9999_9091` (Woods Hole position for an Eastern Pacific launch), and floats 9190 to 9193 and 9195 (longitude minutes with the wrong sign). Originals: `/data1/alamo/tmp/meta-backup-2026-11-12` on argus.

@@ -13,6 +13,21 @@ Decoder:
   restarted it every 30 s. It now checks the server every 30 s, logs the wait when it starts and
   every 10 minutes, and goes on once the server answers. A stop signal during the wait releases
   the run-time lock and exits cleanly. Nothing changes without the database (`sql.enable = 0`).
+- Placeholder metadata files (`internal ID number` -99, -1 or 9999) are used instead of dropped,
+  for floats with no file that has a DAC ID: their launch time and position and the other fields
+  apply, and the float keeps its DAC and WMO IDs (normally none). Files with a DAC ID come first.
+- PHY files are no longer written (deprecated): `gen.phy`, `--phy-enable` and `--phy-disable`
+  are ignored.
+
+Metadata files (`/data1/alamo/meta/dac` on argus; originals in `/data1/alamo/tmp/meta-backup-2026-11-12`):
+
+- Missing launch times and positions estimated from each float's first GPS fix in the field
+  (status `estimated from the first GPS fix in the field`); see float-metadata-format.md,
+  section 9, item 9. Wrong values corrected for 9091, 9100, 9190-9193, 9195, 9207 and 9209.
+- Conflicting files moved to the new, unread `ignored/`: `9999_9244`, `8470_011047`,
+  `8471_011059` and the 8 RTF placeholders (`9999_9122`, `9123`, `9237`-`9243`), which ends the
+  32 metadata errors at each start. `6062_9130` renamed `6062_9119` and `6112_9298` renamed
+  `6122_9298`, to match their contents.
 
 Python tools:
 
