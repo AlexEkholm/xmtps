@@ -559,7 +559,7 @@ from production packets (2026-10-24).
 #### A.4.2 Dynamically corrected salinity — 0xDC  *(format inferred [I]; decoder [D] `XProfileSalinityCorrected.h`)*
 
 **Purpose.** A second binned-profile salinity channel, corrected on the float (RBR dynamic
-correction). It is sent only when mission parameter PPE (dynamic correction mode) = 2 [O]. Values use
+correction). It is sent when mission parameter PPE (dynamic correction mode) is non-zero: PPE = 2 on 10.12 floats [O], PPE = 1 on the 10.14 float 11773 [O] (2026-11). Values use
 the salinity gain and offset, and differ from the uncorrected salinity by a few thousandths of a PSU
 (at most about 0.07). Not in any MRV or spreadsheet document.
 
@@ -2868,7 +2868,7 @@ Offsets 0-7 are the common header (C.1.4).
 | 74 | 4 | R4 | PPC1 | - | PPC1: RBR dynamic-correction alpha (short-term thermal mass), single. Only in the 88-byte form. |
 | 78 | 4 | R4 | PPC2 | s | PPC2: RBR dynamic-correction tdelay (water-cell lag), single. Only in the 88-byte form. |
 | 82 | 4 | R4 | PPC3 | - | PPC3: RBR dynamic-correction ctcoeff (long-term thermal mass), single. Only in the 88-byte form. |
-| 86 | 1 | U1 | PPE | enum | PPE: RBR post-processing (dynamic correction) enable. Floats with PPE = 2 send corrected salinity (0xDC). Only in the 88-byte form. |
+| 86 | 1 | U1 | PPE | enum | PPE: RBR post-processing (dynamic correction) enable. Floats with PPE ≠ 0 send corrected salinity (0xDC): PPE = 2 on 10.12 floats, PPE = 1 on 10.14.0.40 (11773). Only in the 88-byte form. Listed since 2026-11-13. |
 | 70 or 87 | 1 | char | `;` | | Terminator. |
 
 [decoder] The 88-byte form carries `PPC0`-`PPC3` and `PPE` (NG10.12; production 10.12.0.1 and 10.12.0.32 floats). The decoder accepts both lengths for the `Fw0A080004` firmware group and decodes `PPC`/`PPE` only when the blob is 88 bytes long.
@@ -2877,7 +2877,7 @@ Offsets 0-7 are the common header (C.1.4).
 
 | Layout (firmware) | D1 bytes | Difference from the table above |
 |---|---:|---|
-| `Fw0A070101` (10.7.1.1) | 88 | Only 88 bytes is accepted. [decoder] `PPC0`-`PPE` at offsets 70-86 are not decoded (the lines are commented out), so they keep their unset values. |
+| `Fw0A070101` (10.7.1.1) | 88 | [decoder] Since 2026-11-13 decoded with the `Fw0A080004` code, which reads `PPC0`–`PPC3` (R4) at 70, 74, 78, 82 and `PPE` (U1) at 86 from the 88-byte form. Before, `DecodeXMsgDataFw0A070101` left them undecoded (its lines were commented out and used the WIMS offsets). |
 | `Fw0A080031` (WIMS: 10.7.1.31, 10.8.0.31, 10.9.1.31, 10.10.0.31, 10.12.1.31) | 90 | `WMT` (U2, s, WIMS timeout) at offset 70. `PPC0` at 72, `PPC1` at 76, `PPC2` at 80, `PPC3` at 84 (R4), `PPE` at 88 (U1), terminator at 89. |
 
 #### C.1.8 The 10.5/10.6 layout (`Fw0A050000`, `Fw0A060200`, `Fw0A060231`)
@@ -2967,7 +2967,7 @@ The "Mission Configuration" section is printed once per dive, from the dive's D0
 
    - `MIS` is `MIS %5d %4d 0x%02X 0x%08X %11d # name`: serial number, dive, parameters version (offset 8), firmware word, CTD type and its name (`RBR`, `SBE` or `unknown`).
    - Each `m` line is `m SN dive idx NAME value [units] # description`. `idx` counts the `m` lines from 0, in listing order, not in message order. Integers are printed with `%10d`. Scaled values use 1-4 decimals.
-   - Sections, in order: General; BIT (layouts before 10.7 only); Calibration Coefficients; Start-of-Mission Trigger; Diagnostic Dive; Mission Phase; Profile; Profile - Dynamic Salinity Correction (only in the `0A050000`, `0A060231` and `0A080031` listings); Profile - Binning Configuration (CPN/CPP depend on the CTD type: RBR scaled, SBE raw dBar, unknown raw); Profile - Raw Sampling; Profile - Surface Offset Correction; Pump Characteristics; Descent (General, Fall Time-Series, Stages 1-3); Drift/Park (General, Seek, Start of Profile Trigger, Fall to Profile Pressure); Ascent/Profile (General, Rise Time-Series, Ice-Detection, Ice-Detection Summer and Winter); Surface (General, Air Pump, Sampling, Sat./Comm., Abort/Beacon Mode); Surface - Wave-Field Measurement (`WST`, only in the WIMS listings `08000000`, `0A060231` and `0A080031`; the `06057700` listing prints `WMT` instead, which that layout never decodes, so it always shows 65535).
+   - Sections, in order: General; BIT (layouts before 10.7 only); Calibration Coefficients; Start-of-Mission Trigger; Diagnostic Dive; Mission Phase; Profile; Profile - Dynamic Salinity Correction (`PPE`, `PPC0`–`PPC3`: always in the WIMS listings `0A060231` and `0A080031`; in the `0A050000` and `0A070101` listings since 2026-11-13, for RBR floats whose message carried them; before then those two listings had the lines commented out); Profile - Binning Configuration (CPN/CPP depend on the CTD type: RBR scaled, SBE raw dBar, unknown raw); Profile - Raw Sampling; Profile - Surface Offset Correction; Pump Characteristics; Descent (General, Fall Time-Series, Stages 1-3); Drift/Park (General, Seek, Start of Profile Trigger, Fall to Profile Pressure); Ascent/Profile (General, Rise Time-Series, Ice-Detection, Ice-Detection Summer and Winter); Surface (General, Air Pump, Sampling, Sat./Comm., Abort/Beacon Mode); Surface - Wave-Field Measurement (`WST`, only in the WIMS listings `08000000`, `0A060231` and `0A080031`; the `06057700` listing prints `WMT` instead, which that layout never decodes, so it always shows 65535).
    - A 10.12.0.x listing has 177 `m` lines.
    - The Python tools keep each `m` line (section, index, name, value, units) in the dive JSON as `mission.entries`, and keep `cfgver`, `fwver` and `ctdtype` from the `MIS` line.
 - If no D0 has arrived, the firmware word is still 0xFFFFFFFF and the section is the single line `# Incomplete mission parameters.`

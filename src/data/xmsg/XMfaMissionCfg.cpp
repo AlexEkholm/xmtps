@@ -459,10 +459,10 @@ void XMfaMissionCfg::DecodeXMsgData(uint32_t fw_ver, uint8_t msg_idx, const vect
         DecodeXMsgDataFw0A060200(msg_idx, data);
         break;
 
+      // 10.7.1.1 has the same layout as 10.8.0.4, with the 88-byte message 1 that carries the RBR
+      // dynamic correction parameters (PPC0-PPC3 at 70, PPE at 86). DecodeXMsgDataFw0A070101()
+      // did not decode them (its lines used the WIMS offsets and were commented out).
       case 0x0A070101: // ALAMO Software version 10.7.1.1
-        DecodeXMsgDataFw0A070101(msg_idx, data);
-        break;
-
       case 0x0A080004: // ALAMO Software version 10.8.0.4 (SBE)
       case 0x0A0C0001: // ALAMO Software version 10.12.0.1 (RBR)
       case 0x0A0C0032: // ALAMO/MM2 Software version 10.12.0.32
@@ -11786,21 +11786,16 @@ void XMfaMissionCfg::GenerateListingStringFw0A050000(ostringstream& os, int whoi
   os << lpre << format(fmt_f3)    % midx++  % "CSP"  % csp_sec()   % "[sec]"       % "continuous sampling period"  << endl;
   os << lpre << format(fmt_d)     % midx++  % "CTC"  % ctc()       % "[-]"         % "aux. temperature channel mode"  << endl;
   os << lpre << format(fmt_d)     % midx++  % "CTF"  % ctf()       % "[dBar]"      % "profile cut-off pressure"  << endl;
-//        switch(sensor_type()) {
-//        case 0:  // RBR
-//          os << "# --- Profile - Dynamic Salinity Correction --------------------------------------------------------" << endl;
-//          os << str_h1 << endl << str_h2 << endl;
-//          os << lpre << format(fmt_d)     % midx++  % "PPE"  % (int)ppe()     % "[-]"      % "dynamic correction mode"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_tau()      % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_alpha()    % "[-]"      % "alpha: short-term thermal mass correction" << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC2" % ppc_tdelay()   % "[sec]"    % "tdelay: water-cell lag"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC3" % ppc_ctccoeff() % "[-]"      % "ctccoeff: long-term thermal mass correction"  << endl;
-//          break;
-//        case 1:   // SBE
-//          break;
-//        default:
-//          break;
-//        }
+  // RBR dynamic salinity correction (decoded by DecodeXMsgDataFw0A050000/0A060200)
+  if(sensor_type() == 0 && ppe() != XMSG_BAD_U08) {
+    os << "# --- Profile - Dynamic Salinity Correction --------------------------------------------------------" << endl;
+    os << str_h1 << endl << str_h2 << endl;
+    os << lpre << format(fmt_d)     % midx++  % "PPE"  % (int)ppe()     % "[-]"      % "dynamic correction mode"  << endl;
+    os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_tau()      % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
+    os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_alpha()    % "[-]"      % "alpha: short-term thermal mass correction" << endl;
+    os << lpre << format(fmt_f3)    % midx++  % "PPC2" % ppc_tdelay()   % "[sec]"    % "tdelay: water-cell lag"  << endl;
+    os << lpre << format(fmt_f3)    % midx++  % "PPC3" % ppc_ctccoeff() % "[-]"      % "ctccoeff: long-term thermal mass correction"  << endl;
+  }
   os << "# --- Profile - Binning Configuration --------------------------------------------------------------" << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "CPB1" % cpb1()      % "[dBar]"      % "interval 1 pressure boundary"  << endl;
@@ -12110,21 +12105,17 @@ void XMfaMissionCfg::GenerateListingStringFw0A070101(ostringstream& os, int whoi
   os << lpre << format(fmt_f3)    % midx++  % "CSP"  % csp_sec()   % "[sec]"       % "continuous sampling period"  << endl;
   os << lpre << format(fmt_d)     % midx++  % "CTC"  % ctc()       % "[-]"         % "aux. temperature channel mode"  << endl;
   os << lpre << format(fmt_d)     % midx++  % "CTF"  % ctf()       % "[dBar]"      % "profile cut-off pressure"  << endl;
-//        switch(sensor_type()) {
-//        case 0:  // RBR
-//          os << "# --- Profile - Dynamic Salinity Correction --------------------------------------------------------" << endl;
-//          os << str_h1 << endl << str_h2 << endl;
-//          os << lpre << format(fmt_d)     % midx++  % "PPE"  % (int)ppe()     % "[-]"      % "dynamic correction mode"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_tau()      % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_alpha()    % "[-]"      % "alpha: short-term thermal mass correction" << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC2" % ppc_tdelay()   % "[sec]"    % "tdelay: water-cell lag"  << endl;
-//          os << lpre << format(fmt_f3)    % midx++  % "PPC3" % ppc_ctccoeff() % "[-]"      % "ctccoeff: long-term thermal mass correction"  << endl;
-//          break;
-//        case 1:   // SBE
-//          break;
-//        default:
-//          break;
-//        }
+  // RBR dynamic salinity correction: decoded only from the 88-byte form of the message
+  // (10.12 and later; DecodeXMsgDataFw0A080004), so listed only when PPE was received.
+  if(sensor_type() == 0 && ppe() != XMSG_BAD_U08) {
+    os << "# --- Profile - Dynamic Salinity Correction --------------------------------------------------------" << endl;
+    os << str_h1 << endl << str_h2 << endl;
+    os << lpre << format(fmt_d)     % midx++  % "PPE"  % (int)ppe()     % "[-]"      % "dynamic correction mode"  << endl;
+    os << lpre << format(fmt_f3)    % midx++  % "PPC0" % ppc_tau()      % "[sec]"    % "tau: conductivity-temperature lag"  << endl;
+    os << lpre << format(fmt_f3)    % midx++  % "PPC1" % ppc_alpha()    % "[-]"      % "alpha: short-term thermal mass correction" << endl;
+    os << lpre << format(fmt_f3)    % midx++  % "PPC2" % ppc_tdelay()   % "[sec]"    % "tdelay: water-cell lag"  << endl;
+    os << lpre << format(fmt_f3)    % midx++  % "PPC3" % ppc_ctccoeff() % "[-]"      % "ctccoeff: long-term thermal mass correction"  << endl;
+  }
   os << "# --- Profile - Binning Configuration --------------------------------------------------------------" << endl;
   os << str_h1 << endl << str_h2 << endl;
   os << lpre << format(fmt_d)     % midx++  % "CPB1" % cpb1()      % "[dBar]"      % "interval 1 pressure boundary"  << endl;

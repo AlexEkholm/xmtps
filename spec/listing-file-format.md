@@ -1186,7 +1186,7 @@ m   11700  -12   3 MDS         2100      [dBar]       # maximum depth
 | units | `%-12s` | Units in square brackets (`[dBar]`, `[sec]`, `[-]`, `[LSB@12V]`). |
 | `# desc` | `%s` | Description. |
 
-- Parameters are grouped under `# --- <Group> ---` headings (General, Calibration Coefficients, Start-of-Mission Trigger, Diagnostic Dive, …), each followed by the two-line header shown above. The groups and their order depend on the firmware layout ([C.1.11](xmessage-format.md#c111-listing-output)). A 10.12.0.x listing has 177 `m` lines.
+- Parameters are grouped under `# --- <Group> ---` headings (General, Calibration Coefficients, Start-of-Mission Trigger, Diagnostic Dive, …), each followed by the two-line header shown above. The groups and their order depend on the firmware layout ([C.1.11](xmessage-format.md#c111-listing-output)). A 10.12.0.x listing has 177 `m` lines. Since 2026-11-13, an RBR float whose message carries the dynamic-correction parameters (the 88-byte form, 10.12 and later) gets 5 more, in the group `Profile - Dynamic Salinity Correction` after `CTF`: `PPE` (dynamic correction mode), `PPC0` (tau, s), `PPC1` (alpha), `PPC2` (tdelay, s) and `PPC3` (ctccoeff). They were decoded but not listed. The WIMS layouts (`…31`) already listed them.
 - `CPN`/`CPP` binning values depend on the sensor type (scaled for RBR, raw dBar for SBE).
 
 Parser: `MIS` gives `cfgver`, `fwver` and `ctdtype` (found by locating the two hex fields, so the older form with an index also works). Each `m` line gives name (`x[4]`), value (`x[5]`), units (`x[6]` without brackets) and index (`x[3]`), stored with the current sub-group name in `mission.entries` and by name in `mission.parameters`; the description is not kept.

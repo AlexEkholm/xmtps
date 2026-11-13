@@ -7,6 +7,13 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Decoder:
 
+- Listings of RBR floats on 10.7–10.14 firmware whose mission configuration carries the dynamic
+  salinity correction parameters (the 88-byte form) show them: `PPE` (dynamic correction mode) and
+  `PPC0`–`PPC3`, in a `Profile - Dynamic Salinity Correction` group. They were decoded, but the
+  lines were commented out. Float 11773 (10.14.0.40) has PPE = 1.
+- The same lines are back in the listings of RBR floats on 10.2–10.6 firmware (they were there in
+  2023–2024 listings, then commented out), and 10.7.1.1 floats are decoded with the 10.8–10.14
+  layout, which reads PPC0–PPC3 and PPE (`DecodeXMsgDataFw0A070101` did not).
 - Reprocessing (`-r`, `-R`, `-A`) fetches the new mail after each float, instead of leaving it in
   the inbox until every float is done (hours for a full reprocess). New mail from a float still
   waiting to be reprocessed is saved but decoded only by its float's reprocess, in order with its
