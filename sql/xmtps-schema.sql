@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS `XGPS` (
 CREATE TABLE IF NOT EXISTS `XFloatMail` (
   `id_dive` smallint NOT NULL DEFAULT '-99',
   `id_imei` bigint unsigned NOT NULL,
-  `id_sbd_momsn` smallint NOT NULL DEFAULT '-1',
+  `id_sbd_momsn` int NOT NULL DEFAULT '-1',
   `id_sbd_packet` int NOT NULL DEFAULT '-1',
   `id_msg` varchar(128) NOT NULL,
   `id_instrument` smallint NOT NULL DEFAULT '-1',

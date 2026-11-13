@@ -124,11 +124,11 @@ The figure title is `<serial>: <title>`. The float page shows the title without 
 
 ### 2.4 Common plot conventions
 
-These hold for all plot groups unless section 3 says otherwise.
+These hold for all plot groups unless section 3 says otherwise. The conventions for new and changed plots are in [plot-style-guide.md](plot-style-guide.md).
 
 - **Dive list.** `dives` is the sorted list of distinct dive numbers in the float's SBD table, including negative (startup) dives.
 - **Dive colors.** Per-dive traces are colored along an HSV ramp: hue 0.666 (blue) for the first dive in `dives` down to hue 0 (red) for the last, saturation 0.8, value 1, each RGB component rounded to a multiple of 5 (e.g. `rgb(50, 90, 255)` … `rgb(255, 50, 50)`). The latest dive is drawn in black and wider (line width 2 instead of 1.2). Wave plots index the ramp by dive number from 0 to the largest dive, with that dive black.
-- **Per-dive traces** are named by dive number, so the HTML legend lists dives. Hover text shows the dive, the time and the values.
+- **Per-dive traces** are named by dive number, so the HTML legend lists dives. Hover text follows [plot-style-guide.md](plot-style-guide.md): `Dive N: <phase>`, the UTC time (`YYYY-MM-DDThh:mm:ssZ`), Δt, then p, S, T, ρ and the other values, with fixed symbols and units (since 2026-11-13).
 - **Statistics plots** (`*_avg`): one point per dive; a light band for min./max. (`rgb(194,204,204)`), a darker band for ±1σ (`rgb(123,123,123)`) and the mean in black.
 - **Count and sum bar charts** use light gray bars (`rgb(220,220,220)`), one per dive.
 - **Pressure axes** are reversed (surface at the top).
@@ -207,6 +207,8 @@ The function also sets out-of-range pressures to NaN in the aggregate data, whic
 
 ### 3.5 Profiles (`WriteProfilePlots`, category `profile`)
 
+Salinity in the profile and contour plots is the dynamically corrected salinity (`saln_corr`, message 0xDC) wherever the float sent it, else the CTD salinity; density and σ<sub>Θ</sub> are computed from the same salinity (since 2026-11-13).
+
 Input: `profile`, `profile_position` (times). One line per dive in the dive colors.
 
 | ID | Title | Size | Page | Contents |
@@ -214,7 +216,7 @@ Input: `profile`, `profile_position` (times). One line per dive in the dive colo
 | `profile_temp` | Temperature Profiles | `fig` | Profile | x: "Temperature [°C]"; y: "Pressure [dBar]". |
 | `profile_saln` | Salinity Profiles | `fig` | Profile | x: "Salinity [PSU]"; y: pressure. |
 | `profile_dens` | In-situ Density Profiles | `fig` | table | x: "In-situ Density Anomaly, ρ - 1000 [kg m⁻³]"; y: pressure. |
-| `profile_sigma0` | Potential Density Profiles | `fig` | Profile | x: "Potential Density Anomaly, σ₀ [kg m⁻³]"; y: pressure. |
+| `profile_sigma0` | Potential Density Profiles | `fig` | Profile | x: "Potential Density Anomaly, σ<sub>Θ</sub> [kg m⁻³]"; y: pressure. |
 | `profile_ts` | T-S Profiles | `fig` | Profile | x: "Salinity [PSU]"; y: "Temperature [°C]". |
 | `profile_num_bins` | No. Profile Bins | `figWideXS` | Profile | Bars; x: "Dive"; y: "Bins". |
 
@@ -227,7 +229,7 @@ The profiles are regridded onto a 1-dBar pressure grid against profile time. Eac
 | `profile_contour_temp` | Temperature Contour | Profile | `thermal` | Temperature [°C] |
 | `profile_contour_saln` | Salinity Contour | Profile | `haline` | Salinity [PSU] |
 | `profile_contour_dens` | In-situ Density Contour | table | `dense` | In-situ Density Anomaly, ρ - 1000 [kg m⁻³] |
-| `profile_contour_sigma0` | Potential Density Contour | Profile | `dense` | Potential Density, σ₀ [kg m⁻³] |
+| `profile_contour_sigma0` | Potential Density Contour | Profile | `dense` | Potential Density Anomaly, σ<sub>Θ</sub> [kg m⁻³] |
 
 ### 3.7 Ascent and descent (`WriteAscentPlots`, `WriteDescentPlots`, categories `ascent`, `descent`)
 
@@ -252,7 +254,7 @@ Input: `drift`. Time series plots have x "Time [minutes]" from the start of the 
 | `drift_temp` | Drift Temperature | `fig` | Drift | Temperature [°C] |
 | `drift_saln` | Drift Salinity | `fig` | Drift | Salinity [PSU] |
 | `drift_dens` | Drift In-Situ Density | `fig` | Drift | In-situ Density Anomaly, ρ - 1000 [kg m⁻³] |
-| `drift_sigma0` | Drift Potential Density | `fig` | table | Potential Density Anomaly, σ₀ [kg m⁻³] |
+| `drift_sigma0` | Drift Potential Density | `fig` | table | Potential Density Anomaly, σ<sub>Θ</sub> [kg m⁻³] |
 | `drift_pres_avg` | Average Drift Pressure | `fig2` | Drift | as `drift_pres`; statistics per dive |
 | `drift_temp_avg` | Average Drift Temperature | `fig2` | Drift | as `drift_temp` |
 | `drift_saln_avg` | Average Drift Salinity | `fig2` | Drift | as `drift_saln` |
@@ -343,7 +345,7 @@ Input: `wave`, `wave_spectra`, `profile_position`. Written only for floats with 
 | `wave_mwm` | Significant Wave Height, Average Period, and Average Direction (Toward) | `figWideXXL` | Wave | Polar plot: angle = mean direction (toward), radius = "Average Period [s]", marker size = significant wave height; one marker per dive in the dive colors; a white "SWH" size key (10 m, 5 m, 2, 1). |
 | `wave_swh` | Significant Wave Height | `figWide` | Wave | x: date; y: "H<sub>m0</sub> [m]"; markers in the dive colors. |
 | `wave_period` | Average Wave Period | `figWide` | Wave | x: date; y: "Period [s]"; "Average" in the dive colors, "Dominant" and "Zero-crossing" gray. |
-| `wave_direction_mean` | Wave Mean Direction Spectra (Toward) | `figWideXL` | Wave | Heatmap: x: date; y: "Frequency [Hz]"; color: mean direction, cyclic color scale. |
+| `wave_direction_mean` | Wave Mean Direction Spectra (Toward) | `figWideXL` | Wave | Heatmap: x: date; y: "Frequency [Hz]"; color: mean direction, cyclic color scale. Like the waterfalls, drawn from a frequency × time grid (`WaveGrid`, since 2026-11-13): times and frequencies are given once, values and hover data as 2-D arrays, the values as 32-bit floats and the hover data as short preformatted strings (`-` where missing). Before, every cell repeated its time string and frequency, which made these pages 15–20 MB for a float with over a thousand dives. |
 | `wave_spectra_accel_Szz`, `_linear` | Wave Vertical Acceleration Spectra (S<sub>ZZ</sub>) | `figWideL` | table | y: "Power Spectral Density (S<sub>ZZ</sub>) [g² Hz⁻¹]". |
 | `wave_spectra_accel_Sxx`, `_linear` | Wave East-West Horizontal Acceleration Spectra (S<sub>XX</sub>) | `figWideL` | table | y: S<sub>XX</sub> [g² Hz⁻¹]. |
 | `wave_spectra_accel_Syy`, `_linear` | Wave North-South Horizontal Acceleration Spectra (S<sub>YY</sub>) | `figWideL` | table | y: S<sub>YY</sub> [g² Hz⁻¹]. |
@@ -448,7 +450,7 @@ Written by `bin/py/xmtps-generate-summary-page.py` from all `<serial>_summary.js
 
 1. Heading `ALAMO/ALTO Float Summary`, and under it the links to the table pages, in `<div id="tlinks">` (`WritePageLinks` in `bin/py/PageStatus.py`, since 2026-11-09; `TABLE_PAGES`): "Summary" (this page, as plain text), "Startups" (`engineering/startup.html`), "Parameters" (`engineering/params.html`) and "Energy" (`engineering/energy.html`), separated by " | ". The paths are relative and assume the production layout of section 11, with the other pages in `engineering/` below the summary page. The startup, mission and energy pages have the same links under their headings, built from `--plots-url` (`/alamo/` and `/alamo/engineering/...` in production).
 2. Map (`div#pit`, 390 × 420 px): a Plotly figure embedded as a `div` (`to_html(full_html=False, include_plotlyjs='cdn', div_id='plot')`), so it also loads plotly.js from the Plotly CDN. Orthographic globe centered on 30° N, 45° W; 15°/30° graticule; dashed lines at the tropics and polar circles; equator line. One marker per float at its latest valid GPS position (`latest.gps`), colored by status (`FloatStatus`, as in the table): orange `rgb(255,168,64)` size 6 PREDEPLOYMENT (last seen at WHOI), green `rgb(123,255,123)` size 6 under 30 days since the latest SBD message, blue `rgb(123,123,255)` size 5 under 180 days, red `rgb(255,123,123)` size 4 otherwise. Hover shows the serial. Mode bar hidden. The map includes floats the table leaves out (it does not check the cycle or profiled distance).
-3. Table `#stable` (class `stripe`), one row per float, most recent report first. A float is left out if `latest.cycle` < 1 or its `profdepthsum` is not positive. Production on 2026-10-30: 250 rows (40 ACTIVE, 11 OVERDUE, 199 ARCHIVED).
+3. Table `#stable` (class `stripe`), one row per float, most recent report first. A float is listed once end-of-dive data (profile, rise or surface data) of dive 0 or a later dive has arrived (`end_of_dive` in its summary; since 2026-11-13). A summary without `end_of_dive`, written before then, uses the old rule: left out if `latest.cycle` < 1 or `profdepthsum` is not positive. Production on 2026-10-30: 250 rows (40 ACTIVE, 11 OVERDUE, 199 ARCHIVED).
 4. Footer (section 8) on the left, and an "Auto Refresh" checkbox on the right.
 
 ### 5.3 Table columns
@@ -762,7 +764,7 @@ Bugs found in the code:
 
 1. **Single-dive floats get almost no plots.** The dive color ramp divides by `len(dives) - 1` (`colorsys.hsv_to_rgb(x*.666/(len(dives)-1), ...)`), which raises `ZeroDivisionError` when the SBD table has one dive. The geo, displacement, profile, contour, ascent, descent, drift, pump, surface and satcom groups fail; only `cycle_timing`, `trajectory` and `phase_vac` are written. Confirmed locally on float 10270 (one dive, 21140) and seen in production for 10008 and 10270. `WriteEngineeringPlots` guards with `max(n-1, 1)`; the others do not.
 2. **Wrong error text for surface displacement.** `WriteSurfaceDisplacementPlots` logs "Failed to submerged displacement plotes for float ..." (the submerged text, with "plotes"), so a surface displacement failure looks like a submerged one. Production logs show this for float 9326.
-3. **`drift_sigma0_avg` y-axis label** reads "In-situ Density Anomaly, ρ - 1000" although it plots σ₀.
+3. **`drift_sigma0_avg` y-axis label** read "In-situ Density Anomaly, ρ - 1000" although it plots σ<sub>Θ</sub>; fixed 2026-11-13.
 4. **`wave_spectra_disp_Cxy_linear` y-axis label** reads "Co-Spectral Density (X<sub>XY</sub>)"; the acceleration version reads C<sub>XY</sub>.
 5. **Titles** "Submerged Dispacement" and "Surface Dispacement" are misspelled.
 6. **SWH key labels** in `wave_mwm` are "10m", "5m", "2", "1" (units only on the first two).

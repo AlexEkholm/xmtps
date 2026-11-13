@@ -587,7 +587,8 @@ the salinity gain and offset, and differ from the uncorrected salinity by a few 
   includes VVV.
 - The total count equals the 0x3n salinity count. The parts can split differently from 0x3n [O].
 - The `salnCorr` column is added to `pro` only when the corrected channel is complete (contiguous
-  indices and the same count as salinity). Otherwise `# (Incomplete Corrected Salinity Data)` is
+  indices and the same count as salinity, or as pressure when the float sends no 0x3n salinity, as
+  VOP 10.14 floats with PPE = 2 do; since 2026-11-13). Otherwise `# (Incomplete Corrected Salinity Data)` is
   printed.
 - In the JSON output it is `saln_corr` (NaN when absent).
 

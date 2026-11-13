@@ -47,6 +47,7 @@ Iridium gateway ──e-mail──▶ stage 1/2 ──▶ RAW, SBD files, MySQL
 |---|---|
 | Per-dive, aggregate and summary JSON, `.lastprocessed` | [json-file-format.md](json-file-format.md) |
 | Plots, float pages, summary, mission and startup pages; the bathymetry and other non-JSON inputs | [plot-and-page-files.md](plot-and-page-files.md) |
+| Conventions for new and changed plots: titles, axes, colors, hover text (symbols T, S, p, ρ, t, Δt, Σt) | [plot-style-guide.md](plot-style-guide.md) |
 
 ### Reference
 

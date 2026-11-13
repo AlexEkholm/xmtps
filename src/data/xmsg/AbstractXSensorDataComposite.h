@@ -949,8 +949,13 @@ public:
 
     /** Is the corrected salinity channel complete?
      *
+     *  A float with dynamic correction can send the corrected channel (0xDC) without the
+     *  uncorrected salinity (0x3n); the corrected channel is then compared with the pressure
+     *  channel instead.
+     *
      *  @return     TRUE if the corrected salinity messages have contiguous indices and as many
-     *              samples as the salinity channel.
+     *              samples as the salinity channel, or as the pressure channel when the float
+     *              sent no uncorrected salinity.
      */
     bool IsCorrectedSalnDataComplete() const {
 
@@ -959,7 +964,8 @@ public:
             // Get an exclusive lock.
             lock_guard<recursive_mutex> guard(mutex_);
 
-            if(corr_saln_messages_.empty() || num_corr_saln_samples() != num_saln_samples())
+            const size_t expected = num_saln_samples() ? num_saln_samples() : num_pres_samples();
+            if(corr_saln_messages_.empty() || expected == 0 || num_corr_saln_samples() != expected)
                 return false;
 
             int idx = corr_saln_messages_.at(0)->xmsg_index();

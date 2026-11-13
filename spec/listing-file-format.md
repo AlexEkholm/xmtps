@@ -651,7 +651,7 @@ pro  9303  483           0      290.32      19.070      19.063      36.689
 | `PRO` | `PRO %5d %4d %11d` | SN, dive, numSamples (number of bins). |
 | `pro`, standard | `pro %5d %4d %11d %11s %11.3f %11.3f` | SN, dive, sampleIdx, pres (dBar), temp (degC), saln (PSU). |
 | `pro`, auxiliary temperature | `pro %5d %4d %11d %11s %11.3f %11.3f %11.3f` | SN, dive, sampleIdx, pres, temp1 (CTD, degC), temp2 (auxiliary channel, degC), saln. |
-| `salnCorr` column | ` %11.3f` appended | Dynamically corrected salinity (PSU), when complete. |
+| `salnCorr` column | ` %11.3f` appended | Dynamically corrected salinity (PSU), when complete: contiguous parts with as many values as `saln`, or as `pres` when the float sends no uncorrected salinity (0x3n). In that case `saln` is `-9.999` on every line (VOP 10.14 floats such as 11773; since 2026-11-13, before which the column was left out). |
 
 - Bins are listed in the order the float sends them, normally deepest first. `sampleIdx` counts from 0.
 - The rule and the column header (with a `salnCorr` / `(PSU)` column when present) are printed before bins 0, 50, 100, …; the units header is part of each repetition.

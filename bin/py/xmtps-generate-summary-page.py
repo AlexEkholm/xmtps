@@ -448,10 +448,14 @@ $(document).ready(function () {
                                         
                                         # Check Float Data
                                         
-                                        if x['latest']['cycle'] < 1:
-                                            continue
-                                        
-                                        if (x['profdepthsum'] <= 0) or np.isnan(x['profdepthsum']):
+                                        # Listed once end-of-dive data (profile, rise or surface
+                                        # data) of the diagnostic dive 0 or a later dive has
+                                        # arrived. Summaries written before 'end_of_dive' existed
+                                        # use the old rule: dive 1 reached, with a profile.
+                                        if 'end_of_dive' in x:
+                                            if not x['end_of_dive']:
+                                                continue
+                                        elif x['latest']['cycle'] < 1 or (x['profdepthsum'] <= 0) or np.isnan(x['profdepthsum']):
                                             continue
                                         
                                         # if len(x['fwver']) < 10:

@@ -1228,6 +1228,9 @@ def AggregateDiveData():
                         'fwver': '',
                         'ctdtype': '',
                         'profdepthsum': 0, 
+                        # True once end-of-dive data (profile, rise or surface data) of a dive 0 or
+                        # later has arrived; the summary page lists only such floats
+                        'end_of_dive': False,
                         'type': 'ALTO' if float_data.id.whoi > 10000 else 'ALAMO',
                         'startup':  { 
                             'gps': Gps(), 
@@ -1297,6 +1300,8 @@ def AggregateDiveData():
                             }
                         )
                         float_aggregate_data['ascent'] = AppendRows(float_aggregate_data['ascent'], df_profile)
+                        if ascent_data.n > 0:
+                            float_aggregate_data['summary']['end_of_dive'] = True
                         
                         # Append NaNs to separate dives
                         
@@ -1661,13 +1666,18 @@ def AggregateDiveData():
                                 'pres':   np.array(profile_data.pres, dtype='float'),
                                 'temp':   np.array(profile_data.temp, dtype='float'),
                                 'tcnd':   np.array(profile_data.tcnd, dtype='float'),
-                                'saln':   np.array(profile_data.saln, dtype='float'),
+                                # dynamically corrected salinity wherever the float sent it
+                                'saln':   np.where(np.isfinite(np.array(getattr(profile_data, 'saln_corr', [np.nan] * profile_data.n), dtype='float')),
+                                                   np.array(getattr(profile_data, 'saln_corr', [np.nan] * profile_data.n), dtype='float'),
+                                                   np.array(profile_data.saln, dtype='float')),
                                 'saln_corr': np.array(getattr(profile_data, 'saln_corr', [np.nan] * profile_data.n), dtype='float'),
                                 'dens':   np.array(profile_data.dens, dtype='float'),
                                 'sigma0': np.array(profile_data.sigma0, dtype='float'),
                             }
                         )
                         float_aggregate_data['profile'] = AppendRows(float_aggregate_data['profile'], df_profile)
+                        if profile_data.n > 0:
+                            float_aggregate_data['summary']['end_of_dive'] = True
                     
                         # Get Summary data
                         
@@ -1879,6 +1889,8 @@ def AggregateDiveData():
                             }
                         )
                         float_aggregate_data['surface'] = AppendRows(float_aggregate_data['surface'], df_profile)
+                        if dive_data.dive_num >= 0 and surface_data.n > 0:
+                            float_aggregate_data['summary']['end_of_dive'] = True
                         
                         # Append NaNs to separate dives
                         
@@ -3953,7 +3965,7 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
     fig = go.Figure()
     fig.add_trace(go.Heatmap(
         x=np.round(lon, 5), y=np.round(lat, 5), z=-depth_m, zmin=-dmax, zmax=0, colorscale=colorscale,
-        customdata=depth_m, hovertemplate='%{customdata}m<extra></extra>',
+        customdata=depth_m, hovertemplate='depth = %{customdata} m<extra></extra>',
         colorbar=dict(title=dict(text='Depth [m]'), len=0.6, y=0.3,
                       tickvals=[-d for d in depth_ticks], ticktext=[str(d) for d in depth_ticks]),
         name='depth'))
@@ -3999,9 +4011,9 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
         fig.add_trace(go.Scatter(
             x=d['lon_u'], y=d['lat'], mode='markers', name='last profile' if is_last else 'profiles',
             customdata=np.stack((d['dive'], d['dt_str'], d['src'], d['depth'], d['lon']), -1),
-            hovertemplate=('Dive <b>%{customdata[0]}</b><br>%{customdata[1]}<br>'
-                           '%{y:.4f}°N %{customdata[4]:.4f}°E<br>fix: %{customdata[2]}<br>'
-                           + name + ' depth %{customdata[3]}m<extra></extra>'),
+            hovertemplate=('Dive <b>%{customdata[0]}</b><br>%{customdata[1]|%Y-%m-%d %H:%M}Z<br>'
+                           '%{y:.4f}°N %{customdata[4]:.4f}°E<br>source = %{customdata[2]}<br>'
+                           'depth = %{customdata[3]} m (' + name + ')<extra></extra>'),
             marker=dict(color=d['color'], size=16 if is_last else 9,
                         symbol='star' if is_last else 'circle',
                         line=dict(color='black', width=0.8 if is_last else 0.4),
@@ -4014,7 +4026,7 @@ def PositionBathymetryFigure(float_id, df_profiles, dives, colors):
         yaxis=dict(title='Latitude [°N]', range=[region[2], region[3]], showgrid=False,
                    scaleanchor='x', scaleratio=1 / coslat, constrain='domain', ticks='outside'),
         showlegend=False, hovermode='closest', plot_bgcolor='white',
-        hoverlabel=dict(font=dict(family='Consolas, monospace', size=13)),
+        hoverlabel=dict(font=dict(family='Consolas, monospace', size=14)),
         margin=dict(l=10, r=10, b=20, t=50, pad=4))
     return fig
 
@@ -4074,7 +4086,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
             # Preprocess data
             
             df_profiles = float_aggregate_data['profile_position']
-            df_profiles = df_profiles[df_profiles['dive'] > 0] # TODO fix
+            df_profiles = df_profiles[df_profiles['dive'] >= 0]   # dive 0 (diagnostic) included
             df_profiles = df_profiles[(~df_profiles['lat'].isna()) & (~df_profiles['lon'].isna())]
             
             # 
@@ -4647,8 +4659,9 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                                 # ), 
                                 # -1),
                             hovertemplate = '<br>'.join([
+                                'Dive <b>{}</b>'.format(dive),
                                 label,
-                                df_gps_pre[idx]['dt_str'].values[0],
+                                HoverTime(df_gps_pre[idx]['dt_str'].values[0], seconds = False),
                                 '%{lat:.4f}°N %{lon:.4f}°E',
                                 'CEP = {:.3f} km'.format(df_gps_pre[idx]['cep_km'].values[0]),
                                 '<extra></extra>'
@@ -4680,8 +4693,9 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                                 # ), 
                                 # -1),
                             hovertemplate = '<br>'.join([
+                                'Dive <b>{}</b>'.format(dive),
                                 label,
-                                df_gps_pre[idx]['dt_str'].values[0],
+                                HoverTime(df_gps_pre[idx]['dt_str'].values[0], seconds = False),
                                 '%{lat:.4f}°N %{lon:.4f}°E',
                                 'CEP = {:.3f} km'.format(df_gps_pre[idx]['cep_km'].values[0]),
                                 '<extra></extra>'
@@ -4854,7 +4868,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
                             'GPS before descent',
-                            df_gps['dt_str'][idx].values[0],
+                            HoverTime(df_gps['dt_str'][idx].values[0], seconds = False),
                             '%{lat:.4f}°N %{lon:.4f}°E',
                             'CEP = {:.3f} km'.format(df_gps['cep_km'][idx].values[0]),
                             '<extra></extra>'
@@ -4878,7 +4892,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                     figs['position_all'].add_trace(go.Scattergeo(
                         lat = df_gps['lat'][idx],
                         lon = df_gps['lon'][idx],
-                        customdata = df_gps['dt_str'][idx].values,
+                        customdata = [ HoverTime(x, seconds = False) for x in df_gps['dt_str'][idx].values ],
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
                             'GPS beacon',
@@ -4909,7 +4923,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
                             'GPS after ascent',
-                            df_gps['dt_str'][idx].values[0],
+                            HoverTime(df_gps['dt_str'][idx].values[0], seconds = False),
                             '%{lat:.4f}°N %{lon:.4f}°E',
                             'CEP = {:.3f} km'.format(df_gps['cep_km'][idx].values[0]),
                             '<extra></extra>'
@@ -4963,14 +4977,13 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                             hovertemplate = '<br>'.join([
                                 'Dive <b>{}</b>'.format(dive),
                                 'Iridium Composite',
-                                df_iridium['dt_str'][idx].values[0],
-                                '%{lat:.4f}°N %{lon:.4f}°E',
-                                'CEP = {:.3f} km'.format(df_iridium['cep_km'][idx].values[0]),
+                                HoverTime(df_iridium['dt_str'][idx].values[0]),
+                                '%{{lat:.3f}}°N %{{lon:.3f}}°E ± {:.0f} km'.format(df_iridium['cep_km'][idx].values[0]),
                                 '<extra></extra>'
                                 ]) if len(df_iridium[idx]) > 0 else '',
                             # hoverinfo = 'none',
                             legendgroup=legendgroup,
-                            opacity = 0.7,
+                            opacity = 0.8,
                             marker = dict(
                                 color=colors[i],
                                 line=dict(
@@ -5012,7 +5025,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
                             'GPS before descent',
-                            df_gps['dt_str'][idx].values[0],
+                            HoverTime(df_gps['dt_str'][idx].values[0], seconds = False),
                             '%{lat:.4f}°N %{lon:.4f}°E',
                             'CEP = {:.3f} km'.format(df_gps['cep_km'][idx].values[0]),
                             '<extra></extra>'
@@ -5037,7 +5050,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                     figs['position_gps'].add_trace(go.Scattergeo(
                         lat = df_gps['lat'][idx],
                         lon = df_gps['lon'][idx],
-                        customdata = df_gps['dt_str'][idx].values,
+                        customdata = [ HoverTime(x, seconds = False) for x in df_gps['dt_str'][idx].values ],
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
                             'GPS beacon',
@@ -5069,7 +5082,7 @@ def WriteGeoPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
                             'GPS after ascent',
-                            df_gps['dt_str'][idx].values[0],
+                            HoverTime(df_gps['dt_str'][idx].values[0], seconds = False),
                             '%{lat:.4f}°N %{lon:.4f}°E',
                             'CEP = {:.3f} km'.format(df_gps['cep_km'][idx].values[0]),
                             '<extra></extra>'
@@ -5232,7 +5245,7 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
                 displacement_submerged = go.Figure(
                     layout=dict(
                         showlegend = False,
-                        title=dict(text='{}: Submerged Dispacement'.format(float_id)),
+                        title=dict(text='{}: Submerged Displacement'.format(float_id)),
                         polar=dict(
                             angularaxis = dict(
                                 direction='clockwise',
@@ -5286,8 +5299,6 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
                             title='Dive',
                             ),
                         # plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=10,t=70,pad=4),
                         )
                     ),
@@ -5317,7 +5328,7 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
                             bgcolor='white',
                             radialaxis = dict(
                                 title=dict(
-                                    text = 'Speed [cm s<sup>-1</sup>]',
+                                    text = 'Speed [cm s<sup>−1</sup>]',
                                     font = dict(
                                         size= 10,
                                         ),
@@ -5348,8 +5359,6 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
                             title='Dive',
                             ),
                         # plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=10,t=70,pad=4),
                         )
                     ),
@@ -5383,10 +5392,10 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
                         theta = [ df_dive['azi'].values[0]],
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'bearing = %{theta:.0f}°',
+                            'θ = %{theta:.0f}°',
                             'dist = %{r:.2f} km',
                             'duration = {:.2f} hours'.format(df_dive['duration_s'].values[0]/3600.),
-                            'speed = {:.2f} cm s<sup>-1</sup>'.format(df_dive['speed_mps'].values[0]*100),
+                            'speed = {:.2f} cm s<sup>−1</sup>'.format(df_dive['speed_mps'].values[0]*100),
                             'pos1 = ',
                             ' {:.4f}°N {:.4f}°E'.format(df_dive['pos1_lat'].values[0], df_dive['pos1_lon'].values[0]),
                             ' ' + dt1,
@@ -5416,10 +5425,10 @@ def WriteSubmergedDisplacementPlots(float_id, float_aggregate_data, dpath_float,
                         theta = [ df_dive['azi'].values[0]],
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'bearing = %{theta:.0f}°',
+                            'θ = %{theta:.0f}°',
                             'dist = {:.2f} km'.format(df_dive['dist_m'].values[0]/1000),
                             'duration = {:.2f} hours'.format(df_dive['duration_s'].values[0]/3600.),
-                            'speed = %{r:.2f} cm s<sup>-1</sup>',
+                            'speed = %{r:.2f} cm s<sup>−1</sup>',
                             'pos1 = ',
                             ' {:.4f}°N {:.4f}°E'.format(df_dive['pos1_lat'].values[0], df_dive['pos1_lon'].values[0]),
                             ' ' + dt1,
@@ -5513,7 +5522,7 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
             #colors = list(Color("#33FF33").range_to(Color("#3333FF"), round(len(dives)/2))) + list(Color("#3333FF").range_to(Color("#FF3333"), round(len(dives)/2)+1))
             colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
-            colors[len(dives)-2] = 'rgb(0,0,0)'
+            colors[len(dives)-1] = 'rgb(0,0,0)'
         
             # Preprocess profile data
                 
@@ -5542,7 +5551,7 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
                 displacement_surface = go.Figure(
                     layout=dict(
                         showlegend = False,
-                        title=dict(text='{}: Surface Dispacement'.format(float_id)),
+                        title=dict(text='{}: Surface Displacement'.format(float_id)),
                         polar=dict(
                             angularaxis = dict(
                                 direction='clockwise',
@@ -5596,8 +5605,6 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
                             title='Dive',
                             ),
                         # plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=10,t=70,pad=4),
                         )
                     ),
@@ -5627,7 +5634,7 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
                             bgcolor='white',
                             radialaxis = dict(
                                 title=dict(
-                                    text = 'Speed [cm s<sup>-1</sup>]',
+                                    text = 'Speed [cm s<sup>−1</sup>]',
                                     font = dict(
                                         size= 10,
                                         ),
@@ -5658,8 +5665,6 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
                             title='Dive',
                             ),
                         # plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=10,t=70,pad=4),
                         )
                     ),
@@ -5692,10 +5697,10 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
                         theta = [ df_dive['azi'].values[0]],
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'bearing = %{theta:.0f}°',
+                            'θ = %{theta:.0f}°',
                             'dist = %{r:.0f} m',
                             'duration = {:.0f} minutes'.format(df_dive['duration_s'].values[0]/60.),
-                            'speed = {:.1f} cm s<sup>-1</sup>'.format(df_dive['speed_mps'].values[0]*100),
+                            'speed = {:.1f} cm s<sup>−1</sup>'.format(df_dive['speed_mps'].values[0]*100),
                             'pos1 = ',
                             ' {:.4f}°N {:.4f}°E'.format(df_dive['pos1_lat'].values[0], df_dive['pos1_lon'].values[0]),
                             ' ' + dt1,
@@ -5725,10 +5730,10 @@ def WriteSurfaceDisplacementPlots(float_id, float_aggregate_data, dpath_float, d
                         theta = [ df_dive['azi'].values[0]],
                         hovertemplate = '<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'bearing = %{theta:.0f}°',
+                            'θ = %{theta:.0f}°',
                             'dist = {:.0f} m'.format(df_dive['dist_m'].values[0]),
                             'duration = {:.0f} minutes'.format(df_dive['duration_s'].values[0]/60.),
-                            'speed = %{r:.1f} cm s<sup>-1</sup>',
+                            'speed = %{r:.1f} cm s<sup>−1</sup>',
                             'pos1 = ',
                             ' {:.4f}°N {:.4f}°E'.format(df_dive['pos1_lat'].values[0], df_dive['pos1_lon'].values[0]),
                             ' ' + dt1,
@@ -5853,16 +5858,16 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                     (df_surface['pres'] <= -5 ) | (df_surface['pres'] >= 600) | df_surface['pres'].isna(),
                     ['pres','dt_str']] = np.nan
                     
-            df_ascent = df_ascent[df_ascent['dive'] > 0] # TODO fix
-            df_descent = df_descent[df_descent['dive'] > 0]
-            df_surface = df_surface[df_surface['dive'] > 0]
-            df_drift = df_drift[df_drift['dive'] > 0]
+            df_ascent = df_ascent[df_ascent['dive'] >= 0]   # dive 0 (diagnostic) included
+            df_descent = df_descent[df_descent['dive'] >= 0]
+            df_surface = df_surface[df_surface['dive'] >= 0]
+            df_drift = df_drift[df_drift['dive'] >= 0]
 
-            # Seafloor pressure at the GPS fixes of dives 1 and later
+            # Seafloor pressure at the GPS fixes of dives 0 (diagnostic) and later
 
             df_bathy = df_gps[df_gps['lat'].between(-90, 90) & df_gps['lon'].between(-360, 360)
                               & ~((df_gps['lat'] == 0) & (df_gps['lon'] == 0)) & (df_gps['dt_epoch'] > 0)
-                              & (df_gps['dive'] >= 1)]
+                              & (df_gps['dive'] >= 0)]
             df_bathy = df_bathy.sort_values('dt_epoch')
             bathy_pres = BathymetryPressure(df_bathy['lat'].values, df_bathy['lon'].values) if len(df_bathy) else None
 
@@ -5943,8 +5948,8 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                     hovertemplate='<br>'.join([
                         'Dive <b>%{customdata[0]}</b>: Bathymetry (' + bathymetry['name'] + ')',
                         '%{x|%Y-%m-%d %H:%M}Z',
+                        'p = %{y:.1f} dBar',
                         '%{customdata[1]:.4f}°N %{customdata[2]:.4f}°E',
-                        '%{y:.0f} dBar',
                         '<extra></extra>',
                         ]),
                     line=dict(
@@ -6009,7 +6014,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                     customdata=target_dive,
                     hovertemplate='<br>'.join([
                         'Dive <b>%{customdata}</b>: Drift Target',
-                        '%{y:.0f} dBar',
+                        'p = %{y:.1f} dBar',
                         '<extra></extra>',
                         ]),
                     line=dict(
@@ -6043,7 +6048,6 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                     'size = %{customdata[3]} bytes',
                     '<extra></extra>',
                     ]),
-                hoverinfo='none',
                 mode='markers',
                 marker=dict(
                     color='rgb(69,255,255)',
@@ -6096,7 +6100,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                 hovertemplate='<br>'.join([
                     'Dive <b>%{customdata}</b>: Ascent',
                     '%{x|%Y-%m-%d %H:%M:%S}Z',
-                    '%{y:.2f} dBar',
+                    'p = %{y:.1f} dBar',
                     '<extra></extra>',
                     ]),
                 line=dict(
@@ -6114,7 +6118,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                 hovertemplate='<br>'.join([
                     'Dive <b>%{customdata}</b>: Descent',
                     '%{x|%Y-%m-%d %H:%M:%S}Z',
-                    '%{y:.2f} dBar',
+                    'p = %{y:.1f} dBar',
                     '<extra></extra>',
                     ]),
                 line=dict(
@@ -6130,9 +6134,9 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                 y=df_drift['pres'],
                 customdata=df_drift['dive'],
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{customdata}</b>: Drift',
-                    '%{x|%Y-%m-%d %H:%M}Z',
-                    '%{y:.2f} dBar',
+                    'Dive <b>%{customdata}</b>: Park/Drift',
+                    '%{x|%Y-%m-%d %H:%M:%S}Z',
+                    'p = %{y:.1f} dBar',
                     '<extra></extra>',
                     ]),
                 line=dict(
@@ -6140,7 +6144,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                     width=1.0,
                     ),
                 mode='lines',
-                name='Drift',
+                name='Park/Drift',
                 opacity=0.8,
                 ))
             figs['trajectory'].add_trace(go.Scatter(
@@ -6150,7 +6154,7 @@ def WriteTrajectoryPlots(float_id, float_aggregate_data, dpath_float, dives, max
                 hovertemplate='<br>'.join([
                     'Dive <b>%{customdata}</b>: Surface',
                     '%{x|%Y-%m-%d %H:%M:%S}Z',
-                    '%{y:.2f} dBar',
+                    'p = %{y:.1f} dBar',
                     '<extra></extra>',
                     ]),
                 line=dict(
@@ -6263,6 +6267,7 @@ def WriteCycleTimingPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                         barmode='stack',
                         legend=dict(
                             title='Cycle Phase',
+                            traceorder='reversed',
                             ),
                         hoverlabel=dict(
                             font=dict(
@@ -6270,7 +6275,7 @@ def WriteCycleTimingPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                                 size=14,
                                 ),
                             ),
-                        hovermode='x',
+                        hovermode='x unified',
                         plot_bgcolor='white',
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
@@ -6286,15 +6291,15 @@ def WriteCycleTimingPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                 y = df_ct['descent_duration_s']/3600,
                 customdata = [ DateTime.duration_to_hhmmss_str(x) for x in df_ct['descent_duration_s'].values ],
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b> Descent: %{customdata}',
-                    # 'starting %{customdata|%Y-%m-%d %H:%M:%S}Z'
+                    'Descent: Δt = %{y:.2f} hours (%{customdata})',
                     '<extra></extra>',
+                    # 'starting %{customdata|%Y-%m-%d %H:%M:%S}Z'
                     ]),
                 marker = dict(
                     color="rgb(99,222,99)",
                     line = dict(
-                        color="rgb(99,222,99)",
-                        width=1,
+                        color='rgb(255,255,255)',
+                        width=0.3,
                         )
                     ),
                 name = 'Descent',
@@ -6305,18 +6310,18 @@ def WriteCycleTimingPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                 y = df_ct['drift_duration_s']/3600,
                 customdata = [ DateTime.duration_to_hhmmss_str(x) for x in df_ct['drift_duration_s'].values ],
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b> Drift: %{customdata}',
-                    # 'starting %{customdata|%Y-%m-%d %H:%M:%S}Z'
+                    'Park/Drift: Δt = %{y:.2f} hours (%{customdata})',
                     '<extra></extra>',
+                    # 'starting %{customdata|%Y-%m-%d %H:%M:%S}Z'
                     ]),
                 marker = dict(
                     color="rgb(99,99,222)",
                     line = dict(
-                        color="rgb(99,99,222)",
-                        width=1,
+                        color='rgb(255,255,255)',
+                        width=0.3,
                         )
                     ),
-                name = 'Drift',
+                name = 'Park/Drift',
                 # opacity=0.8,
                 ))
             figs['cycle_timing'].add_trace(go.Bar(
@@ -6324,15 +6329,15 @@ def WriteCycleTimingPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                 y = df_ct['ascent_duration_s']/3600,
                 customdata = [ DateTime.duration_to_hhmmss_str(x) for x in df_ct['ascent_duration_s'].values ],
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b> Ascent: %{customdata}',
-                    # 'starting %{customdata|%Y-%m-%d %H:%M:%S}Z'
+                    'Ascent: Δt = %{y:.2f} hours (%{customdata})',
                     '<extra></extra>',
+                    # 'starting %{customdata|%Y-%m-%d %H:%M:%S}Z'
                     ]),
                 marker = dict(
                     color="rgb(222,99,99)",
                     line = dict(
-                        color="rgb(222,99,99)",
-                        width=1,
+                        color='rgb(255,255,255)',
+                        width=0.3,
                         )
                     ),
                 name = 'Ascent',
@@ -6347,38 +6352,29 @@ def WriteCycleTimingPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                         # df_ct['surface_dt_str'],
                         # ), -1),
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b> Surface: %{customdata}',
-                    # 'starting %{customdata[1]|%Y-%m-%d %H:%M:%S}Z'
+                    'Surface: Δt = %{y:.2f} hours (%{customdata})',
                     '<extra></extra>',
+                    # 'starting %{customdata[1]|%Y-%m-%d %H:%M:%S}Z'
                     ]),
                 marker = dict(
                     color='rgb(122,122,122)',
                     line = dict(
-                        color='rgb(122,122,122)',
-                        width=1,
+                        color='rgb(255,255,255)',
+                        width=0.3,
                         )
                     ),
                 name = 'Surface',
                 # opacity=0.8,
                 )) 
-            figs['cycle_timing'].add_trace(go.Bar(
+            figs['cycle_timing'].add_trace(go.Scatter(
                 x = df_ct['dive'],
-                y = [ 0 ] * len(df_ct),
+                y = df_ct['total_duration_s']/3600,
                 customdata = [ DateTime.duration_to_hhmmss_str(x) for x in df_ct['total_duration_s'].values ],
-                hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b> Total: %{customdata}',
-                    '<extra></extra>',
-                    ]),
-                marker = dict(
-                    color="rgba(0,0,0,0)",
-                    # line = dict(
-                        # color="rgb(99,222,99)",
-                        # width=1,
-                        # )
-                    ),
-                name = 'Dive',
+                hovertemplate='Total: <b>Δt = %{y:.2f} hours (%{customdata})</b><extra></extra>',
+                mode = 'markers',
+                marker = dict(size=0, opacity=0),
+                name = 'Total',
                 showlegend= False,
-                # opacity=0.8,
                 ))
                
 
@@ -6542,7 +6538,7 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         showlegend = False,
                         title=dict(text='{}: Potential Density Profiles'.format(float_id)),
                         xaxis=dict(
-                            title='Potential Density Anomaly, σ<sub>0</sub> [kg m<sup>−3</sup>]',
+                            title='Potential Density Anomaly, σ<sub>Θ</sub> [kg m<sup>−3</sup>]',
                             autorange=False,
                             range=rng['sigma0'],
                             ),
@@ -6673,13 +6669,13 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         y=df_dive['pres'],
                         customdata=np.stack((df_dive['temp'], df_dive['saln'], df_dive['sigma0']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            dt_str,
-                            'p = %{y} dBar',
-                            'T = %{customdata[0]} °C',
-                            's = %{customdata[1]} PSU',
-                            'σ<sub>0</sub> = %{customdata[2]} kg m<sup>−3</sup>',
-                            'ρ - 1000 = %{x} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Profile'.format(dive),
+                            *([dt_str] if dt_str else []),
+                            'p = %{y:.1f} dBar',
+                            'S = %{customdata[1]:.3f} PSU',
+                            'T = %{customdata[0]:.3f} °C',
+                            'ρ − 1000 = %{x:.2f} kg m<sup>−3</sup>',
+                            'σ<sub>Θ</sub> = %{customdata[2]:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -6694,13 +6690,12 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         y=df_dive['pres'],
                         customdata=np.stack((df_dive['temp'], df_dive['sigma0']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            dt_str,
-                            'p = %{y:.2f} dBar',
-                            't = %{customdata[0]:.3f} °C',
-                            's = %{x:.3f} PSU',
-                            # 'ρ = %{customdata[1]} kg m<sup>−3</sup>',
-                            'σ<sub>0</sub> = %{customdata[1]:.3f} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Profile'.format(dive),
+                            *([dt_str] if dt_str else []),
+                            'p = %{y:.1f} dBar',
+                            'S = %{x:.3f} PSU',
+                            'T = %{customdata[0]:.3f} °C',
+                            'σ<sub>Θ</sub> = %{customdata[1]:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -6715,13 +6710,12 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         y=df_dive['pres'],
                         customdata=np.stack((df_dive['saln'], df_dive['sigma0']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            dt_str,
-                            'p = %{y:.2f} dBar',
-                            't = %{x:.3f} °C',
-                            's = %{customdata[0]:.3f} PSU',
-                            # 'ρ = %{customdata[1]} kg m<sup>−3</sup>',
-                            'σ<sub>0</sub> = %{customdata[1]:.3f} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Profile'.format(dive),
+                            *([dt_str] if dt_str else []),
+                            'p = %{y:.1f} dBar',
+                            'S = %{customdata[0]:.3f} PSU',
+                            'T = %{x:.3f} °C',
+                            'σ<sub>Θ</sub> = %{customdata[1]:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -6736,13 +6730,12 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         y=df_dive['pres'],
                         customdata=np.stack((df_dive['temp'], df_dive['saln']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            dt_str,
-                            'p = %{y:.2f} dBar',
-                            't = %{customdata[0]:.3f} °C',
-                            's = %{customdata[1]:.3f} PSU',
-                            # 'ρ = %{customdata[1]} kg m<sup>−3</sup>',
-                            'σ<sub>0</sub> = %{x:.3f} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Profile'.format(dive),
+                            *([dt_str] if dt_str else []),
+                            'p = %{y:.1f} dBar',
+                            'S = %{customdata[1]:.3f} PSU',
+                            'T = %{customdata[0]:.3f} °C',
+                            'σ<sub>Θ</sub> = %{x:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -6757,13 +6750,12 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         y=df_dive['temp'],
                         customdata=np.stack((df_dive['pres'], df_dive['sigma0']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            dt_str,
-                            'p = %{customdata[0]:.2f} dBar',
-                            't = %{y:.3f} °C',
-                            's = %{x:.3f} PSU',
-                            # 'ρ = %{customdata[1]} kg m<sup>−3</sup>',
-                            'σ<sub>0</sub> = %{customdata[1]:.3f} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Profile'.format(dive),
+                            *([dt_str] if dt_str else []),
+                            'p = %{customdata[0]:.1f} dBar',
+                            'S = %{x:.3f} PSU',
+                            'T = %{y:.3f} °C',
+                            'σ<sub>Θ</sub> = %{customdata[1]:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -6785,8 +6777,8 @@ def WriteProfilePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 x=df_profiles_gb.count().index.values,
                 y=df_profiles_gb.count()['pres'],
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    '%{y:.0f}',
+                    'Dive <b>%{x}</b>: Profile',
+                    '%{y:.0f} bins',
                     '<extra></extra>',
                     ]),
                 marker=dict(
@@ -6891,8 +6883,8 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             
             df_profiles = df_profiles[~df_profiles['pres'].isna()]
             
-            df_profiles = df_profiles[df_profiles['dive'] > 0] # TODO fix
-            df_profile_positions = df_profile_positions[df_profile_positions['dive'] > 0]
+            df_profiles = df_profiles[df_profiles['dive'] >= 0]   # dive 0 (diagnostic) included
+            df_profile_positions = df_profile_positions[df_profile_positions['dive'] >= 0]
             
             df_profiles = df_profiles.drop_duplicates(subset=['dive','pres'], ignore_index=True)
             if len(df_profiles) < 1 or len(df_profile_positions) < 1:
@@ -7003,6 +6995,7 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                     continue
                 
                 if len(df_profile[~df_profile['pres'].isna()]) < 4:
+                    logger.debug('Fewer than 4 profile samples for float {}, dive {}; left out of the contours'.format(float_id, dive_num))
                     continue
                 
                 # Interpolate data
@@ -7065,6 +7058,7 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 -1)
                 
             # adjust range:
+            deep = rng['pres'][0] > 300           # size class from the axis before the 2% margin
             rng['pres'] = [ rng['pres'][0] * 1.02, 0 ]
            
             
@@ -7107,13 +7101,13 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                             ), 
                             -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>%{customdata[0]}</b>',
+                            'Dive <b>%{customdata[0]}</b>: Profile',
                             '%{x|%Y-%m-%d %H:%M}Z',
                             'p = %{y:.0f} dBar',
-                            't = %{customdata[2]} °C',
-                            's = %{customdata[3]} PSU',
-                            'σ<sub>0</sub> = %{customdata[4]} kg m<sup>−3</sup>',
-                            'ρ - 1000 = %{customdata[1]} kg m<sup>−3</sup>',
+                            'S = %{customdata[3]} PSU',
+                            'T = %{customdata[2]} °C',
+                            'ρ − 1000 = %{customdata[1]} kg m<sup>−3</sup>',
+                            'σ<sub>Θ</sub> = %{customdata[4]} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -7173,12 +7167,12 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         colorscale='haline',
                         customdata=customdata,
                         hovertemplate='<br>'.join([
-                            'Dive <b>%{customdata[0]}</b>',
+                            'Dive <b>%{customdata[0]}</b>: Profile',
                             '%{x|%Y-%m-%d %H:%M}Z',
                             'p = %{y:.0f} dBar',
-                            't = %{customdata[1]} °C',
-                            's = %{customdata[2]} PSU',
-                            'σ<sub>0</sub> = %{customdata[3]} kg m<sup>−3</sup>',
+                            'S = %{customdata[2]} PSU',
+                            'T = %{customdata[1]} °C',
+                            'σ<sub>Θ</sub> = %{customdata[3]} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -7228,7 +7222,7 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         ),
                         colorbar=dict(
                             title=dict(
-                                text='Potential Density, σ<sub>0</sub> [kg m<sup>−3</sup>]',
+                                text='Potential Density Anomaly, σ<sub>Θ</sub> [kg m<sup>−3</sup>]',
                                 side='top'
                                 ), 
                             #side='top',
@@ -7238,12 +7232,12 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         colorscale='dense',
                         customdata=customdata,
                         hovertemplate='<br>'.join([
-                            'Dive <b>%{customdata[0]}</b>',
+                            'Dive <b>%{customdata[0]}</b>: Profile',
                             '%{x|%Y-%m-%d %H:%M}Z',
                             'p = %{y:.0f} dBar',
-                            't = %{customdata[1]} °C',
-                            's = %{customdata[2]} PSU',
-                            'σ<sub>0</sub> = %{customdata[3]} kg m<sup>−3</sup>',
+                            'S = %{customdata[2]} PSU',
+                            'T = %{customdata[1]} °C',
+                            'σ<sub>Θ</sub> = %{customdata[3]} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -7303,12 +7297,12 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         colorscale='thermal',
                         customdata=customdata,
                         hovertemplate='<br>'.join([
-                            'Dive <b>%{customdata[0]}</b>',
+                            'Dive <b>%{customdata[0]}</b>: Profile',
                             '%{x|%Y-%m-%d %H:%M}Z',
                             'p = %{y:.0f} dBar',
-                            't = %{customdata[1]} °C',
-                            's = %{customdata[2]} PSU',
-                            'σ<sub>0</sub> = %{customdata[3]} kg m<sup>−3</sup>',
+                            'S = %{customdata[2]} PSU',
+                            'T = %{customdata[1]} °C',
+                            'σ<sub>Θ</sub> = %{customdata[3]} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -7354,7 +7348,7 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                     dpath_float = dpath_float,
                     category = 'profile_contour',
                     # wide = True,
-                    size = 'figWideXL' if rng['pres'][0] > 300 else 'figWideL',
+                    size = 'figWideXL' if deep else 'figWideL',
                     ts_pos = [1.00, -0.06],
                     showlegend = False,
                     )
@@ -7487,8 +7481,6 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             # font=dict(size=10)
                             ),
                         plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
                     ),
@@ -7497,7 +7489,7 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         showlegend = False,
                         title = dict(text='{}: Ascent Rate'.format(float_id)),
                         xaxis=dict(
-                            title='Vertical Rate [mBar s<sup>-1</sup>]',
+                            title='Vertical Rate [mBar s<sup>−1</sup>]',
                             # ticklabelposition='inside',
                             autorange=False,
                             range=rng['rate'],
@@ -7519,8 +7511,6 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             # font=dict(size=10)
                             ),
                         plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
                     ),
@@ -7535,7 +7525,7 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             range=rng['dt_ref_delta_min'],
                             ),
                         yaxis=dict(
-                            title='Vertical Rate [mBar s<sup>-1</sup>]',
+                            title='Vertical Rate [mBar s<sup>−1</sup>]',
                             # ticklabelposition='inside',
                             autorange=False,
                             range=rng['rate'],
@@ -7551,8 +7541,6 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             # font=dict(size=10)
                             ),
                         plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
                     ),
@@ -7567,7 +7555,7 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             range=rng['dive'],
                             ),
                         yaxis=dict(
-                            title='Vertical Rate [mBar s<sup>-1</sup>]',
+                            title='Vertical Rate [mBar s<sup>−1</sup>]',
                             # ticklabelposition='inside',
                             autorange=False,
                             range=rng['rate'],
@@ -7584,8 +7572,6 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             # font=dict(size=10)
                             ),
                         plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
                     ),                            
@@ -7682,10 +7668,11 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         y=df_dive['pres'],
                         customdata=np.stack((df_dive['dt_str'], [ '-' if np.isnan(x) else '{:.2f}'.format(x) for x in df_dive['rate'].astype(np.double)]), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
+                            'Dive <b>{}</b>: Ascent'.format(dive),
                             '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
-                            '%{y:.2f} dBar',
-                            '%{customdata[1]} mBar s<sup>-1</sup>',
+                            'Δt = %{x:.1f} min',
+                            'p = %{y:.1f} dBar',
+                            'dp/dt = %{customdata[1]} mBar s<sup>−1</sup>',
                             '<extra></extra>',
                             ]),                               
                         line=dict(
@@ -7700,10 +7687,10 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         y=df_dive['pres'],
                         customdata=df_dive['dt_str'],
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
+                            'Dive <b>{}</b>: Ascent'.format(dive),
                             '%{customdata|%Y-%m-%d %H:%M:%S}Z',
-                            '%{y:.2f} dBar',
-                            '%{x:.2f} mBar s<sup>-1</sup>',
+                            'p = %{y:.1f} dBar',
+                            'dp/dt = %{x:.2f} mBar s<sup>−1</sup>',
                             '<extra></extra>',
                             ]),                               
                         line=dict(
@@ -7718,10 +7705,11 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         y=df_dive['rate'],
                         customdata=np.stack((df_dive['dt_str'], df_dive['pres']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
+                            'Dive <b>{}</b>: Ascent'.format(dive),
                             '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
-                            '%{customdata[1]:.2f} dBar',
-                            '%{y:.2f} mBar s<sup>-1</sup>',
+                            'Δt = %{x:.1f} min',
+                            'p = %{customdata[1]:.1f} dBar',
+                            'dp/dt = %{y:.2f} mBar s<sup>−1</sup>',
                             '<extra></extra>',
                             ]),                               
                         line=dict(
@@ -7744,11 +7732,11 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             for x in [ 
                     ('rate', 
                     '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.1f} mBar s<sup>-1</sup>',
-                        'mean = %{y:.2f} mBar s<sup>-1</sup>',
-                        'max = %{customdata[1]:.1f} mBar s<sup>-1</sup>',
-                        'σ = %{customdata[2]:.2f} mBar s<sup>-1</sup>',
+                        'Dive <b>%{x}</b>: Ascent',
+                        'min = %{customdata[0]:.1f} mBar s<sup>−1</sup>',
+                        'mean = %{y:.2f} mBar s<sup>−1</sup>',
+                        'max = %{customdata[1]:.1f} mBar s<sup>−1</sup>',
+                        'σ = %{customdata[2]:.2f} mBar s<sup>−1</sup>',
                         '<extra></extra>',
                         ]),
                     ) ]:
@@ -7795,8 +7783,8 @@ def WriteAscentPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 x=df_dives_gb.count().index.values,
                 y=np.round((df_dives_gb.count()['pres'].values + 1) / 2),
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    '%{y:.0f}',
+                    'Dive <b>%{x}</b>: Ascent',
+                    '%{y:.0f} samples',
                     '<extra></extra>',
                     ]),
                 marker=dict(
@@ -7954,7 +7942,7 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         showlegend = False,
                         title = dict(text='{}: Descent Rate'.format(float_id)),
                         xaxis=dict(
-                            title='Vertical Rate [mBar s<sup>-1</sup>]',
+                            title='Vertical Rate [mBar s<sup>−1</sup>]',
                             # ticklabelposition='inside',
                             autorange=False,
                             range=rng['rate'],
@@ -7990,7 +7978,7 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                             range=rng['dt_ref_delta_min'],
                             ),
                         yaxis=dict(
-                            title='Vertical Rate [mBar s<sup>-1</sup>]',
+                            title='Vertical Rate [mBar s<sup>−1</sup>]',
                             # ticklabelposition='inside',
                             autorange=False,
                             range=rng['rate'],
@@ -8020,7 +8008,7 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                             range=rng['dive'],
                             ),
                         yaxis=dict(
-                            title='Vertical Rate [mBar s<sup>-1</sup>]',
+                            title='Vertical Rate [mBar s<sup>−1</sup>]',
                             # ticklabelposition='inside',
                             autorange=False,
                             range=rng['rate'],
@@ -8037,8 +8025,6 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                             # font=dict(size=10)
                             ),
                         plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
                     ),
@@ -8135,10 +8121,11 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         y=df_dive['pres'],
                         customdata=np.stack((df_dive['dt_str'], [ '-' if np.isnan(x) else '{:.2f}'.format(x) for x in df_dive['rate'].astype(np.double)]), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
+                            'Dive <b>{}</b>: Descent'.format(dive),
                             '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
-                            '%{y:.2f} dBar',
-                            '%{customdata[1]} mBar s<sup>-1</sup>',
+                            'Δt = %{x:.1f} min',
+                            'p = %{y:.1f} dBar',
+                            'dp/dt = %{customdata[1]} mBar s<sup>−1</sup>',
                             '<extra></extra>',
                             ]),                                
                         line=dict(
@@ -8153,10 +8140,10 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         y=df_dive['pres'],
                         customdata=df_dive['dt_str'],
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
+                            'Dive <b>{}</b>: Descent'.format(dive),
                             '%{customdata|%Y-%m-%d %H:%M:%S}Z',
-                            '%{y:.2f} dBar',
-                            '%{x:.2f} mBar s<sup>-1</sup>',
+                            'p = %{y:.1f} dBar',
+                            'dp/dt = %{x:.2f} mBar s<sup>−1</sup>',
                             '<extra></extra>',
                             ]),                               
                         line=dict(
@@ -8171,10 +8158,11 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         y=df_dive['rate'],
                         customdata=np.stack((df_dive['dt_str'], df_dive['pres']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
+                            'Dive <b>{}</b>: Descent'.format(dive),
                             '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
-                            '%{customdata[1]:.2f} dBar',
-                            '%{y:.2f} mBar s<sup>-1</sup>',
+                            'Δt = %{x:.1f} min',
+                            'p = %{customdata[1]:.1f} dBar',
+                            'dp/dt = %{y:.2f} mBar s<sup>−1</sup>',
                             '<extra></extra>',
                             ]),                               
                         line=dict(
@@ -8185,7 +8173,7 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         mode='lines'
                         ))
                 except Exception as exc:
-                    errstr = 'Failed to add traces to ascent plots for float {}, dive {}'.format(float_id, dive)
+                    errstr = 'Failed to add traces to descent plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
                     logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
@@ -8197,11 +8185,11 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             for x in [ 
                     ('rate', 
                     '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.1f} mBar s<sup>-1</sup>',
-                        'mean = %{y:.2f} mBar s<sup>-1</sup>',
-                        'max = %{customdata[1]:.1f} mBar s<sup>-1</sup>',
-                        'σ = %{customdata[2]:.2f} mBar s<sup>-1</sup>',
+                        'Dive <b>%{x}</b>: Descent',
+                        'min = %{customdata[0]:.1f} mBar s<sup>−1</sup>',
+                        'mean = %{y:.2f} mBar s<sup>−1</sup>',
+                        'max = %{customdata[1]:.1f} mBar s<sup>−1</sup>',
+                        'σ = %{customdata[2]:.2f} mBar s<sup>−1</sup>',
                         '<extra></extra>',
                         ]),
                     ) ]:
@@ -8248,8 +8236,8 @@ def WriteDescentPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 x=df_dives_gb.count().index.values,
                 y=np.round((df_dives_gb.count()['pres'].values + 1) / 2),
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    '%{y:.0f}',
+                    'Dive <b>%{x}</b>: Descent',
+                    '%{y:.0f} samples',
                     '<extra></extra>',
                     ]),
                 marker=dict(
@@ -8374,7 +8362,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                     ]).astype(np.double),
                 # pres   = np.array([np.nanmax(df_dives['pres'].values), 0 ]),
                 pres   = np.percentile(df_dives['pres'].values, [100, 0]).astype(np.double),
-                saln   = RangePercentile(df_dives['saln'].values, [2, 98]),
+                saln   = RangePercentile(df_dives['saln'].values, [1, 99]),
                 sigma0 = RangePercentile(df_dives['sigma0'].values, [99, 1]),
                 temp   = RangePercentile(df_dives['temp'].values, [1, 99]),
                 )
@@ -8391,7 +8379,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                 drift_dens = go.Figure(
                     layout=dict(
                         showlegend = False,
-                        title = dict(text='{}: Drift In-Situ Density'.format(float_id)),
+                        title = dict(text='{}: Drift In-situ Density'.format(float_id)),
                         xaxis=dict(
                             title='Time [minutes]',
                             autorange=False,
@@ -8413,8 +8401,6 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                             # font=dict(size=10)
                             ),
                         plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=20,t=50,pad=4)
                         )
                     ),
@@ -8486,7 +8472,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                             range=rng['dt_ref_delta_min']
                             ),
                         yaxis=dict(
-                            title='Potential Density Anomaly, σ<sub>0</sub> [kg m<sup>−3</sup>]',
+                            title='Potential Density Anomaly, σ<sub>Θ</sub> [kg m<sup>−3</sup>]',
                             # ticklabelposition='inside',
                             autorange=False,
                             range=rng['sigma0'],
@@ -8627,7 +8613,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                 drift_dens_avg = go.Figure(
                     layout=dict(
                         showlegend = False,
-                        title = dict(text='{}: Average Drift In-Situ Density'.format(float_id)),
+                        title = dict(text='{}: Average Drift In-situ Density'.format(float_id)),
                         xaxis=dict(
                             title='Dive',
                             # autorange=False,
@@ -8664,7 +8650,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                             # range=rng['dt_ref_delta_min']
                             ),
                         yaxis=dict(
-                            title='In-situ Density Anomaly, ρ - 1000 [kg m<sup>−3</sup>]',
+                            title='Potential Density Anomaly, σ<sub>Θ</sub> [kg m<sup>−3</sup>]',
                             # ticklabelposition='inside',
                             autorange=False,
                             range=rng['sigma0'],
@@ -8740,13 +8726,14 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                         y=df_dive['dens'],
                         customdata=np.stack((df_dive['dt_str'], df_dive['pres'], df_dive['temp'], df_dive['saln'], df_dive['sigma0']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            '%{customdata[0]|%Y-%m-%d %H:%M}Z',
-                            'p = %{customdata[1]:.2f} dBar',
-                            't = %{customdata[2]:.3f} °C',
-                            's = %{customdata[3]:.3f} PSU',
-                            'σ<sub>0</sub> = %{customdata[4]:.3f} kg m<sup>−3</sup>',
-                            'ρ - 1000 = %{y:.3f} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Park/Drift'.format(dive),
+                            '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
+                            'Δt = %{x:.1f} min',
+                            'p = %{customdata[1]:.1f} dBar',
+                            'S = %{customdata[3]:.3f} PSU',
+                            'T = %{customdata[2]:.3f} °C',
+                            'ρ − 1000 = %{y:.2f} kg m<sup>−3</sup>',
+                            'σ<sub>Θ</sub> = %{customdata[4]:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -8759,15 +8746,15 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                     figs['drift_pres'].add_trace(go.Scatter(
                         x=df_dive['dt_ref_delta_sec']/60,
                         y=df_dive['pres'],
-                        customdata=np.stack((df_dive['dt_str'], df_dive['temp'], df_dive['saln'], df_dive['sigma0'], df_dive['dens']), -1),
+                        customdata=np.stack((df_dive['dt_str'], df_dive['temp'], df_dive['saln'], df_dive['sigma0']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            '%{customdata[0]|%Y-%m-%d %H:%M}Z',
-                            'p = %{y:.2f} dBar',
-                            't = %{customdata[1]:.3f} °C',
-                            's = %{customdata[2]:.3f} PSU',
-                            'σ<sub>0</sub> = %{customdata[3]:.3f} kg m<sup>−3</sup>',
-                            'ρ - 1000 = %{customdata[4]:.3f} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Park/Drift'.format(dive),
+                            '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
+                            'Δt = %{x:.1f} min',
+                            'p = %{y:.1f} dBar',
+                            'S = %{customdata[2]:.3f} PSU',
+                            'T = %{customdata[1]:.3f} °C',
+                            'σ<sub>Θ</sub> = %{customdata[3]:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -8780,15 +8767,15 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                     figs['drift_saln'].add_trace(go.Scatter(
                         x=df_dive['dt_ref_delta_sec']/60,
                         y=df_dive['saln'],
-                        customdata=np.stack((df_dive['dt_str'], df_dive['pres'], df_dive['temp'], df_dive['sigma0'], df_dive['dens']), -1),
+                        customdata=np.stack((df_dive['dt_str'], df_dive['pres'], df_dive['temp'], df_dive['sigma0']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            '%{customdata[0]|%Y-%m-%d %H:%M}Z',
-                            'p = %{customdata[1]:.2f} dBar',
-                            't = %{customdata[2]:.3f} °C',
-                            's = %{y:.3f} PSU',
-                            'σ<sub>0</sub> = %{customdata[3]:.3f} kg m<sup>−3</sup>',
-                            'ρ - 1000 = %{customdata[4]:.3f} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Park/Drift'.format(dive),
+                            '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
+                            'Δt = %{x:.1f} min',
+                            'p = %{customdata[1]:.1f} dBar',
+                            'S = %{y:.3f} PSU',
+                            'T = %{customdata[2]:.3f} °C',
+                            'σ<sub>Θ</sub> = %{customdata[3]:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -8801,15 +8788,15 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                     figs['drift_sigma0'].add_trace(go.Scatter(
                         x=df_dive['dt_ref_delta_sec']/60,
                         y=df_dive['sigma0'],
-                        customdata=np.stack((df_dive['dt_str'], df_dive['pres'], df_dive['temp'], df_dive['saln'], df_dive['dens']), -1),
+                        customdata=np.stack((df_dive['dt_str'], df_dive['pres'], df_dive['temp'], df_dive['saln']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            '%{customdata[0]|%Y-%m-%d %H:%M}Z',
-                            'p = %{customdata[1]:.2f} dBar',
-                            't = %{customdata[2]:.3f} °C',
-                            's = %{customdata[3]:.3f} PSU',
-                            'σ<sub>0</sub> = %{y:.3f} kg m<sup>−3</sup>',
-                            'ρ - 1000 = %{customdata[4]:.3f} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Park/Drift'.format(dive),
+                            '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
+                            'Δt = %{x:.1f} min',
+                            'p = %{customdata[1]:.1f} dBar',
+                            'S = %{customdata[3]:.3f} PSU',
+                            'T = %{customdata[2]:.3f} °C',
+                            'σ<sub>Θ</sub> = %{y:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -8822,15 +8809,15 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                     figs['drift_temp'].add_trace(go.Scatter(
                         x=df_dive['dt_ref_delta_sec']/60,
                         y=df_dive['temp'],
-                        customdata=np.stack((df_dive['dt_str'], df_dive['pres'], df_dive['temp'], df_dive['saln'], df_dive['dens']), -1),
+                        customdata=np.stack((df_dive['dt_str'], df_dive['pres'], df_dive['saln'], df_dive['sigma0']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
-                            '%{customdata[0]|%Y-%m-%d %H:%M}Z',
-                            'p = %{customdata[1]:.2f} dBar',
-                            't = %{y:.3f} °C',
-                            's = %{customdata[2]:.3f} PSU',
-                            'σ<sub>0</sub> = %{customdata[3].3f} kg m<sup>−3</sup>',
-                            'ρ - 1000 = %{customdata[4]:.3f} kg m<sup>−3</sup>',
+                            'Dive <b>{}</b>: Park/Drift'.format(dive),
+                            '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
+                            'Δt = %{x:.1f} min',
+                            'p = %{customdata[1]:.1f} dBar',
+                            'S = %{customdata[2]:.3f} PSU',
+                            'T = %{y:.3f} °C',
+                            'σ<sub>Θ</sub> = %{customdata[3]:.2f} kg m<sup>−3</sup>',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -8842,7 +8829,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                         ))
                         
                 except Exception as exc:
-                    errstr = 'Failed to add traces to ascent plots for float {}, dive {}'.format(float_id, dive)
+                    errstr = 'Failed to add traces to drift plots for float {}, dive {}'.format(float_id, dive)
                     if hasattr(args, 'halt') and args.halt:
                         raise Exception(errstr)
                     logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
@@ -8855,7 +8842,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
             for x in [ 
                     ('pres', 
                     '<br>'.join([
-                        'Dive <b>%{x}</b>',
+                        'Dive <b>%{x}</b>: Park/Drift',
                         'min = %{customdata[0]:.1f} dBar',
                         'mean = %{y:.1f} dBar',
                         'max = %{customdata[1]:.1f} dBar',
@@ -8865,7 +8852,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                     ),
                     ('temp',
                     '<br>'.join([
-                        'Dive <b>%{x}</b>',
+                        'Dive <b>%{x}</b>: Park/Drift',
                         'min = %{customdata[0]:.3f} °C',
                         'mean = %{y:.3f} °C',
                         'max = %{customdata[1]:.3f} °C',
@@ -8875,7 +8862,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                     ),
                     ('saln',
                     '<br>'.join([
-                        'Dive <b>%{x}</b>',
+                        'Dive <b>%{x}</b>: Park/Drift',
                         'min = %{customdata[0]:.3f} PSU',
                         'mean = %{y:.3f} PSU',
                         'max = %{customdata[1]:.3f} PSU',
@@ -8885,27 +8872,29 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                     ),
                     ('sigma0',
                     '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.3f} kg m<sup>−3</sup>',
-                        'mean = %{y:.3f} kg m<sup>−3</sup>',
-                        'max = %{customdata[1]:.3f} kg m<sup>−3</sup>',
-                        'σ = %{customdata[2]:.3f} kg m<sup>−3</sup>',
+                        'Dive <b>%{x}</b>: Park/Drift',
+                        'min = %{customdata[0]:.2f} kg m<sup>−3</sup>',
+                        'mean = %{y:.2f} kg m<sup>−3</sup>',
+                        'max = %{customdata[1]:.2f} kg m<sup>−3</sup>',
+                        'σ = %{customdata[2]:.2f} kg m<sup>−3</sup>',
                         '<extra></extra>',
                         ])                               
                     ),
                     ('dens',
                     '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.3f} kg m<sup>−3</sup>',
-                        'mean = %{y:.3f} kg m<sup>−3</sup>',
-                        'max = %{customdata[1]:.3f} kg m<sup>−3</sup>',
-                        'σ = %{customdata[2]:.3f} kg m<sup>−3</sup>',
+                        'Dive <b>%{x}</b>: Park/Drift',
+                        'ρ − 1000 (in-situ density anomaly)',
+                        'min = %{customdata[0]:.2f} kg m<sup>−3</sup>',
+                        'mean = %{customdata[3]:.2f} kg m<sup>−3</sup>',
+                        'max = %{customdata[1]:.2f} kg m<sup>−3</sup>',
+                        'σ = %{customdata[2]:.2f} kg m<sup>−3</sup>',
                         '<extra></extra>',
                         ])                              
                     ) ]:
                 var = x[0]
                 dive, min, mean, max, std = df_dives_gb_mean.index.values, df_dives_gb_min[var], df_dives_gb_mean[var], df_dives_gb_max[var], df_dives_gb_std[var]
                 hovertemplate = x[1]
+                off = 0
                 
                 figs[pre+var+'_avg'].add_trace(go.Scatter(
                     x = np.vstack((dive, dive, [np.nan]*len(dive))).flatten('F'),
@@ -8932,7 +8921,7 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                 figs[pre+var+'_avg'].add_trace(go.Scatter(
                     x=dive,
                     y=mean,
-                    customdata=np.stack((min, max, std), -1),
+                    customdata=np.stack((min + off, max + off, std, mean + off), -1),
                     hovertemplate=hovertemplate,
                     line=dict(
                         color='rgb(0,0,0)',
@@ -8946,8 +8935,8 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
                 x=df_dives_gb.count().index.values,
                 y=df_dives_gb.count()['pres'],
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    '%{y:.0f}',
+                    'Dive <b>%{x}</b>: Park/Drift',
+                    '%{y:.0f} samples',
                     '<extra></extra>',
                     ]),
                 marker=dict(
@@ -9014,6 +9003,36 @@ def WriteDriftPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive
 
 CASE_VAC_LIMITS_INHG = (3, 7)      # case vacuum range marked on the phase_vac plot
 
+def HoverStr(values, fmt):
+    """Return values (array-like or scalar) as an object array of strings formatted with fmt (a
+    str.format pattern such as '{:.1f}'), with '-' for missing or non-finite values, for hover
+    custom data shown with a plain %{customdata[i]} (no NaN in hovers)."""
+    v = pd.to_numeric(pd.Series(np.atleast_1d(np.asarray(values, dtype=object)).ravel()),
+                      errors='coerce').values.astype(np.double)
+    return np.array([fmt.format(x) if np.isfinite(x) else '-' for x in v], dtype=object)
+
+def PaddedRange(values, q=(1, 99), pad=0.05, decimals=1, zero=False):
+    """Return a fixed axis range [lo, hi] from the finite values: the q percentiles
+    (RangePercentile), widened by pad times their span on each side and rounded outward to
+    decimals. zero=True starts the range at 0 (energies, durations). None if there are no finite
+    values, so the caller can leave the axis on autorange."""
+    lo, hi = RangePercentile(values, list(q))
+    if not (np.isfinite(lo) and np.isfinite(hi)):
+        return None
+    if zero:
+        lo = 0.0
+    span = hi - lo
+    p = pad * span if span > 0 else max(abs(hi) * pad, 10.0 ** -decimals)
+    step = 10.0 ** -decimals
+    lo = 0.0 if zero else np.floor((lo - p) / step) * step
+    hi = np.ceil((hi + p) / step) * step
+    return [round(float(lo), decimals), round(float(hi), decimals)]
+
+def FixedRange(r):
+    """Axis keyword arguments for a fixed range r from PaddedRange: autorange off and the range,
+    or nothing (autorange) when r is None."""
+    return dict(autorange=False, range=r) if r is not None else dict()
+
 def AddCaseVacLimits(fig):
     """Draw CASE_VAC_LIMITS_INHG as dashed gray horizontal lines across a vacuum plot (y in inHg).
 
@@ -9033,7 +9052,7 @@ def PumpOperationTraces(df_pump, col, scale, value_fmt):
     colored by the pressure of its pump operation in the bathymetry plot's blues (DEPTH_BLUES:
     light blue at the surface to dark blue at the float's deepest pump pressure, rounded up to
     100 dbar), gray if the pressure is invalid, outlined in faint gray so the light segments stand
-    out from the background (no outlines above 150 dives, where they would hide the colors). An invisible trace carries the "Pump pressure [dbar]" color bar, with
+    out from the background (no outlines above 150 dives, where they would hide the colors). An invisible trace carries the "Pump Pressure [dBar]" color bar, with
     the surface at the top like the depth color bar of the bathymetry plot. A last, invisible marker trace at the top of
     each bar gives the dive total its own line in the (x unified) hover label.
     """
@@ -9057,8 +9076,8 @@ def PumpOperationTraces(df_pump, col, scale, value_fmt):
         traces.append(go.Bar(
             x=d['dive'].values,
             y=d[col].values * scale,
-            customdata=d['pres'].values,
-            hovertemplate='#{}: '.format(op) + value_fmt + ' at %{customdata:.0f} dbar<extra></extra>',
+            customdata=HoverStr(d['pres'].values, '{:.1f}'),
+            hovertemplate='#{}: '.format(op) + value_fmt + ', p = %{customdata} dBar<extra></extra>',
             name='operation {}'.format(op),
             showlegend=False,
             marker=dict(color=list(d['color']), line=dict(color='rgba(90,90,90,0.35)', width=outline)),
@@ -9072,7 +9091,7 @@ def PumpOperationTraces(df_pump, col, scale, value_fmt):
             x=[df['dive'].iloc[0]], y=[0], mode='markers', hoverinfo='skip', showlegend=False,
             marker=dict(size=0, opacity=0, color=[0], cmin=-pmax, cmax=0, colorscale=DEPTH_BLUES,
                         showscale=True,
-                        colorbar=dict(title=dict(text='Pump pressure [dbar]'), thickness=12,
+                        colorbar=dict(title=dict(text='Pump Pressure [dBar]'), thickness=12,
                                       tickvals=[-t for t in ticks], ticktext=[str(t) for t in ticks])),
             name='pump pressure'))
         total = df.groupby('dive')[col].sum(min_count=1) * scale
@@ -9156,7 +9175,12 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             rng['power']  = np.round(rng['power']  + [-1.00, 1.00], 1)
             rng['energy'] = np.round(rng['energy'] + [ 0.00,  200], 0)
             rng['num']    = np.round(rng['num']    + [-1.00, 1.00], 0)
-            
+            # Fixed ranges from the whole float (None: no data, the axis stays on autorange)
+            rng['vac']        = PaddedRange(df_dives['vac'], decimals=1)
+            rng['cum_time']   = PaddedRange(df_dives.groupby('dive')['time'].cumsum(), decimals=-1, zero=True)
+            rng['max_pres']   = PaddedRange(df_dives_gb_max['pres'], decimals=-1)
+            rng['energy_sum'] = PaddedRange(df_dives_gb_sum['energy'] / 1000, decimals=1, zero=True)
+
             # TODO Generate Figures
             
             figs = dict(
@@ -9287,9 +9311,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             ),
                         yaxis=dict(
                             title='Vacuum [inHg]',
-                            # ticklabelposition='inside',
-                            # autorange=False,
-                            # range=rng['curr'],
+                            **FixedRange(rng['vac']),
                             ),
                         hoverlabel=dict(
                             font=dict(
@@ -9308,7 +9330,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 pump_vac_v_pres = go.Figure(
                     layout=dict(
                         showlegend = False,
-                        title = dict(text='{}: Internal Vac. vs. Pump Pressure'.format(float_id)),
+                        title = dict(text='{}: Internal Vacuum vs. Pump Pressure'.format(float_id)),
                         yaxis=dict(
                             title='Pressure [dBar]',
                             autorange=False,
@@ -9316,9 +9338,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             ),
                         xaxis=dict(
                             title='Vacuum [inHg]',
-                            # ticklabelposition='inside',
-                            # autorange=False,
-                            # range=rng['curr'],
+                            **FixedRange(rng['vac']),
                             ),
                         hoverlabel=dict(
                             font=dict(
@@ -9340,14 +9360,11 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         title = dict(text='{}: Internal Vacuum vs. Pump Time'.format(float_id)),
                         xaxis=dict(
                             title='Cumulative Pump Duration [seconds]',
-                            # autorange=False,
-                            # range= rng['pres'],
+                            **FixedRange(rng['cum_time']),
                             ),
                         yaxis=dict(
                             title='Vacuum [inHg]',
-                            # ticklabelposition='inside',
-                            # autorange=False,
-                            # range=rng['curr'],
+                            **FixedRange(rng['vac']),
                             ),
                         hoverlabel=dict(
                             font=dict(
@@ -9432,9 +9449,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             ),
                         yaxis=dict(
                             title='Vacuum [inHg]',
-                            # ticklabelposition='inside',
-                            # autorange=False,
-                            # range=rng['volt'],
+                            **FixedRange(rng['vac']),
                             ),
                         hoverlabel=dict(
                             font=dict(
@@ -9586,16 +9601,14 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 pump_energy_v_max_pres = go.Figure(
                     layout=dict(
                         showlegend = False,
-                        title = dict(text='{}: Total Pump Energy vs. Max. Pres.'.format(float_id)),
+                        title = dict(text='{}: Total Pump Energy vs. Maximum Pressure'.format(float_id)),
                         xaxis=dict(
-                            title='Max. Pressure [dBar]',
-                            # autorange=False,
-                            # range=[ rng['pres'][1], rng['pres'][0] ],
+                            title='Maximum Pressure [dBar]',
+                            **FixedRange(rng['max_pres']),
                             ),
                         yaxis=dict(
                             title='Energy [kJ]',
-                            # ticklabelposition='inside',
-                            
+                            **FixedRange(rng['energy_sum']),
                             ),
                         hoverlabel=dict(
                             font=dict(
@@ -9632,26 +9645,35 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     marker_size = np.where(marker_size > 5, marker_size, 5)
                     marker_size = np.round(marker_size, 0)
                     
+                    # Hover values preformatted as strings, '-' where missing (no NaN in hovers)
+                    h_time = HoverStr(df_dive['time'], '{:.0f}')
+                    h_pres = HoverStr(df_dive['pres'], '{:.1f}')
+                    h_volt = HoverStr(df_dive['volt'], '{:.2f}')
+                    h_curr = HoverStr(df_dive['curr'], '{:.3f}')
+                    h_power = HoverStr(df_dive['power'], '{:.2f}')
+                    h_energy = HoverStr(df_dive['energy'], '{:.1f}')
+                    h_cumt = HoverStr(df_dive['time'].cumsum(), '{:.0f}')
+                    
                     figs['pump_pres'].add_trace(go.Scatter(
                         # x=df_dive['dt_ref_delta_sec'],
                         y=df_dive['pres'],
                         customdata=np.stack(
                             (
-                                df_dive['time'], 
-                                df_dive['volt'], 
-                                df_dive['curr'], 
-                                df_dive['power'], 
-                                df_dive['energy'], ), 
+                                h_time,
+                                h_volt,
+                                h_curr,
+                                h_power,
+                                h_energy, ),
                             -1
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'p = %{y:.2f} dBar',
-                            't = %{customdata[0]:.0f} s',
-                            'V = %{customdata[1]:.2f} V',
-                            'I = %{customdata[2]:.3f} A',
-                            'P = %{customdata[3]:.2f} W',
-                            'E = %{customdata[4]:.1f} J',
+                            't = %{customdata[0]} s',
+                            'p = %{y:.1f} dBar',
+                            'V = %{customdata[1]} V',
+                            'I = %{customdata[2]} A',
+                            'P = %{customdata[3]} W',
+                            'E = %{customdata[4]} J',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -9676,23 +9698,23 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         y=df_dive['power'],
                         customdata=np.stack(
                             (
-                                df_dive['time'], 
-                                df_dive['volt'], 
-                                df_dive['curr'], 
-                                df_dive['energy'],
+                                h_time,
+                                h_volt,
+                                h_curr,
+                                h_energy,
                                 df_dive.index.values
                                 ), 
                             -1
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'pump # %{customdata[4]}',
-                            'p = %{y:.2f} dBar',
-                            't = %{customdata[0]:.0f} s',
-                            'V = %{customdata[1]:.2f} V',
-                            'I = %{customdata[2]:.3f} A',
+                            't = %{customdata[0]} s',
+                            'p = %{x:.1f} dBar',
+                            'pump = %{customdata[4]}',
+                            'V = %{customdata[1]} V',
+                            'I = %{customdata[2]} A',
                             'P = %{y:.2f} W',
-                            'E = %{customdata[3]:.1f} J',
+                            'E = %{customdata[3]} J',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -9703,7 +9725,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             color=colors[i],
                             line=dict(
                                 color='rgb(0, 0, 0)',
-                                width = 0.5,
+                                width = 0.3,
                                 ),
                             size=marker_size,
                             ),
@@ -9717,21 +9739,21 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         y=df_dive['volt'],
                         customdata=np.stack(
                             (
-                                df_dive['pres'], 
-                                df_dive['time'], 
-                                df_dive['curr'], 
-                                df_dive['power'], 
-                                df_dive['energy'], ), 
+                                h_pres,
+                                h_time,
+                                h_curr,
+                                h_power,
+                                h_energy, ),
                             -1
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'p = %{customdata[0]:.2f} dBar',
-                            't = %{customdata[1]:.0f} s',
+                            't = %{customdata[1]} s',
+                            'p = %{customdata[0]} dBar',
                             'V = %{y:.2f} V',
-                            'I = %{customdata[2]:.3f} A',
-                            'P = %{customdata[3]:.2f} W',
-                            'E = %{customdata[4]:.1f} J',
+                            'I = %{customdata[2]} A',
+                            'P = %{customdata[3]} W',
+                            'E = %{customdata[4]} J',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -9756,21 +9778,21 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         y=df_dive['curr'],
                         customdata=np.stack(
                             (
-                                df_dive['pres'], 
-                                df_dive['time'], 
-                                df_dive['volt'], 
-                                df_dive['power'], 
-                                df_dive['energy'], ), 
+                                h_pres,
+                                h_time,
+                                h_volt,
+                                h_power,
+                                h_energy, ),
                             -1
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'p = %{customdata[0]:.2f} dBar',
-                            't = %{customdata[1]:.0f} s',
-                            'V = %{customdata[2]:.2f} V',
+                            't = %{customdata[1]} s',
+                            'p = %{customdata[0]} dBar',
+                            'V = %{customdata[2]} V',
                             'I = %{y:.3f} A',
-                            'P = %{customdata[3]:.2f} W',
-                            'E = %{customdata[4]:.1f} J',
+                            'P = %{customdata[3]} W',
+                            'E = %{customdata[4]} J',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -9795,21 +9817,21 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         y=df_dive['power'],
                         customdata=np.stack(
                             (
-                                df_dive['pres'], 
-                                df_dive['time'], 
-                                df_dive['volt'], 
-                                df_dive['curr'], 
-                                df_dive['energy'], ), 
+                                h_pres,
+                                h_time,
+                                h_volt,
+                                h_curr,
+                                h_energy, ),
                             -1
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'p = %{customdata[0]:.2f} dBar',
-                            't = %{customdata[1]:.0f} s',
-                            'V = %{customdata[2]:.2f} V',
-                            'I = %{customdata[3]:.3f} A',
+                            't = %{customdata[1]} s',
+                            'p = %{customdata[0]} dBar',
+                            'V = %{customdata[2]} V',
+                            'I = %{customdata[3]} A',
                             'P = %{y:.2f} W',
-                            'E = %{customdata[4]:.1f} J',
+                            'E = %{customdata[4]} J',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -9834,21 +9856,21 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         y=df_dive['energy'],
                         customdata=np.stack(
                             (
-                                df_dive['pres'], 
-                                df_dive['time'], 
-                                df_dive['volt'], 
-                                df_dive['curr'], 
-                                df_dive['power'], 
+                                h_pres,
+                                h_time,
+                                h_volt,
+                                h_curr,
+                                h_power,
                                 ), 
                             -1
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'p = %{customdata[0]:.2f} dBar',
-                            't = %{customdata[1]:.0f} s',
-                            'V = %{customdata[2]:.2f} V',
-                            'I = %{customdata[3]:.3f} A',
-                            'P = %{customdata[4]:.2f} W',
+                            't = %{customdata[1]} s',
+                            'p = %{customdata[0]} dBar',
+                            'V = %{customdata[2]} V',
+                            'I = %{customdata[3]} A',
+                            'P = %{customdata[4]} W',
                             'E = %{y:.1f} J',
                             '<extra></extra>',
                             ]),
@@ -9874,9 +9896,9 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         y=df_dive['vac'],
                         customdata=np.stack(
                             (
-                                df_dive['pres'], 
-                                df_dive['time'], 
-                                df_dive['time'].cumsum(), 
+                                h_pres,
+                                h_time,
+                                h_cumt,
                                 # df_dive['curr_adj'], 
                                 # df_dive['power'], 
                                 # df_dive['power'], 
@@ -9885,16 +9907,16 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'p = %{customdata[0]:.2f} dBar',
-                            't = %{customdata[1]:.0f} s',
-                            'Σt = %{customdata[2]:.0f} s',
-                            'vac = %{y:.2f} inHg'
-                            # 't = %{customdata[1]:.0f} s',
-                            # 'V = %{customdata[2]:.2f} V',
-                            # 'I = %{customdata[3]:.3f} A',
-                            # 'P = %{customdata[4]:.2f} W',
-                            # 'E = %{y:.1f} J',
+                            't = %{customdata[1]} s',
+                            'Σt = %{customdata[2]} s',
+                            'p = %{customdata[0]} dBar',
+                            'vac = %{y:.2f} inHg',
                             '<extra></extra>',
+                            # 't = %{customdata[1]} s',
+                            # 'V = %{customdata[2]} V',
+                            # 'I = %{customdata[3]} A',
+                            # 'P = %{customdata[4]} W',
+                            # 'E = %{y:.1f} J',
                             ]),
                         line=dict(
                             color=colors[i],
@@ -9919,8 +9941,8 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         customdata=np.stack(
                             (
                                 df_dive.index.values,
-                                df_dive['time'], 
-                                df_dive['time'].cumsum(), 
+                                h_time,
+                                h_cumt,
                                 # df_dive['volt'], 
                                 # df_dive['curr_adj'], 
                                 # df_dive['power'], 
@@ -9930,17 +9952,17 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'pump # %{customdata[0]}',
-                            'p = %{y:.2f} dBar',
-                            't = %{customdata[1]:.0f} s',
-                            'Σt = %{customdata[2]:.0f} s',
-                            'vac = %{x:.2f} inHg'
-                            # 't = %{customdata[1]:.0f} s',
-                            # 'V = %{customdata[2]:.2f} V',
-                            # 'I = %{customdata[3]:.3f} A',
-                            # 'P = %{customdata[4]:.2f} W',
-                            # 'E = %{y:.1f} J',
+                            't = %{customdata[1]} s',
+                            'Σt = %{customdata[2]} s',
+                            'p = %{y:.1f} dBar',
+                            'pump = %{customdata[0]}',
+                            'vac = %{x:.2f} inHg',
                             '<extra></extra>',
+                            # 't = %{customdata[1]} s',
+                            # 'V = %{customdata[2]} V',
+                            # 'I = %{customdata[3]} A',
+                            # 'P = %{customdata[4]} W',
+                            # 'E = %{y:.1f} J',
                             ]),
                         line=dict(
                             color=colors[i],
@@ -9965,8 +9987,8 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         customdata=np.stack(
                             (
                                 df_dive.index.values,
-                                df_dive['pres'], 
-                                df_dive['time'], 
+                                h_pres,
+                                h_time,
                                 # df_dive['volt'], 
                                 # df_dive['curr_adj'], 
                                 # df_dive['power'], 
@@ -9976,17 +9998,17 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'pump # %{customdata[0]}',
-                            'p = %{customdata[1]:.2f} dBar',
-                            't = %{customdata[2]:.0f} s',
+                            't = %{customdata[2]} s',
                             'Σt = %{x:.0f} s',
-                            'vac = %{y:.2f} inHg'
-                            # 't = %{customdata[1]:.0f} s',
-                            # 'V = %{customdata[2]:.2f} V',
-                            # 'I = %{customdata[3]:.3f} A',
-                            # 'P = %{customdata[4]:.2f} W',
-                            # 'E = %{y:.1f} J',
+                            'p = %{customdata[1]} dBar',
+                            'pump = %{customdata[0]}',
+                            'vac = %{y:.2f} inHg',
                             '<extra></extra>',
+                            # 't = %{customdata[1]} s',
+                            # 'V = %{customdata[2]} V',
+                            # 'I = %{customdata[3]} A',
+                            # 'P = %{customdata[4]} W',
+                            # 'E = %{y:.1f} J',
                             ]),
                         line=dict(
                             color=colors[i],
@@ -10018,10 +10040,10 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             ),
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
-                            'max. p = %{x:.2f} dBar',
+                            'Σt = %{customdata[1]:.0f} s',
+                            'max. p = %{x:.1f} dBar',
                             'ΣE = %{y:.3f} kJ',
                             'no. pumps = %{customdata[0]:.0f}',
-                            'Σt = %{customdata[1]:.0f} s',
                             '<extra></extra>',
                             ]),
                         name='{}'.format(dive),
@@ -10049,54 +10071,25 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             # Add traces to average figures
             
             pre='pump_'
-            for x in [ 
-                    ('vac', 
-                    '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.2f} inHg',
-                        'mean = %{y:.3f} inHg',
-                        'max = %{customdata[1]:.2f} inHg',
-                        'σ = %{customdata[2]:.3f} inHg',
-                        '<extra></extra>',
-                        ])
-                    ),
-                    ('volt',
-                        '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.3f} V',
-                        'mean = %{y:.3f} V',
-                        'max = %{customdata[1]:.3f} V',
-                        'σ = %{customdata[2]:.3f} V',
-                        '<extra></extra>',
-                        ])                                
-                    ),
-                    ('curr',
-                        '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.3f} A',
-                        'mean = %{y:.3f} A',
-                        'max = %{customdata[1]:.3f} A',
-                        'σ = %{customdata[2]:.3f} A',
-                        '<extra></extra>',
-                        ])                          
-                    ),
-                    ('power',
-                    '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.3f} W',
-                        'mean = %{y:.3f} W',
-                        'max = %{customdata[1]:.3f} W',
-                        'σ = %{customdata[2]:.3f} W',
-                        '<extra></extra>',
-                        ]),                            
-                    ) ]:
-                var = x[0]
+            # (variable, unit, hover format): min, max and σ are preformatted ('-' for NaN, e.g. the
+            # σ of a dive with one pump operation); the mean is the plotted y
+            for var, unit, fmt in [
+                    ('vac',   'inHg', '.2f'),
+                    ('volt',  'V',    '.2f'),
+                    ('curr',  'A',    '.3f'),
+                    ('power', 'W',    '.2f'),
+                    ]:
                 
-                if var == 'curr':
-                    dive, min, mean, max, std = df_dives_gb_mean.index.values, df_dives_gb_min['curr'], df_dives_gb_mean['curr'], df_dives_gb_max['curr'], df_dives_gb_std['curr']
-                else: 
-                    dive, min, mean, max, std = df_dives_gb_mean.index.values, df_dives_gb_min[var], df_dives_gb_mean[var], df_dives_gb_max[var], df_dives_gb_std[var]
-                hovertemplate = x[1]
+                dive, min, mean, max, std = df_dives_gb_mean.index.values, df_dives_gb_min[var], df_dives_gb_mean[var], df_dives_gb_max[var], df_dives_gb_std[var]
+                hovertemplate = '<br>'.join([
+                    'Dive <b>%{x}</b>',
+                    'min = %{{customdata[0]}} {}'.format(unit),
+                    'mean = %{{y:{}}} {}'.format(fmt, unit),
+                    'max = %{{customdata[1]}} {}'.format(unit),
+                    'σ = %{{customdata[2]}} {}'.format(unit),
+                    '<extra></extra>',
+                    ])
+                hover_cd = np.stack([HoverStr(v, '{:' + fmt + '}') for v in (min, max, std)], -1)
                 
                 figs[pre+var+'_avg'].add_trace(go.Scatter(
                     x = np.vstack((dive, dive, [np.nan]*len(dive))).flatten('F'),
@@ -10123,7 +10116,7 @@ def WritePumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                 figs[pre+var+'_avg'].add_trace(go.Scatter(
                     x=dive,
                     y=mean,
-                    customdata=np.stack((min, max, std), -1),
+                    customdata=hover_cd,
                     hovertemplate=hovertemplate,
                     line=dict(
                         color='rgb(0,0,0)',
@@ -10285,11 +10278,11 @@ def WriteAirPumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
         figs['air_pump_duration'].add_trace(go.Bar(
             x=df_air.index.values,
             y=df_air['surface.air_pump_runtime_s'],
-            customdata=sao.values,
+            customdata=HoverStr(sao.values, '{:.0f}'),
             hovertemplate='<br>'.join([
                 'Dive <b>%{x}</b>',
-                'surface: %{y:.0f} s',
-                'SAO = %{customdata:.0f} s',
+                't = %{y:.0f} s (surface)',
+                'SAO = %{customdata} s',
                 '<extra></extra>',
                 ]),
             marker=dict(
@@ -10304,7 +10297,7 @@ def WriteAirPumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
         figs['air_pump_pres'].add_trace(go.Scatter(
             x=df_air.index.values,
             y=df_air['surface.air_bladder_max_pres_psi'],
-            hovertemplate='surface max. = %{y:.3f} PSI<extra></extra>',
+            hovertemplate='Dive <b>%{x}</b><br>surface max. = %{y:.3f} PSI<extra></extra>',
             line=dict(
                 color='rgb(0,0,0)',
                 width=1.2,
@@ -10322,7 +10315,7 @@ def WriteAirPumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 figs['air_pump_pres'].add_trace(go.Scatter(
                     x=df_cfg.index.values,
                     y=df_cfg[key],
-                    hovertemplate=label + ' = %{y:.3f} PSI<extra></extra>',
+                    hovertemplate='Dive <b>%{x}</b><br>' + label + ' = %{y:.3f} PSI<extra></extra>',
                     line=dict(
                         color=color,
                         width=1.5,
@@ -10335,12 +10328,12 @@ def WriteAirPumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
 
         df_bit = df_air[df_air['bit.air_pump_test_s'].notna() | df_air['bit.air_pump_max_pres_psi'].notna()]
         if len(df_bit) > 0:
-            for fig, col, fmt in (('air_pump_duration', 'bit.air_pump_test_s', 'BIT test: %{y:.0f} s'),
+            for fig, col, fmt in (('air_pump_duration', 'bit.air_pump_test_s', 't = %{y:.0f} s (BIT test)'),
                                   ('air_pump_pres', 'bit.air_pump_max_pres_psi', 'BIT test max. = %{y:.3f} PSI')):
                 figs[fig].add_trace(go.Scatter(
                     x=df_bit.index.values,
                     y=df_bit[col],
-                    hovertemplate=fmt + '<extra></extra>',
+                    hovertemplate='Dive <b>%{x}</b><br>' + fmt + '<extra></extra>',
                     marker=dict(
                         color='rgb(255,140,0)',
                         size=7,
@@ -10349,6 +10342,13 @@ def WriteAirPumpPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                     mode='markers',
                     name='BIT test',
                     ))
+
+        # No bladder pressure (surface or BIT) at all: the plot would show only the SAX/SAN steps
+
+        if not any(np.isfinite(pd.to_numeric(df_air[col], errors='coerce')).any()
+                   for col in ('surface.air_bladder_max_pres_psi', 'bit.air_pump_max_pres_psi')
+                   if col in df_air.columns):
+            DropFigures(figs, ['air_pump_pres'], 'No air bladder pressure', float_id)
 
         # Write plot files
 
@@ -10433,18 +10433,19 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
             # or more) are gaps too. A real 0.00 inHg is kept.
             df_vac = df_vac.where((df_vac >= 0) & (df_vac < 30))
 
-            # One line per dive through the cycle's phase points, colored from blue (first
-            # dives) to red, the last dive in black, as in the surface plots
+            # One line per dive through the cycle's phase points, in the float's dive colors
+            # (blue for the first dive to red, the latest dive in black, by position in dives),
+            # so each dive has the same color as in the other plots
             points = [(sec + '.' + v, '{} {}'.format(label, name))
                       for sec, label in phases for v, name in (('vac0', 'start'), ('vac1', 'end'))
                       if sec + '.' + v in df_vac.columns]
             df_vac = df_vac[[c for c, _ in points]].dropna(how = 'all')
             vac_dives = df_vac.index.values
-            n = len(vac_dives)
-            colors = [colorsys.hsv_to_rgb(x*.666/max(n-1, 1),.8,1) for x in range(n)][::-1]
+            colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1),.8,1) for x in range(len(dives))][::-1]
             colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
-            if n > 0:
-                colors[n-1] = 'rgb(0,0,0)'
+            if len(dives) > 0:
+                colors[len(dives)-1] = 'rgb(0,0,0)'
+            color_of = { int(d): colors[k] for k, d in enumerate(dives) }
 
             # Each phase's start and end are joined, with a gap (and a blank x position) between
             # phases: the start of phase k is at x = 3k, its end at 3k + 1.
@@ -10467,8 +10468,6 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                         ticktext=[label for _, label in points],
                         # Padding so the markers at either end are drawn whole
                         range=[min(xpos) - 0.3, max(xpos) + 0.3],
-                        showgrid=False,
-                        zeroline=False,
                         ),
                     yaxis=dict(
                         title='Vacuum [inHg]',
@@ -10482,26 +10481,26 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                     margin=dict(l=10,r=10,b=20,t=50,pad=4)
                     )
                 )
-            for i, dive in enumerate(vac_dives):
+            for dive in vac_dives:
+                color = color_of.get(int(dive), 'rgb(128,128,128)')
                 values = iter(df_vac.loc[dive].values)
                 fig.add_trace(go.Scatter(
                     x=x_gapped,
                     y=[None if x is None else next(values) for x in x_gapped],
                     text=labels_gapped,
                     hovertemplate='<br>'.join([
-                        'Dive <b>{:d}</b>'.format(int(dive)),
-                        '%{text}',
+                        'Dive <b>{:d}</b>: %{{text}}'.format(int(dive)),
                         'vac = %{y:.2f} inHg',
                         '<extra></extra>',
                         ]),
                     # Styled as the pump plots (pump_vac, pump_pres, ...): thin line, outlined
                     # markers, 0.7 opacity. There, marker size shows the pump time; here it is fixed.
                     line=dict(
-                        color=colors[i],
+                        color=color,
                         width=1,
                         ),
                     marker=dict(
-                        color=colors[i],
+                        color=color,
                         line=dict(
                             color='rgb(0, 0, 0)',
                             width = 0.3,
@@ -10557,13 +10556,15 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                 # configured value is unknown (the float may also change DFT itself), so the line
                 # is broken there instead of carrying the last value forward. Each value is a
                 # step across its own bar (dive - 0.5 to dive + 0.5), so a lone dive still shows.
-                dft_x, dft_y = [], []
+                dft_x, dft_y, dft_d = [], [], []
                 for dive in sorted(dft):
                     if dft_x and dft_x[-1] is not None and dft_x[-1] != dive - 0.5:
                         dft_x.append(None)
                         dft_y.append(None)
+                        dft_d.append(None)
                     dft_x += [dive - 0.5, dive + 0.5]
                     dft_y += [dft[dive], dft[dive]]
+                    dft_d += [dive, dive]
 
                 fig = go.Figure(
                     layout=dict(
@@ -10574,12 +10575,12 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                             range=[-0.5, max(first.index.max(), 0) + 0.5],
                             ),
                         yaxis=dict(
-                            title='First pump [seconds]',
+                            title='First Pump [seconds]',
                             # Sized to the dives in the default x range
                             range=[0, 1.1 * np.nanmax(np.append(first[first.index >= 0].values, 1))],
                             ),
                         yaxis2=dict(
-                            title='Seek adjustment [seconds]',
+                            title='Seek Adjustment [seconds]',
                             overlaying='y',
                             side='right',
                             zeroline=True,
@@ -10597,7 +10598,7 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                     y=first.values,
                     hovertemplate='<br>'.join([
                         'Dive <b>%{x}</b>',
-                        'first pump: %{y:.0f} s',
+                        't = %{y:.0f} s (first pump)',
                         '<extra></extra>',
                         ]),
                     marker=dict(
@@ -10613,7 +10614,8 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                     fig.add_trace(go.Scatter(
                         x=dft_x,
                         y=dft_y,
-                        hovertemplate='DFT = %{y:.0f} s<extra></extra>',
+                        customdata=dft_d,
+                        hovertemplate='Dive <b>%{customdata}</b><br>DFT = %{y:.0f} s<extra></extra>',
                         line=dict(
                             color='rgb(0,0,255)',
                             width=1.5,
@@ -10637,7 +10639,7 @@ def WriteEngineeringPlots(float_id, float_aggregate_data, dpath_float, dives, ma
                         x=adj.index.values,
                         y=adj.values,
                         yaxis='y2',
-                        hovertemplate=label + ' = %{y:+.0f} s<extra></extra>',
+                        hovertemplate='Dive <b>%{x}</b><br>' + label + ' = %{y:+.0f} s<extra></extra>',
                         line=dict(
                             color=color,
                             width=1.2,
@@ -10934,12 +10936,13 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                     figs['surface_pres'].add_trace(go.Scatter(
                         x=df_dive['dt_ref_delta_sec'],
                         y=df_dive['pres'],
-                        customdata=np.stack((df_dive['dt_str'], df_dive['temp']), -1),
+                        customdata=np.stack((df_dive['dt_str'], HoverStr(df_dive['temp'], '{:.3f}')), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
+                            'Dive <b>{}</b>: Surface'.format(dive),
                             '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
+                            'Δt = %{x:.0f} s',
                             'p = %{y:.2f} dBar',
-                            't = %{customdata[1]:.3f} °C',
+                            'T = %{customdata[1]} °C',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -10954,10 +10957,11 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         y=df_dive['temp'],
                         customdata=np.stack((df_dive['dt_str'], df_dive['pres'], df_dive['temp']), -1),
                         hovertemplate='<br>'.join([
-                            'Dive <b>{}</b>'.format(dive),
+                            'Dive <b>{}</b>: Surface'.format(dive),
                             '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
+                            'Δt = %{x:.0f} s',
                             'p = %{customdata[1]:.2f} dBar',
-                            't = %{y:.3f} °C',
+                            'T = %{y:.3f} °C',
                             '<extra></extra>',
                             ]),
                         line=dict(
@@ -10980,21 +10984,21 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             for x in [ 
                     ('pres', 
                     '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.2f} dBar',
-                        'mean = %{y:.3f} dBar',
-                        'max = %{customdata[1]:.2f} dBar',
-                        'σ = %{customdata[2]:.3f} dBar',
+                        'Dive <b>%{x}</b>: Surface',
+                        'min = %{customdata[0]} dBar',
+                        'mean = %{y:.2f} dBar',
+                        'max = %{customdata[1]} dBar',
+                        'σ = %{customdata[2]} dBar',
                         '<extra></extra>',
                         ]),
                     ),
                     ('temp',
                     '<br>'.join([
-                        'Dive <b>%{x}</b>',
-                        'min = %{customdata[0]:.3f} °C',
+                        'Dive <b>%{x}</b>: Surface',
+                        'min = %{customdata[0]} °C',
                         'mean = %{y:.3f} °C',
-                        'max = %{customdata[1]:.3f} °C',
-                        'σ = %{customdata[2]:.3f} °C',
+                        'max = %{customdata[1]} °C',
+                        'σ = %{customdata[2]} °C',
                         '<extra></extra>',
                         ])                                
                     ) ]:
@@ -11027,7 +11031,9 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 figs[pre+var+'_avg'].add_trace(go.Scatter(
                     x=dive,
                     y=mean,
-                    customdata=np.stack((min, max, std), -1),
+                    # min, max and σ preformatted: '-' where NaN (σ of a single sample)
+                    customdata=np.stack([HoverStr(v, '{:.2f}' if var == 'pres' else '{:.3f}')
+                                         for v in (min, max, std)], -1),
                     hovertemplate=hovertemplate,
                     line=dict(
                         color='rgb(0,0,0)',
@@ -11048,6 +11054,7 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                         x=pres_corr.index.values,
                         y=pres_corr.values,
                         hovertemplate='<br>'.join([
+                            'Dive <b>%{x}</b>',
                             'correction = %{y:.2f} dBar',
                             '<extra></extra>',
                             ]),
@@ -11068,8 +11075,8 @@ def WriteSurfacePlots(float_id, float_aggregate_data, dpath_float, dives, max_di
                 x=df_dives_gb.count().index.values,
                 y=df_dives_gb.count()['pres'],
                 hovertemplate='<br>'.join([
-                    'Dive <b>%{x}</b>',
-                    '%{y:.0f}',
+                    'Dive <b>%{x}</b>: Surface',
+                    '%{y:.0f} samples',
                     '<extra></extra>',
                     ]),
                 marker=dict(
@@ -11235,6 +11242,20 @@ def SbdDataSizeTraces(df_sbd_type, sbd_size_by_dive):
             name='not broken down',
             marker=dict(color='rgb(220,220,220)', line=dict(color='rgb(188,188,188)', width=0.5)),
             ))
+    if len(traces):
+        # Invisible marker at the top of each bar: the dive total on its own line of the (x
+        # unified) hover label. The top is the SBT total where it exceeds the message sizes.
+        top = total.copy()
+        top[broken] = np.maximum(total[broken], sbt_total.reindex(total[broken].index).fillna(0))
+        traces.append(go.Scatter(
+            x=top.index.values,
+            y=top.values,
+            mode='markers',
+            marker=dict(size=0, opacity=0),
+            hovertemplate='Total: <b>%{y:,.0f} bytes</b><extra></extra>',
+            name='Total',
+            showlegend=False,
+            ))
     return traces
 
 def FormatDataSize(size_b):
@@ -11282,15 +11303,15 @@ def SbdDataTypeBar(float_id, df_sbd_type, sbd_size_by_dive):
     Sums the 'sbd_type' aggregate (the listing's SBT lines) over every dive with a positive dive
     number that has them, one part per type, colored as in the SBD data size plot
     (SBD_TYPE_COLORS). sbd_size_by_dive is the sum of the SBD message sizes per dive; where it
-    exceeds a dive's SBT total, the difference is added as a 'retransmitted' part. Dive 0, the
-    startup dives (negative numbers) and dives without SBT lines are left out; the title gives
-    the number of dives and their range. Parts of at least 3% are labeled with the type and data
+    exceeds a dive's SBT total, the difference is added as a 'retransmitted' part. The startup
+    dives (negative numbers) and dives without SBT lines are left out (dive 0 is included); the title gives
+    the number of dives and their range. Parts of at least 5% are labeled with the type and data
     size (FormatDataSize), so the small image (without legend) can be read.
     """
 
     if df_sbd_type is None or len(df_sbd_type) < 1:
         return None
-    df = df_sbd_type[df_sbd_type['dive'] > 0]
+    df = df_sbd_type[df_sbd_type['dive'] >= 0]
     if len(df) < 1:
         return None
     by_type = df.groupby('ids').agg(size_b=('size_b', 'sum'), name=('name', 'first'))
@@ -11420,6 +11441,11 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
             
             rng['time'] = np.round(rng['time'] + [(rng['time'][1] - rng['time'][0]) * -0.03, (rng['time'][1] - rng['time'][0]) * +0.03] + [-21600, +21600])
             rng['time'] = [ DateTime().dt_from_epoch(x).dt_str for x in rng['time'] ] 
+            # Fixed ranges of the GPS plots, from the fixes they show (idx 0-2); None: no data
+            df_gps_shown = df_gps[df_gps['idx'].isin([0, 1, 2])]
+            rng['ttf'] = PaddedRange(df_gps_shown['ttf_sec'], decimals=-1, zero=True)
+            rng['cno'] = PaddedRange(df_gps_shown[['snr_min', 'snr_avg', 'snr_max']].values.ravel(), decimals=0)
+            rng['gps_cep'] = PaddedRange(df_gps_shown['cep_km'] * 1000, decimals=0, zero=True)
             
             
             # Generate Figures
@@ -11461,7 +11487,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 satcom_gps_ttf = go.Figure(
                     layout=dict(
                         showlegend = True,
-                        title = dict(text='{}: GPS Time-to-fix (TTF)'.format(float_id)),
+                        title = dict(text='{}: GPS Time to Fix (TTF)'.format(float_id)),
                         xaxis=dict(
                             title='Dive',
                             autorange=False,
@@ -11469,14 +11495,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             ),
                         yaxis=dict(
                             title='TTF [seconds]',
-                            # ticklabelposition='inside',
-                            # autorange=False,
-                            # range=[ 
-                            #     dateutil.parser.parse('2021-02-11 23:00:00'),
-                            #     dateutil.parser.parse('2021-02-13 01:00:00'),
-                            #     ],
-                            # type='date',
-                            # tickformat='%H:%M',
+                            **FixedRange(rng['ttf']),
                             ),
                         hoverlabel=dict(
                             font=dict(
@@ -11504,14 +11523,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             ),
                         yaxis=dict(
                             title='CNO [dBHz]',
-                            # ticklabelposition='inside',
-                            # autorange=False,
-                            # range=[ 
-                            #     dateutil.parser.parse('2021-02-11 23:00:00'),
-                            #     dateutil.parser.parse('2021-02-13 01:00:00'),
-                            #     ],
-                            # type='date',
-                            # tickformat='%H:%M',
+                            **FixedRange(rng['cno']),
                             ),
                         hoverlabel=dict(
                             font=dict(
@@ -11538,7 +11550,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             range=rng['dive']
                             ),
                         yaxis=dict(
-                            title='No. Satellites',
+                            title='Satellites',
                             autorange=False,
                             range=[ -1, (np.nanmax(df_gps['nsat'].values) if len(df_gps) else 0)+1 ],
                             ),
@@ -11560,7 +11572,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                  satcom_gps_hdop = go.Figure(
                     layout=dict(
                         showlegend = True,
-                        title = dict(text='{}: GPS Horiz. Dilution of Precision'.format(float_id)),
+                        title = dict(text='{}: GPS Horizontal Dilution of Precision'.format(float_id)),
                         xaxis=dict(
                             title='Dive',
                             autorange=False,
@@ -11596,7 +11608,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             range=rng['dive']
                             ),
                         yaxis=dict(
-                            title='No. Messages',
+                            title='Messages',
                             #autorange=False,
                             #range=[ 0, np.max(df_gps['hdop'].values)+1 ],
                             ),
@@ -11712,7 +11724,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 satcom_gps_fix_cep = go.Figure(
                     layout=dict(
                         showlegend = True,
-                        title = dict(text='{}: GPS Fix Uncertainty Est.'.format(float_id)),
+                        title = dict(text='{}: GPS Fix Uncertainty Estimate'.format(float_id)),
                         xaxis=dict(
                             title='Dive',
                             # autorange=False,
@@ -11720,8 +11732,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                             ),
                         yaxis=dict(
                             title='Uncertainty [m]',
-                            #autorange=False,
-                            #range=[ -10, np.max(df_gps['cep_km'].values)*1000 + 100],
+                            **FixedRange(rng['gps_cep']),
                             ),
                         #bargap=0,
                         hoverlabel=dict(
@@ -11792,7 +11803,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                                 d['status_text'],
                                 d['lat'],
                                 d['lon'],
-                                d['cep_km'],
+                                HoverStr(d['cep_km'], '{:.0f}'),
                                 ),
                             -1
                             ),
@@ -11827,7 +11838,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         df_sbd['size_b'][df_sbd['mtmsn'] == 0],
                         df_sbd['lat'][df_sbd['mtmsn'] == 0],
                         df_sbd['lon'][df_sbd['mtmsn'] == 0],
-                        df_sbd['cep_km'][df_sbd['mtmsn'] == 0],
+                        HoverStr(df_sbd['cep_km'][df_sbd['mtmsn'] == 0], '{:.0f}'),
                         ), 
                     -1
                     ),
@@ -11864,7 +11875,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         df_sbd['size_b'][df_sbd['mtmsn'] != 0],
                         df_sbd['lat'][df_sbd['mtmsn'] != 0],
                         df_sbd['lon'][df_sbd['mtmsn'] != 0],
-                        df_sbd['cep_km'][df_sbd['mtmsn'] != 0],
+                        HoverStr(df_sbd['cep_km'][df_sbd['mtmsn'] != 0], '{:.0f}'),
                         df_sbd['mtmsn'][df_sbd['mtmsn'] != 0],
                         ), 
                     -1
@@ -11893,13 +11904,13 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 ))
             figs['satcom'].add_trace(go.Scatter(
                 x = df_gps['dt_str'],
-                y = [ dateutil.parser.parse('2021-02-12 '+x[11:16]) for x in df_gps['dt_str'].values ],
+                y = [ dateutil.parser.parse('2021-02-12 '+x[11:19]) for x in df_gps['dt_str'].values ],
                 customdata=np.stack(
                     (
                         df_gps['dive'],
                         df_gps['lat'],
                         df_gps['lon'],
-                        df_gps['ttf_sec'],
+                        HoverStr(df_gps['ttf_sec'], '{:.0f}'),
                         df_gps['nsat'],
                         df_gps['hdop'],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps['snr_min'] ],
@@ -11953,7 +11964,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 hovertemplate='<br>'.join([
                     'Dive <b>%{x:.0f}</b>',
                     '%{customdata[0]|%Y-%m-%d %H:%M}Z',
-                    'TTF = %{y} s',
+                    'TTF = %{y:.0f} s',
                     'no. sat = %{customdata[1]}',
                     'HDOP = %{customdata[2]:.1f}',
                     'CNO min. = %{customdata[3]} dBHz',
@@ -11992,7 +12003,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 hovertemplate='<br>'.join([
                     'Dive <b>%{x:.0f}</b>',
                     '%{customdata[0]|%Y-%m-%d %H:%M}Z',
-                    'TTF = %{y} s',
+                    'TTF = %{y:.0f} s',
                     'no. sat = %{customdata[1]}',
                     'HDOP = %{customdata[2]:.1f}',
                     'CNO min. = %{customdata[3]} dBHz',
@@ -12023,7 +12034,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 customdata=np.stack(
                     (
                         df_gps[idx]['dt_str'],
-                        df_gps[idx]['ttf_sec'],
+                        HoverStr(df_gps[idx]['ttf_sec'], '{:.0f}'),
                         df_gps[idx]['nsat'],
                         df_gps[idx]['hdop'],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_min'] ],
@@ -12085,7 +12096,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 customdata=np.stack(
                     (
                         df_gps[idx]['dt_str'],
-                        df_gps[idx]['ttf_sec'],
+                        HoverStr(df_gps[idx]['ttf_sec'], '{:.0f}'),
                         df_gps[idx]['nsat'],
                         df_gps[idx]['hdop'],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_min'] ],
@@ -12110,7 +12121,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                         color='rgb(0,0,0)',
                         width=0.5,
                         ),
-                    size=6,
+                    size=8,
                     symbol='cross',
                     ),
                 mode='markers',
@@ -12150,7 +12161,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 customdata=np.stack(
                     (
                         df_gps[idx]['dt_str'],
-                        df_gps[idx]['ttf_sec'],
+                        HoverStr(df_gps[idx]['ttf_sec'], '{:.0f}'),
                         df_gps[idx]['hdop'],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_min'] ],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_avg'] ],
@@ -12189,7 +12200,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 customdata=np.stack(
                     (
                         df_gps[idx]['dt_str'],
-                        df_gps[idx]['ttf_sec'],
+                        HoverStr(df_gps[idx]['ttf_sec'], '{:.0f}'),
                         df_gps[idx]['hdop'],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_min'] ],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_avg'] ],
@@ -12231,7 +12242,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 customdata=np.stack(
                     (
                         df_gps[idx]['dt_str'],
-                        df_gps[idx]['ttf_sec'],
+                        HoverStr(df_gps[idx]['ttf_sec'], '{:.0f}'),
                         df_gps[idx]['nsat'],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_min'] ],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_avg'] ],
@@ -12270,7 +12281,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 customdata=np.stack(
                     (
                         df_gps[idx]['dt_str'],
-                        df_gps[idx]['ttf_sec'],
+                        HoverStr(df_gps[idx]['ttf_sec'], '{:.0f}'),
                         df_gps[idx]['nsat'],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_min'] ],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_avg'] ],
@@ -12457,7 +12468,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 customdata=np.stack(
                     (
                         df_gps[idx]['dt_str'],
-                        df_gps[idx]['ttf_sec'],
+                        HoverStr(df_gps[idx]['ttf_sec'], '{:.0f}'),
                         df_gps[idx]['nsat'],
                         df_gps[idx]['hdop'],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_min'] ],
@@ -12469,7 +12480,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 hovertemplate='<br>'.join([
                     'Dive <b>%{x:.0f}</b>',
                     '%{customdata[0]|%Y-%m-%d %H:%M}Z',
-                    'CEP = %{y} m',
+                    'CEP = %{y:.0f} m',
                     'TTF = %{customdata[1]} s',
                     'no. sat = %{customdata[2]}',
                     'HDOP = %{customdata[3]:.1f}',
@@ -12498,7 +12509,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 customdata=np.stack(
                     (
                         df_gps[idx]['dt_str'],
-                        df_gps[idx]['ttf_sec'],
+                        HoverStr(df_gps[idx]['ttf_sec'], '{:.0f}'),
                         df_gps[idx]['nsat'],
                         df_gps[idx]['hdop'],
                         [ '-' if np.isnan(x) else str(x) for x in df_gps[idx]['snr_min'] ],
@@ -12510,7 +12521,7 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
                 hovertemplate='<br>'.join([
                     'Dive <b>%{x:.0f}</b>',
                     '%{customdata[0]|%Y-%m-%d %H:%M}Z',
-                    'CEP = %{y} m',
+                    'CEP = %{y:.0f} m',
                     'TTF = %{customdata[1]} s',
                     'no. sat = %{customdata[2]}',
                     'HDOP = %{customdata[3]:.1f}',
@@ -12702,6 +12713,34 @@ def WriteSatcomPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
     return figs_meta
 
 
+def WaveGrid(df_wave_spectra):
+    """Pivot the wave spectra (one row per dive and frequency) onto a frequency x time grid for the
+    waterfall and mean-direction heatmaps.
+
+    Plotly heatmaps given one row per point repeat the time string and the frequency in every
+    cell, which made these pages 15-20 MB for floats with hundreds of dives. On a grid, x (the
+    times) and y (the frequencies) are given once and z and the hover data are 2-D. Returns a dict:
+      x       times as 'YYYY-MM-DD hh:mm:ss' strings (one per spectrum, sorted)
+      y       frequencies [Hz] (sorted)
+      dive, Szz, Szz_g, theta1   2-D float arrays [len(y), len(x)], NaN where a spectrum has no value
+      cd      2-D hover data [len(y), len(x), 4] of short strings: dive, Szz (m^2/Hz, 2 decimals),
+              Szz_g (g^2/Hz, 3 decimals), theta1 (degrees, 0 decimals); '-' where missing
+    """
+    df = df_wave_spectra[['dt_str', 'freq', 'dive', 'Szz', 'Szz_g', 'theta1']].copy()
+    df['t'] = df['dt_str'].astype(str).str[0:10] + ' ' + df['dt_str'].astype(str).str[11:19]
+    g = df.groupby(['freq', 't'])
+    grid = { c: g[c].first().unstack('t').sort_index().sort_index(axis = 1) for c in ('dive', 'Szz', 'Szz_g', 'theta1') }
+    x = list(grid['Szz'].columns.values)
+    y = grid['Szz'].index.values.astype(np.double)
+    out = dict(x = x, y = y)
+    for c in grid:
+        out[c] = grid[c].reindex(index = grid['Szz'].index, columns = grid['Szz'].columns).values.astype(np.double)
+    fmt = lambda a, f: np.where(np.isfinite(a), np.vectorize(f.format, otypes = [object])(np.nan_to_num(a)), '-')
+    out['cd'] = np.stack((fmt(out['dive'], '{:.0f}'), fmt(out['Szz'], '{:.2f}'),
+                          fmt(out['Szz_g'], '{:.3f}'), fmt(out['theta1'], '{:.0f}')), -1)
+    return out
+
+
 def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
     """Write the wave plots for one float; return their figure metadata.
 
@@ -12739,9 +12778,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             df_wave_spectra = float_aggregate_data['wave_spectra']
             df_profile_positions = float_aggregate_data['profile_position']
             
-            df_wave = df_wave[(~df_wave['swh'].isna()) & (df_wave['dive'] > 0)]
+            df_wave = df_wave[(~df_wave['swh'].isna()) & (df_wave['dive'] >= 0)]
             
-            df_wave_spectra = df_wave_spectra[(~df_wave_spectra['Szz'].isna()) & (df_wave_spectra['freq'] >= 0.03) & (df_wave_spectra['freq'] <= 1.25) & (df_wave_spectra['dive'] > 0) ]
+            df_wave_spectra = df_wave_spectra[(~df_wave_spectra['Szz'].isna()) & (df_wave_spectra['freq'] >= 0.03) & (df_wave_spectra['freq'] <= 1.25) & (df_wave_spectra['dive'] >= 0) ]
             # df_wave_spectra = df_wave_spectra[(~df_wave_spectra['Szz'].isna())  & (df_wave_spectra['dive'] > 0) ]
             df_wave_spectra.loc[
                 (df_wave_spectra['Szz'] < 0.02),
@@ -12813,19 +12852,21 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
 
             # Generate Figures
             
+            wg = WaveGrid(df_wave_spectra)        # heatmaps on a frequency x time grid
+
             figs = dict(
                 wave_direction_mean = go.Figure(
                     data = go.Heatmap(
-                        x=[x[0:16] for x in df_wave_spectra['dt_str'].values],
-                        y=df_wave_spectra['freq'],
-                        z=np.where(df_wave_spectra['theta1'] < 180, df_wave_spectra['theta1'] + 180, df_wave_spectra['theta1'] - 180),
+                        x=wg['x'],
+                        y=wg['y'],
+                        z=np.where(wg['theta1'] < 180, wg['theta1'] + 180, wg['theta1'] - 180).astype(np.float32),
                         zauto=False,
                         zmin=0,
                         zmax=360,
                         connectgaps=False,
                         colorbar=dict(
                             title=dict(
-                                text='Mean Direction',
+                                text='Mean Direction [°]',
                                 side='top'
                                 ), 
                             nticks=8,
@@ -12845,19 +12886,13 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             [0.99, "rgb(150,150,150)"], 
                             [1.00, "rgb(150,150,150)"], 
                             ],
-                        customdata=np.stack((
-                                df_wave_spectra['dive'],
-                                df_wave_spectra['Szz'],
-                                np.where(df_wave_spectra['theta1'].isna(), '-', df_wave_spectra['theta1'].map('{:.0f}'.format)),
-                                ), 
-                            -1
-                            ),
+                        customdata=wg['cd'],
                         hovertemplate='<br>'.join([
                             'Dive <b>%{customdata[0]}</b>',
                             '%{x|%Y-%m-%d %H:%M}Z',
                             'f = %{y:.3f} Hz',
-                            'θ<sub>1</sub> = %{customdata[2]}°',
-                            'Szz = %{customdata[1]:.2f} m<sup>2</sup> Hz<sup>-1</sup>',
+                            'θ<sub>1</sub> = %{customdata[3]}°',
+                            'Szz = %{customdata[1]} m<sup>2</sup> Hz<sup>−1</sup>',
                             '<extra></extra>',
                             ]),
                         ),
@@ -12915,7 +12950,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 title=dict(
                                     text = 'Average Period [s]',
                                     font = dict(
-                                        size= 12,
+                                        size= 10,
                                         ),
                                     ),
                                 autorange=False,
@@ -12930,7 +12965,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 showline = False,
                                 tickangle = 22.5,
                                 tickfont = dict(
-                                    size = 12,
+                                    size = 10,
                                     ),
                                 ),
                             ),
@@ -12944,8 +12979,6 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             title='Dive',
                             ),
                         # plot_bgcolor='white',
-                        width=900,
-                        height=900,
                         margin=dict(l=10,r=10,b=10,t=70,pad=4),
                         )
                     ),
@@ -12967,7 +13000,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         hovertemplate='<br>'.join([
                             'Dive <b>%{customdata[0]:.0f}</b>',
                             '%{customdata[1]|%Y-%m-%d %H:%M}Z',
-                            'H<sub>m0</sub> = %{y} m',
+                            'H<sub>m0</sub> = %{y:.2f} m',
                             'θ<sub>mean</sub> = %{customdata[2]}°',
                             'T<sub>peak</sub> = %{customdata[3]:.0f} s',
                             'T<sub>avg</sub> = %{customdata[4]:.1f} s',
@@ -12981,7 +13014,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         marker=dict(
                             color=[ colors[x] for x in df_wave['dive'].values ],
                             line=dict(
-                                color='rgb(88,88,88)',
+                                color='rgb(0,0,0)',
                                 width=0.5,
                                 ),
                             symbol='cross',
@@ -13000,7 +13033,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             type='date',
                             ),
                         yaxis=dict(
-                            title='H<sub>m0</sub> [m]',
+                            title='Significant Wave Height, H<sub>m0</sub> [m]',
                             autorange=False,
                             range=rng['swh'],
                             ),
@@ -13055,7 +13088,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq_g']
                             ),
                         yaxis=dict(
-                            title='Co-Spectral Density (C<sub>XY</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Co-Spectral Density (C<sub>XY</sub>) [g<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=rng['Cxy_g'],
                             ),
@@ -13082,7 +13115,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         range=rng['freq_g']
                         ),
                     yaxis=dict(
-                        title='Power Spectral Density (S<sub>XX</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                        title='Power Spectral Density (S<sub>XX</sub>) [g<sup>2</sup> Hz<sup>−1</sup>]',
                         autorange=False,
                         range=np.log10(rng['Sxx_g']),
                         type='log',
@@ -13110,7 +13143,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq_g']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>XX</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>XX</sub>) [g<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=rng['Sxx_g'],
                             ),
@@ -13137,7 +13170,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq_g']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>YY</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>YY</sub>) [g<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=np.log10(rng['Syy_g']),
                             type='log',
@@ -13165,7 +13198,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq_g']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>YY</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>YY</sub>) [g<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=rng['Syy_g'],
                             # type='log',
@@ -13194,7 +13227,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq_g']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=np.log10(rng['Szz_g']),
                             type='log',
@@ -13223,7 +13256,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq_g']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=rng['Szz_g'],
                             # type='log',
@@ -13252,7 +13285,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq']
                             ),
                         yaxis=dict(
-                            title='Co-Spectral Density (X<sub>XY</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Co-Spectral Density (X<sub>XY</sub>) [m<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=rng['Cxy'],
                             # type='log',
@@ -13281,7 +13314,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>XX</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>XX</sub>) [m<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=np.log10(rng['Sxx']),
                             type='log',
@@ -13310,7 +13343,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>XX</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>XX</sub>) [m<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=rng['Sxx'],
                             # type='log',
@@ -13339,7 +13372,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>YY</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>YY</sub>) [m<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=np.log10(rng['Syy']),
                             type='log',
@@ -13368,7 +13401,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>YY</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>YY</sub>) [m<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=rng['Syy'],
                             # type='log',
@@ -13397,7 +13430,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=np.log10(rng['Szz']),
                             type='log',
@@ -13426,7 +13459,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             range=rng['freq']
                             ),
                         yaxis=dict(
-                            title='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]',
+                            title='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>−1</sup>]',
                             autorange=False,
                             range=rng['Szz'],
                             # type='log',
@@ -13447,20 +13480,20 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     ),
                 wave_waterfall_accel_Szz = go.Figure(
                     data = go.Heatmap(
-                        x=[x[0:16] for x in df_wave_spectra['dt_str'].values],
-                        y=df_wave_spectra['freq'],
-                        z=np.round(np.where(df_wave_spectra['Szz_g'] > .001, np.log10(df_wave_spectra['Szz_g'].astype(np.double)), -3), 3).astype(np.double),
+                        x=wg['x'],
+                        y=wg['y'],
+                        z=np.round(np.where(wg['Szz_g'] > .001, np.log10(np.where(wg['Szz_g'] > .001, wg['Szz_g'], 1)), np.where(np.isnan(wg['Szz_g']), np.nan, -3)), 3).astype(np.float32),
                         zauto=False,
                         zmin=-2.7,
                         zmax=-0.7,
                         connectgaps=True,
                         colorbar=dict(
                             title=dict(
-                                text='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                                text='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>−1</sup>]',
                                 side='top'
                                 ), 
                             tickvals=[ -2.5, -2, -1.5, -1, -0.5],
-                            ticktext=[ '10<sup>-2.5</sup>', '10<sup>-2.0</sup>','10<sup>-1.5</sup>', '10<sup>-1.0</sup>', '10<sup>-0.5</sup>'],
+                            ticktext=[ '10<sup>−2.5</sup>', '10<sup>−2.0</sup>','10<sup>−1.5</sup>', '10<sup>−1.0</sup>', '10<sup>−0.5</sup>'],
                             thickness=20,
                             orientation='h',
                             ),
@@ -13472,20 +13505,12 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             [0.85, "rgb(78,0,76)"], 
                             [1.00, "rgb(245,7,7)"], 
                             ],
-                        customdata=np.stack((
-                                df_wave_spectra['dive'],
-                                df_wave_spectra['Szz'],
-                                df_wave_spectra['Szz_g'],
-                                np.where(df_wave_spectra['theta1'].isna(), '-', df_wave_spectra['theta1'].map('{:.0f}'.format)),
-                                # np.array(['-' if np.isnan(x) else '{:.0f}'.format(x) for x in df_wave_spectra['theta1'].values])
-                                ), 
-                            -1
-                            ),
+                        customdata=wg['cd'],
                         hovertemplate='<br>'.join([
                             'Dive <b>%{customdata[0]}</b>',
                             '%{x|%Y-%m-%d %H:%M}Z',
                             'f = %{y:.3f} Hz',
-                            'Szz = %{customdata[2]:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[1]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
+                            'Szz = %{customdata[2]} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[1]} m<sup>2</sup> Hz<sup>−1</sup>)',
                             'θ<sub>1</sub> = %{customdata[3]}°',
                             '<extra></extra>',
                             ]),
@@ -13520,16 +13545,16 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     ),
                 wave_waterfall_accel_Szz_linear = go.Figure(
                     data = go.Heatmap(
-                        x=[x[0:16] for x in df_wave_spectra['dt_str'].values],
-                        y=df_wave_spectra['freq'],
-                        z=df_wave_spectra['Szz_g'],
+                        x=wg['x'],
+                        y=wg['y'],
+                        z=wg['Szz_g'].astype(np.float32),
                         zauto=False,
                         zmin=0,
                         zmax=0.20,
                         connectgaps=True,
                         colorbar=dict(
                             title=dict(
-                                text='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>-1</sup>]',
+                                text='Power Spectral Density (S<sub>ZZ</sub>) [g<sup>2</sup> Hz<sup>−1</sup>]',
                                 side='top'
                                 ), 
                             tickvals=[0, 0.05, 0.10, 0.15, 0.20],
@@ -13547,20 +13572,13 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             [0.90, "rgb(78,0,76)"], 
                             [1.00, "rgb(245,7,7)"], 
                             ],
-                        customdata=np.stack((
-                                df_wave_spectra['dive'],
-                                df_wave_spectra['Szz'],
-                                np.where(df_wave_spectra['theta1'].isna(), '-', df_wave_spectra['theta1'].map('{:.0f}'.format)),
-                                # np.array(['-' if np.isnan(x) else '{:.0f}'.format(x) for x in df_wave_spectra['theta1'].values])
-                                ), 
-                            -1
-                            ),
+                        customdata=wg['cd'],
                         hovertemplate='<br>'.join([
                             'Dive <b>%{customdata[0]}</b>',
                             '%{x|%Y-%m-%d %H:%M}Z',
                             'f = %{y:.3f} Hz',
-                            'Szz = %{z:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[1]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
-                            'θ<sub>1</sub> = %{customdata[2]}°',
+                            'Szz = %{customdata[2]} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[1]} m<sup>2</sup> Hz<sup>−1</sup>)',
+                            'θ<sub>1</sub> = %{customdata[3]}°',
                             '<extra></extra>',
                             ]),
                         zsmooth='best',
@@ -13593,21 +13611,21 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     ),
                 wave_waterfall_disp_Szz = go.Figure(
                     data = go.Heatmap(
-                        x=[x[0:16] for x in df_wave_spectra['dt_str'].values],
-                        y=df_wave_spectra['freq'],
-                        z=np.round(np.where(df_wave_spectra['Szz'] > .01, np.log10(df_wave_spectra['Szz'].astype(np.double)), -2).astype(np.double), 3),
+                        x=wg['x'],
+                        y=wg['y'],
+                        z=np.round(np.where(wg['Szz'] > .01, np.log10(np.where(wg['Szz'] > .01, wg['Szz'], 1)), np.where(np.isnan(wg['Szz']), np.nan, -2)), 3).astype(np.float32),
                         zauto=False,
                         zmin=-2,
                         zmax=2.2,
                         connectgaps=True,
                         colorbar=dict(
                             title=dict(
-                                text='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]', 
+                                text='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>−1</sup>]', 
                                 side='top'
                                 ), 
                             nticks=5,
                             tickvals=[-2, -1, 0, 1, 2],
-                            ticktext=['10<sup>-2</sup>', '10<sup>-1</sup>', '10<sup>0</sup>', '10<sup>1</sup>', '10<sup>2</sup>'],
+                            ticktext=['10<sup>−2</sup>', '10<sup>−1</sup>', '10<sup>0</sup>', '10<sup>1</sup>', '10<sup>2</sup>'],
                             thickness=20,
                             orientation='h',
                             ),
@@ -13619,19 +13637,12 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             [0.85, "rgb(78,0,76)"], 
                             [1.00, "rgb(245,7,7)"], 
                             ],
-                        customdata=np.stack((
-                                df_wave_spectra['dive'],
-                                df_wave_spectra['Szz'],
-                                df_wave_spectra['Szz_g'],
-                                np.where(df_wave_spectra['theta1'].isna(), '-', df_wave_spectra['theta1'].map('{:.0f}'.format)),
-                                ), 
-                            -1
-                            ),
+                        customdata=wg['cd'],
                         hovertemplate='<br>'.join([
                             'Dive <b>%{customdata[0]}</b>',
                             '%{x|%Y-%m-%d %H:%M}Z',
                             'f = %{y:.3f} Hz',
-                            'Szz = %{customdata[1]:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[2]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
+                            'Szz = %{customdata[1]} m<sup>2</sup> Hz<sup>−1</sup> (%{customdata[2]} g<sup>2</sup> Hz<sup>−1</sup>)',
                             'θ<sub>1</sub> = %{customdata[3]}°',
                             '<extra></extra>',
                             ]),
@@ -13666,16 +13677,16 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     ),
                 wave_waterfall_disp_Szz_linear = go.Figure(
                     data = go.Heatmap(
-                        x=[x[0:16] for x in df_wave_spectra['dt_str'].values],
-                        y=df_wave_spectra['freq'],
-                        z=df_wave_spectra['Szz'],
+                        x=wg['x'],
+                        y=wg['y'],
+                        z=wg['Szz'].astype(np.float32),
                         zauto=False,
                         zmin=0,
                         zmax=100,
                         connectgaps=True,
                         colorbar=dict(
                             title=dict(
-                                text='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>-1</sup>]', 
+                                text='Power Spectral Density (S<sub>ZZ</sub>) [m<sup>2</sup> Hz<sup>−1</sup>]', 
                                 side='top'
                                 ), 
                             tickvals=[0, 20, 40, 60, 80, 100],
@@ -13690,20 +13701,13 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                             [0.90, "rgb(78,0,76)"], 
                             [1.00, "rgb(245,7,7)"], 
                             ],
-                        customdata=np.stack((
-                                df_wave_spectra['dive'],
-                                df_wave_spectra['Szz_g'],
-                                np.where(df_wave_spectra['theta1'].isna(), '-', df_wave_spectra['theta1'].map('{:.0f}'.format)),
-                                # np.array(['-' if np.isnan(x) else '{:.0f}'.format(x) for x in df_wave_spectra['theta1'].values])
-                                ), 
-                            -1
-                            ),
+                        customdata=wg['cd'],
                         hovertemplate='<br>'.join([
                             'Dive <b>%{customdata[0]}</b>',
                             '%{x|%Y-%m-%d %H:%M}Z',
                             'f = %{y:.3f} Hz',
-                            'Szz = %{z:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[1]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
-                            'θ<sub>1</sub> = %{customdata[2]}°',
+                            'Szz = %{customdata[1]} m<sup>2</sup> Hz<sup>−1</sup> (%{customdata[2]} g<sup>2</sup> Hz<sup>−1</sup>)',
+                            'θ<sub>1</sub> = %{customdata[3]}°',
                             '<extra></extra>',
                             ]),
                         zsmooth='best',
@@ -13786,7 +13790,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     hovertemplate='<br>'.join([
                         'Dive <b>%{customdata[0]:.0f}</b>',
                         '%{customdata[1]|%Y-%m-%d %H:%M}Z',
-                        'H<sub>m0</sub> = %{customdata[2]} m',
+                        'H<sub>m0</sub> = %{customdata[2]:.2f} m',
                         'θ<sub>mean</sub> = %{customdata[3]}°',
                         'T<sub>peak</sub> = %{customdata[4]:.0f} s',
                         'T<sub>avg</sub> = %{y:.1f} s',
@@ -13801,7 +13805,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     marker=dict(
                         color=[ colors[x] for x in df_wave['dive'].values ],
                         line=dict(
-                            color='rgb(88,88,88)',
+                            color='rgb(0,0,0)',
                             width=0.5,
                             ),
                         symbol='cross',
@@ -13844,9 +13848,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         hovertemplate='<br>'.join([
                             'Dive <b>{}</b>'.format(dive),
                             dt_str,
-                            'H<sub>m0</sub> = %{customdata[0]} m',
+                            'H<sub>m0</sub> = %{customdata[0]:.2f} m',
                             'θ<sub>mean</sub> = %{customdata[1]}°',
-                            'T<sub>peak</sub> = %{customdata[2]:.1f} s',
+                            'T<sub>peak</sub> = %{customdata[2]:.0f} s',
                             'T<sub>avg</sub> = %{customdata[3]:.1f} s',
                             'T<sub>0</sub> = %{customdata[4]:.1f} s',
                             '<extra></extra>',
@@ -13939,7 +13943,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                         color = 'rgb(222,222,222)',
                         ),
                     mode = 'lines',
-                    # name = '<5E-4 g<sup>2</sup>Hz<sup>-1</sup>',
+                    # name = '<5E-4 g<sup>2</sup>Hz<sup>−1</sup>',
                     showlegend = False,
                     )
                 )
@@ -13955,12 +13959,13 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     x = f,
                     y = y,
                     mode = 'text',
-                    text=[ '5g<sup>2</sup>Hz<sup>-1</sup>' ],
+                    hoverinfo='skip',
+                    text=[ '5g<sup>2</sup>Hz<sup>−1</sup>' ],
                     textposition=[ 'middle center' ],   
                     textfont=dict(
                         size=12,
                         ),
-                    # name = '<5E-4 g<sup>2</sup>Hz<sup>-1</sup>',
+                    # name = '<5E-4 g<sup>2</sup>Hz<sup>−1</sup>',
                     showlegend = False,
                     )
                 )
@@ -13971,12 +13976,13 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     x = f,
                     y = y,
                     mode = 'text',
+                    hoverinfo='skip',
                     text=[ '0.5' ],
                     textposition=[ 'middle center' ],   
                     textfont=dict(
                         size=12,
                         ),
-                    # name = '<5E-4 g<sup>2</sup>Hz<sup>-1</sup>',
+                    # name = '<5E-4 g<sup>2</sup>Hz<sup>−1</sup>',
                     showlegend = False,
                     )
                 )
@@ -13987,12 +13993,13 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                     x = f,
                     y = y,
                     mode = 'text',
+                    hoverinfo='skip',
                     text=[ '0.05' ],
                     textposition=[ 'middle center' ],   
                     textfont=dict(
                         size=12,
                         ),
-                    # name = '<5E-4 g<sup>2</sup>Hz<sup>-1</sup>',
+                    # name = '<5E-4 g<sup>2</sup>Hz<sup>−1</sup>',
                     showlegend = False,
                     )
                 )
@@ -14035,9 +14042,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                'C<sub>XY</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
-                                # 'θ<sub>1</sub> = %{customdata[1]}°',
+                                'C<sub>XY</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[1]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14067,11 +14074,11 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                'S<sub>XX</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
-                                # 'θ<sub>1</sub> = %{customdata[1]}°',
-                                # 'S<sub>YY</sub> = %{customdata[1]:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[2]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
-                                # 'S<sub>ZZ</sub> = %{customdata[3]:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[4]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
+                                'S<sub>XX</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[1]}°',
+                                # 'S<sub>YY</sub> = %{customdata[1]:.3f} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[2]:.2f} m<sup>2</sup> Hz<sup>−1</sup>)',
+                                # 'S<sub>ZZ</sub> = %{customdata[3]:.3f} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[4]:.2f} m<sup>2</sup> Hz<sup>−1</sup>)',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14096,9 +14103,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                'S<sub>XX</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
-                                # 'θ<sub>1</sub> = %{customdata[1]}°',
+                                'S<sub>XX</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[1]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14124,9 +14131,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                'S<sub>YY</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
-                                # 'θ<sub>1</sub> = %{customdata[1]}°',
+                                'S<sub>YY</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[1]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14151,9 +14158,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                'S<sub>YY</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
-                                # 'θ<sub>1</sub> = %{customdata[1]}°',
+                                'S<sub>YY</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[1]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14179,9 +14186,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                # 'θ<sub>1</sub> = %{customdata[1]}°',
-                                'S<sub>ZZ</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
+                                'S<sub>ZZ</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[1]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14206,9 +14213,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                # 'θ<sub>1</sub> = %{customdata[1]}°',
-                                'S<sub>ZZ</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>-1</sup>)',
+                                'S<sub>ZZ</sub> = %{y:.3f} g<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.2f} m<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[1]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14233,9 +14240,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                # 'θ<sub>1</sub> = %{customdata[0]}°',
-                                'C<sub>XY</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
+                                'C<sub>XY</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[0]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14260,9 +14267,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                # 'θ<sub>1</sub> = %{customdata[0]}°',
-                                'S<sub>XX</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
+                                'S<sub>XX</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[0]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14286,9 +14293,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                # 'θ<sub>1</sub> = %{customdata[0]}°',
-                                'S<sub>XX</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
+                                'S<sub>XX</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[0]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14313,9 +14320,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                # 'θ<sub>1</sub> = %{customdata[0]}°',
-                                'S<sub>YY</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
+                                'S<sub>YY</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[0]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14339,9 +14346,9 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'Dive <b>{}</b>'.format(dive),
                                 dt_str,
                                 'f = %{x:.3f} Hz',
-                                # 'θ<sub>1</sub> = %{customdata[0]}°',
-                                'S<sub>YY</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
+                                'S<sub>YY</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>−1</sup> (%{customdata[0]:.3f} g<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
+                                # 'θ<sub>1</sub> = %{customdata[0]}°',
                                 ]),
                             line=dict(
                                 color=colors[dive],
@@ -14369,7 +14376,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'f = %{x:.3f} Hz',
                                 'T = %{customdata[0]:.1f} s',
                                 'θ<sub>1</sub> = %{customdata[1]}°',
-                                'S<sub>ZZ</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[2]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
+                                'S<sub>ZZ</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>−1</sup> (%{customdata[2]:.3f} g<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
                                 ]),
                             line=dict(
@@ -14397,7 +14404,7 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
                                 'f = %{x:.3f} Hz',
                                 'T = %{customdata[0]:.1f} s',
                                 'θ<sub>1</sub> = %{customdata[1]}°',
-                                'S<sub>ZZ</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>-1</sup> (%{customdata[2]:.3f} g<sup>2</sup> Hz<sup>-1</sup>)',
+                                'S<sub>ZZ</sub> = %{y:.2f} m<sup>2</sup> Hz<sup>−1</sup> (%{customdata[2]:.3f} g<sup>2</sup> Hz<sup>−1</sup>)',
                                 '<extra></extra>',
                                 ]),
                             line=dict(
@@ -14508,7 +14515,7 @@ def WriteMicrostructurePlots(float_id, float_aggregate_data, dpath_float, dives,
         df_bands = df_bands[df_bands['dive'] == dive]
         channels = df[['ch', 'name']].drop_duplicates().sort_values(['ch', 'name'])['name'].tolist()
 
-        ink, muted, grid = 'rgb(31,35,40)', 'rgb(89,99,110)', 'rgb(230,232,235)'
+        muted, grid = 'rgb(89,99,110)', 'rgb(230,232,235)'
         series = ['rgb(42,111,219)', 'rgb(217,130,43)']     # channel colors, fixed order
         hoverlabel = dict(font=dict(family='Consolas, monospace', size=14))
 
@@ -14542,22 +14549,35 @@ def WriteMicrostructurePlots(float_id, float_aggregate_data, dpath_float, dives,
             fig.add_trace(go.Scatter(
                 x=var, y=pres, mode='lines+markers', name=name,
                 line=dict(color=color, width=2), marker=dict(size=5, color=color),
-                hovertemplate='%{y:.1f} dBar<br>%{x:.3g} counts<sup>2</sup><extra>' + name + '</extra>'),
+                hovertemplate='<br>'.join([
+                    'Dive <b>{}</b>: Profile'.format(dive),
+                    'channel = ' + name,
+                    'p = %{y:.1f} dBar',
+                    'variance = %{x:.3g} counts<sup>2</sup>',
+                    '<extra></extra>',
+                    ])),
                 row=1, col=1)
             # Channel label in the panel's lower right corner (the PNG images have no legend)
             fig.add_annotation(x=0.98, y=0.02 + 0.04 * i, xref='x domain', yref='y domain', text=name,
                                showarrow=False, xanchor='right', yanchor='bottom',
-                               font=dict(color=color, size=14))
+                               font=dict(color=color, size=12))
             with np.errstate(divide='ignore', invalid='ignore'):
                 z = np.log10(np.where(spec > 0, spec, np.nan))
             fig.add_trace(go.Heatmap(
                 x=freq, y=pres, z=np.round(z, 3), colorscale='amp', zmin=1, zmax=8,
                 showscale=(i == len(channels) - 1),
-                colorbar=dict(title=dict(text='log<sub>10</sub> S [counts<sup>2</sup> Hz<sup>-1</sup>]', side='right'),
+                colorbar=dict(title=dict(text='log<sub>10</sub> S [counts<sup>2</sup> Hz<sup>−1</sup>]', side='right'),
                               thickness=15, len=0.9),
-                hovertemplate='%{y:.1f} dBar, %{x:.1f} Hz<br>log<sub>10</sub> S = %{z:.2f}<extra>' + name + '</extra>'),
+                hovertemplate='<br>'.join([
+                    'Dive <b>{}</b>: Profile'.format(dive),
+                    'channel = ' + name,
+                    'p = %{y:.1f} dBar',
+                    'f = %{x:.1f} Hz',
+                    'log<sub>10</sub> S = %{z:.2f}',
+                    '<extra></extra>',
+                    ])),
                 row=1, col=2 + i)
-            fig.update_xaxes(type='log', title_text='{} spectrum: frequency [Hz]'.format(name), row=1, col=2 + i)
+            fig.update_xaxes(type='log', title_text='{} Spectrum: Frequency [Hz]'.format(name), row=1, col=2 + i)
         # Variance axis over the plausible variances, 10 to 1e11 counts^2 (a failing probe can send
         # 1e-6 or 1e12; shear near the surface reaches about 1e10)
         var_all = df['sigvar'].astype(float).values
@@ -14565,14 +14585,14 @@ def WriteMicrostructurePlots(float_id, float_aggregate_data, dpath_float, dives,
         var_range = None
         if len(var_all) > 1:
             var_range = [np.log10(var_all.min()) - 0.2, np.log10(var_all.max()) + 0.2]
-        fig.update_xaxes(type='log', title_text='Signal variance [counts<sup>2</sup>]', range=var_range, row=1, col=1)
+        fig.update_xaxes(type='log', title_text='Signal Variance [counts<sup>2</sup>]', range=var_range, row=1, col=1)
         fig.update_yaxes(autorange='reversed', title_text='Pressure [dBar]', row=1, col=1)
         fig.update_xaxes(gridcolor=grid, linecolor=muted)
         fig.update_yaxes(gridcolor=grid, linecolor=muted)
         fig.update_layout(
             title=dict(text='{}: Microstructure, Dive {}{}'.format(float_id, dive, when)),
             showlegend=True, legend=dict(title='Channel'), hoverlabel=hoverlabel,
-            plot_bgcolor='white', font=dict(color=ink), margin=dict(l=10, r=10, b=20, t=80, pad=4))
+            plot_bgcolor='white', margin=dict(l=10, r=10, b=20, t=50, pad=4))
         figs['microstructure_profile'] = fig
 
         # Shear spectra on log-log axes, colored by pressure
@@ -14580,35 +14600,45 @@ def WriteMicrostructurePlots(float_id, float_aggregate_data, dpath_float, dives,
         shear = [c for c in channels if c.startswith('shear')]
         if shear:
             pmax = max(1.0, np.nanmax(df[df['name'].isin(shear)]['pres'].astype(float).values))
-            scale = 'Blues'
+            # Ticks of the pressure color bar at a round step (1, 2, 2.5 or 5 x 10^n), at most 6 intervals
+            mag = 10.0 ** np.floor(np.log10(pmax))
+            step = next(m * mag for m in (0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10) if pmax / (m * mag) <= 6)
+            ticks = [round(float(x), 6) for x in np.arange(0, pmax + step / 1000, step)]
             fig = make_subplots(rows=1, cols=len(shear), shared_yaxes=True, horizontal_spacing=0.05)
             for i, name in enumerate(shear):
                 d, freq, spec = channel(name)
                 for p, s in zip(d['pres'].astype(float).values, spec):
                     if not np.isfinite(p) or not np.isfinite(s).any():
                         continue
-                    color = plotly.colors.sample_colorscale(scale, [0.25 + 0.75 * min(p / pmax, 1)])[0]
+                    # DEPTH_BLUES: light at the surface, dark at the deepest record
+                    color = plotly.colors.sample_colorscale(DEPTH_BLUES, [float(np.clip(1 - p / pmax, 0, 1))])[0]
                     fig.add_trace(go.Scatter(
                         x=freq, y=s, mode='lines', line=dict(color=color, width=1.5), showlegend=False,
-                        hovertemplate='%{x:.2f} Hz<br>%{y:.3g} counts<sup>2</sup> Hz<sup>-1</sup><extra>'
-                                      + '{} {:.0f} dBar'.format(name, p) + '</extra>'),
+                        hovertemplate='<br>'.join([
+                            'Dive <b>{}</b>: Profile'.format(dive),
+                            'channel = ' + name,
+                            'p = {:.1f} dBar'.format(p),
+                            'f = %{x:.2f} Hz',
+                            'S = %{y:.3g} counts<sup>2</sup> Hz<sup>−1</sup>',
+                            '<extra></extra>',
+                            ])),
                         row=1, col=1 + i)
-                fig.update_xaxes(type='log', title_text='{} spectra: frequency [Hz]'.format(name), row=1, col=1 + i)
-            fig.add_trace(go.Scatter(   # color bar of the pressure
+                fig.update_xaxes(type='log', title_text='{} Spectra: Frequency [Hz]'.format(name), row=1, col=1 + i)
+            fig.add_trace(go.Scatter(   # color bar of the pressure: -p, so the surface is at the top
                 x=[None], y=[None], mode='markers', showlegend=False, hoverinfo='skip',
-                marker=dict(colorscale=[[x, plotly.colors.sample_colorscale(scale, [0.25 + 0.75 * x])[0]]
-                                        for x in np.linspace(0, 1, 5)],
-                            cmin=0, cmax=pmax, color=[0], showscale=True,
-                            colorbar=dict(title=dict(text='Pressure [dBar]', side='right'), thickness=15, len=0.9))),
+                marker=dict(size=0, opacity=0, colorscale=DEPTH_BLUES, cmin=-pmax, cmax=0, color=[0],
+                            showscale=True,
+                            colorbar=dict(title=dict(text='Pressure [dBar]', side='right'), thickness=15, len=0.9,
+                                          tickvals=[-x for x in ticks], ticktext=['{:g}'.format(x) for x in ticks]))),
                 row=1, col=len(shear))
             fig.update_yaxes(type='log')     # every panel: shared axes don't share the axis type
-            fig.update_yaxes(title_text='Spectrum [counts<sup>2</sup> Hz<sup>-1</sup>]', row=1, col=1)
+            fig.update_yaxes(title_text='Spectrum [counts<sup>2</sup> Hz<sup>−1</sup>]', row=1, col=1)
             fig.update_xaxes(gridcolor=grid, linecolor=muted)
             fig.update_yaxes(gridcolor=grid, linecolor=muted)
             fig.update_layout(
                 title=dict(text='{}: Shear Spectra, Dive {}{}'.format(float_id, dive, when)),
-                showlegend=False, hoverlabel=hoverlabel, plot_bgcolor='white', font=dict(color=ink),
-                margin=dict(l=10, r=10, b=20, t=80, pad=4))
+                showlegend=False, hoverlabel=hoverlabel, plot_bgcolor='white',
+                margin=dict(l=10, r=10, b=20, t=50, pad=4))
             figs['microstructure_shear_spectra'] = fig
 
         for name, fig in figs.items():
@@ -14690,7 +14720,7 @@ def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float, df_pump=None):
         showlegend=True,
         title=dict(text='{}<br><sup>{}</sup>'.format(title, sub)),
         xaxis=dict(title='Dive'),
-        yaxis=dict(title='Remaining cycles', rangemode='tozero'),
+        yaxis=dict(title='Remaining Cycles', rangemode='tozero'),
         hovermode='x',
         hoverlabel=dict(font=dict(family='Consolas, monospace', size=12)),
         plot_bgcolor='white',
@@ -14704,10 +14734,15 @@ def WriteRemainingCyclesPlot(float_id, df, cycle_j, dpath_float, df_pump=None):
                              fill='tonexty', fillcolor=band, name='Range', hoverinfo='skip'))
     fig.add_trace(go.Scatter(x=r['dive'], y=r['remaining_mid'], mode='lines',
                              line=dict(color='rgb(31,119,180)', width=2), name='Estimate',
-                             customdata=np.column_stack([r['remaining_low'], r['remaining_high']]),
-                             hovertemplate=('Dive %{x}<br><b>Expected: %{y:.0f}</b><br>'
-                                            'Min:      %{customdata[0]:.0f}<br>'
-                                            'Max:      %{customdata[1]:.0f}<extra></extra>')))
+                             customdata=np.column_stack([HoverStr(r['remaining_low'], '{:.0f}'),
+                                                         HoverStr(r['remaining_high'], '{:.0f}')]),
+                             hovertemplate='<br>'.join([
+                                 'Dive <b>%{x}</b>',
+                                 'expected = %{y:.0f} cycles',
+                                 'min = %{customdata[0]} cycles',
+                                 'max = %{customdata[1]} cycles',
+                                 '<extra></extra>',
+                                 ])))
     if fall is not None:
         dive, v0, v_last = fall
         warn = 'rgb(214,39,40)'
@@ -14737,7 +14772,7 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
     energy_per_cycle: bars per dive stacked by component in ENERGY_COMPONENTS order, in kJ, with
     the dive total on its own line of the hover label and each component below it; the title
     gives the float total. And as energy_by_component: a one-row horizontal stacked bar
-    (ShareBarFigure) of the float total by component over the same dives, parts of at least 3%
+    (ShareBarFigure) of the float total by component over the same dives, parts of at least 5%
     labeled with the component and kJ. And as
     energy_remaining_cycles: after each dive, the cycles left if the float stays on its current
     mission, (usable energy - energy used so far, storage included) / energy per cycle, with the
@@ -15016,6 +15051,70 @@ def WritePlotFiles():
             raise Exception(errstr)
         logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
+def HoverTime(dt_str, seconds = True):
+    """Format an ISO time string (YYYY-MM-DDThh:mm:ss...) for hover text: 'YYYY-MM-DD hh:mm:ssZ', or
+    'YYYY-MM-DD hh:mmZ' with seconds = False for times taken from GPS fixes, which have no seconds
+    (plot-style-guide.md, section 1). Returns '-' for an empty or missing time."""
+    if not isinstance(dt_str, str) or len(dt_str) < 16:
+        return '-'
+    return dt_str[0:10] + ' ' + dt_str[11:19 if seconds else 16] + 'Z'
+
+
+def IntegerDiveTicks(figure):
+    """Give every axis titled 'Dive' whole-number ticks and, if it has none, a range of whole dives.
+
+    Over a short dive range Plotly's automatic ticks fall on halves (0, 0.5, 1, ...). For each
+    cartesian axis whose title is 'Dive' (and that is not a date axis), the span is taken from its
+    fixed range, or else from the finite numeric x (or y) values of the traces on it; date and
+    text values are ignored. An axis without a fixed range gets [first - 0.5, last + 0.5] over
+    whole dives, so the first and last bars are drawn whole (plot-style-guide.md, 4.4). A span up
+    to 10 dives gets a tick on every dive, up to 20 every second dive; longer spans keep Plotly's
+    ticks, which are then whole numbers. Tick labels are formatted as integers ('d') whenever the
+    axis holds dive numbers.
+    """
+    for name in [ k for k in figure.layout.to_plotly_json().keys() if re.fullmatch(r'[xy]axis\d*', k) ]:
+        axis = figure.layout[name]
+        if axis.title is None or (axis.title.text or '').strip() != 'Dive' or axis.type in ('date', 'category', 'log'):
+            continue
+        ref = name[0] + name[5:]                      # 'xaxis2' -> 'x2'
+        lo = hi = None
+        fixed = axis.range is not None and len(axis.range) == 2 and None not in axis.range
+        if fixed:
+            lo, hi = sorted(float(v) for v in axis.range)
+        else:
+            values = []
+            for trace in figure.data:
+                if (getattr(trace, name[0] + 'axis', None) or name[0]) != ref:
+                    continue
+                v = getattr(trace, name[0], None)
+                if v is None:
+                    continue
+                v = np.asarray(v)
+                if v.dtype.kind not in 'iuf':
+                    if v.dtype.kind != 'O':
+                        continue                      # dates, strings
+                    try:
+                        v = v.astype(np.double)       # numbers with None gaps
+                    except (TypeError, ValueError):
+                        continue
+                v = v.astype(np.double)
+                values.append(v[np.isfinite(v)])
+            values = np.concatenate(values) if values else np.array([])
+            if len(values):
+                lo, hi = float(values.min()), float(values.max())
+        if lo is None:
+            continue
+        axis.tickformat = 'd'
+        if not fixed:
+            lo, hi = np.floor(lo) - 0.5, np.ceil(hi) + 0.5
+            axis.update(autorange = False, range = [lo, hi])
+        span = hi - lo
+        if span <= 11:
+            axis.update(tickmode = 'linear', tick0 = 0, dtick = 1)
+        elif span <= 21:
+            axis.update(tickmode = 'linear', tick0 = 0, dtick = 2)
+
+
 def WritePlotImageFiles(
         id_str, 
         figure, 
@@ -15097,6 +15196,10 @@ def WritePlotImageFiles(
         fig_meta['fpath_svg_small'] = fig_meta['fpath'] + '_small.svg'
         fig_meta['fpath_img_thumb'] = fig_meta['fpath'] + '_thumb.png'
         
+        # Dive-number axes: whole-number ticks only (Plotly picks 0.5 steps over a few dives)
+
+        IntegerDiveTicks(figure)
+
         # Write HTML file
 
         figure.update_layout(

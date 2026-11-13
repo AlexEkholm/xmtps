@@ -3,6 +3,58 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-13
+
+Decoder:
+
+- Reprocessing (`-r`, `-R`, `-A`) fetches the new mail after each float, instead of leaving it in
+  the inbox until every float is done (hours for a full reprocess). New mail from a float still
+  waiting to be reprocessed is saved but decoded only by its float's reprocess, in order with its
+  other messages; stage 1 waits for the new mail to be saved before the next float. See
+  `spec/database-schema.md` 11.3.
+- Dynamically corrected salinity (0xDC) is listed (`salnCorr`) also when the float sends no
+  uncorrected salinity (0x3n), as VOP 10.14 floats with PPE = 2 do (11773). It was compared with
+  the missing 0x3n channel, judged incomplete and left out, so those floats had no salinity at all.
+
+Python tools:
+
+- Plot style guide (`spec/plot-style-guide.md`): a full reference for the float plots, so a new plot
+  can match the others without studying the code: hover text (symbols, units, number formats, line
+  order), titles, size classes, the standard layout, axis ranges, dive colors and named colors,
+  line widths, markers, color bars, a recipe for each plot family, the structure of a plot writer
+  and a checklist. The hover
+  text of all float plots follows it: `T` for temperature and `S` for salinity (were `t` and `s`),
+  `p`, `Δt` for time since the start of the phase,
+  `t` for pump and air-pump run times and `Σt` for cumulative pump time. Each hover starts with `Dive N: <phase>`
+  and the UTC time as `YYYY-MM-DD hh:mm:ssZ` (`YYYY-MM-DD hh:mmZ` for GPS times, which have no seconds), and the values follow in a fixed order (p, S, T, σ_Θ,
+  then the rest). Densities are shown as anomalies: σ_Θ for potential density (was σ₀), and `ρ − 1000` for in-situ density, only in the in-situ density plots. Bearings are θ, in degrees clockwise from north (displacement hovers said `bearing`). Pressures have one decimal, surface pressure data two, regridded (contour) pressures none. Densities have two decimals. The drift temperature
+  hover showed the temperature as S and the salinity as σ_Θ (wrong custom-data indices); fixed.
+- Float plots brought in line with the style guide after an audit (details in
+  `spec/plot-style-guide.md`, section 14): cycle timing as a unified stacked bar; dive-axis ranges
+  set centrally; U+2212 in exponents; no NaN in hovers; fixed ranges for the pump vacuum, pump
+  energy and GPS plots; times by source in the displacement and wave heatmap hovers; in-situ
+  density only in the in-situ density plots; microstructure
+  colors from DEPTH_BLUES; `displacement_surface` blackens the latest dive; title typos and
+  abbreviations fixed; `air_pump_pres` not written without bladder data.
+- Float plots include dive 0, the diagnostic dive, in the trajectory, maps, contours, wave and
+  SBD-type plots (it was left out). The energy plots still leave it out.
+- Profile and contour plots use the dynamically corrected salinity wherever the float sent it,
+  and `xmtps-list2json.py` computes profile density and σ_Θ from it (else from the CTD salinity).
+- Wave waterfalls and the mean-direction heatmap are drawn from a frequency x time grid
+  (`WaveGrid`): times and frequencies once, values as 2-D 32-bit floats, hover data as short
+  strings. One row per point repeated each cell's time string and frequency, and the pages reached
+  15-20 MB for floats with over a thousand dives (9245).
+- Summary page: a float is listed once end-of-dive data (profile, rise or surface data) of dive 0
+  or a later dive has arrived, from the new `end_of_dive` flag in its summary JSON. It used to need
+  dive 1 and a profile; summaries written before the flag existed still use that rule.
+- Float plots: `pump_power_v_pres` hover showed the power as the pressure (`p = %{y}`, but y is
+  power there); it now takes the pressure from x. `phase_vac` colored the dives along a ramp over
+  only the dives with vacuum data, so a dive's color differed from the other plots and the black
+  line could be an earlier dive; it now uses the float's dive colors by position in the dive list.
+- Float plots: an axis by dive number shows only whole-number ticks (`IntegerDiveTicks`, applied to
+  every axis titled "Dive"): a tick on every dive up to 10 dives, every second dive up to 20. With
+  few dives Plotly put ticks at 0.5 steps.
+
 ## 2026-11-12
 
 Decoder:
@@ -24,6 +76,18 @@ Decoder:
   apply, and the float keeps its DAC and WMO IDs (normally none). Files with a DAC ID come first.
 - PHY files are no longer written (deprecated): `gen.phy`, `--phy-enable` and `--phy-disable`
   are ignored.
+
+Database:
+
+- `XFloatMail.id_sbd_momsn` is now `int` instead of `smallint` (`sql/xmtps-schema.sql`; applied
+  on argus with `ALTER TABLE XFloatMail MODIFY id_sbd_momsn int NOT NULL DEFAULT -1`). A MOMSN of
+  32,768 or more was out of range, so stage 2 dropped the message: float 11495 lost every message
+  from MOMSN 32,768 on (2,743, February 2024).
+- Messages missing from `XFloatMail` restored: about 17,600 that exist only as RAW files (most
+  from before 2023, plus float 11495) and 71 that exist only on the mail server. The RAW files
+  hold the decoded session details and a hex dump, not the e-mail, so each was rebuilt as an
+  e-mail in the gateway's layout and imported with a one-shot run reading mail files
+  (`mail.fetchMode = 1`); the affected floats were then reprocessed.
 
 Metadata files (`/data1/alamo/meta/dac` on argus; originals in `/data1/alamo/tmp/meta-backup-2026-11-12`):
 
@@ -51,16 +115,6 @@ Python tools:
 - Startup, parameters and energy pages: the Type column shows `/WIMS` after the CTD type
   (`RBR/WIMS`, `SBE/WIMS`) for floats with valid WIMS wave data, as the summary page does. The
   check (`HasWimsData`) and the label (`FloatSubtype`) are shared in `PageStatus.py`.
-
-## 2026-11-13
-
-Decoder:
-
-- Reprocessing (`-r`, `-R`, `-A`) fetches the new mail after each float, instead of leaving it in
-  the inbox until every float is done (hours for a full reprocess). New mail from a float still
-  waiting to be reprocessed is saved but decoded only by its float's reprocess, in order with its
-  other messages; stage 1 waits for the new mail to be saved before the next float. See
-  `spec/database-schema.md` 11.3.
 
 ## 2026-11-10
 

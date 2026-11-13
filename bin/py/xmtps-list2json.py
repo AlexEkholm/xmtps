@@ -997,16 +997,21 @@ def ProcessListingFile(fpath_list):
                         dive_data.profile.saln_corr[idx] = float(col['salnCorr']) if 'salnCorr' in col and float(col['salnCorr']) > MIN_SALN else np.nan
                     else:
                         logger.error('Unsupported profile line format: \'' + line + '\'')
-                        
+
                     del x
-                        
-                    # Lookup density:
+
+                    # Lookup density, from the dynamically corrected salinity when the float sends
+                    # it (salnCorr), else from the salinity. A float with dynamic correction may
+                    # send only the corrected channel; its saln is then the fill value (NaN).
+                    saln_used = dive_data.profile.saln_corr[idx]
+                    if np.isnan(saln_used):
+                        saln_used = dive_data.profile.saln[idx]
                     dive_data.profile.dens[idx] = RhoLUT.GetRhoFromLut(
-                            dive_data.profile.saln[idx],
+                            saln_used,
                             dive_data.profile.temp[idx],
                             dive_data.profile.pres[idx])
                     dive_data.profile.sigma0[idx] = RhoLUT.GetSigma0FromLut(
-                            dive_data.profile.saln[idx],
+                            saln_used,
                             dive_data.profile.temp[idx],
                             dive_data.profile.pres[idx])
                     

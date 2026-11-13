@@ -291,10 +291,10 @@ pro  9303  483           0      290.32      19.070      19.063      36.689
 | `pres` | list of float | dBar | `pres`. Fill value kept. |
 | `temp` | list of float | °C | `temp`, or `temp1` when the float has an auxiliary channel. `NaN` if ≤ −5. |
 | `tcnd` | list of float | °C | `temp2`, the conductivity-cell temperature (auxiliary channel, [xmessage-format.md](xmessage-format.md) A.4.3). `NaN` if not listed or ≤ −5. |
-| `saln` | list of float | PSU | `saln`. `NaN` if ≤ 0. |
+| `saln` | list of float | PSU | `saln`. `NaN` if ≤ 0, and for a float that sends only the corrected channel (its `saln` is the fill value). |
 | `saln_corr` | list of float | PSU | `salnCorr`, the dynamically corrected salinity (message 0xDC, A.4.2). `NaN` if not listed or ≤ 0. |
-| `dens` | list of float | kg/m³ − 1000 | From `RhoLUT` (uses `temp`, not `tcnd`). |
-| `sigma0` | list of float | kg/m³ − 1000 | From `RhoLUT`. |
+| `dens` | list of float | kg/m³ − 1000 | From `RhoLUT` (uses `temp`, not `tcnd`), with `saln_corr` where it is not `NaN`, else `saln` (since 2026-11-13; `saln` only before). |
+| `sigma0` | list of float | kg/m³ − 1000 | From `RhoLUT`, with the same salinity as `dens`. |
 | `n` | int | | Number of bins (`PRO` `numSamples`). 0 without a `PRO` line. |
 
 Bins are in listing order, which is deepest first. A bin that has no `pro` line stays `NaN`. The `PRD`/`prd` lines (column descriptions) are ignored.
@@ -1184,6 +1184,7 @@ When the same `Gps` or `Sbd` object fills two slots (for example the deployment 
 | `fwver` | string | | `mission.fwver` of the last dive (in read order) that has one; `""` if none. |
 | `ctdtype` | string | | Likewise for `mission.ctdtype`. |
 | `profdepthsum` | float | dBar | Sum over dives ≥ 0 that are in `_profile` of the dive's maximum profile pressure, 1 decimal. 0.0 if none. The pages treat a float with `profdepthsum` > 0 and `latest.cycle` ≥ 1 as deployed. |
+| `end_of_dive` | bool | | True once end-of-dive data of dive 0 (the diagnostic dive) or a later dive is in the aggregate: binned profile rows, rise (`_ascent`) rows or surface rows. The summary page lists only floats where it is true (since 2026-11-13; absent in older summaries). |
 | `type` | string | | `"ALTO"` if the serial is above 10000, else `"ALAMO"`. |
 | `startup` | object | | `gps`, `sbd` at startup (below). |
 | `deployment` | object | | `gps`, `sbd` at deployment. |
@@ -1235,7 +1236,7 @@ Written by `bin/py/xmtps-generate-summary-page.py` (`WriteSummaryJsonFile`) next
 
 - Encoding: `json.dump(..., indent=1, allow_nan=False)`, UTF-8, with a final newline. Plain JSON: no jsonpickle tags, no `NaN`.
 - Top level: `json_vers` (`"0.11"`), `generated` (the time the file was written, `YYYY-MM-DDThh:mm:ssZ`, UTC) and `floats`, the list of records.
-- Records are built in the same loop as the table rows, so they match the table row for row: the same floats (a float is left out if `latest.cycle` < 1 or `profdepthsum` is not positive), in the same order (latest SBD message first). A row that fails is left out of both.
+- Records are built in the same loop as the table rows, so they match the table row for row: the same floats (see [plot-and-page-files.md](plot-and-page-files.md) section 5.2 for which floats are listed), in the same order (latest SBD message first). A row that fails is left out of both.
 - Numbers are rounded as on the page. Values the page shows as `-` are `null`.
 
 | Key | Type | Page column | Contents |
