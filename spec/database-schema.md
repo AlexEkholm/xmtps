@@ -580,11 +580,13 @@ With `sql.enable = 0` ([configuration-file-format.md](configuration-file-format.
 
 ## 11. Reprocessing flows
 
-Reprocessing rebuilds a float's dive data from its stored messages. It runs once, in the stage 1 thread, before mail fetching starts (`XFloatMailRetrievalService::operator()`, `src/stage1_MailRetrievalThread.cpp`).
+Reprocessing rebuilds a float's dive data from its stored messages. It runs once, in the stage 1 thread, before the normal mail fetching starts (`XFloatMailRetrievalService::operator()`, `src/stage1_MailRetrievalThread.cpp`); since 2026-11-13 new mail is also fetched between the floats (section 11.3).
 
 ### 11.1 Per-float procedure
 
 For each serial number in the reprocessing list:
+
+0. Stop holding the float's new mail (section 11.3): from now on it is decoded when it arrives.
 
 1. Delete the float's derived rows:
 
@@ -615,7 +617,19 @@ Not deleted or reset:
 - The `XFloat` row. Its gains and offsets end up as those of the last Argo message decoded. Its latest-position columns and `start_of_mission_datetime` keep any later values they already had.
 - `XFloatMetadata`.
 
+4. Fetch the new mail (section 11.3).
+
 After the list is done, stage 1 waits up to 30 s (for a non-daemon run to be stopped), then starts fetching mail.
+
+### 11.3 New mail between floats
+
+Before 2026-11-13, new mail waited in the inbox until the whole list was reprocessed (hours for `-R`, about an hour for `-A`). Now, after each float's messages are queued, stage 1 fetches all new mail from the mail server (or the RAW mail input directory) and queues it, unless the SQL server is unavailable (`FetchInboxBetweenFloats()`).
+
+A new message from a float that is still waiting in the list is saved to `XFloatMail` by stage 2 but not decoded (`XFloatMailProcessingService::HoldFloats()`, log line `Saved; decoded when the float is reprocessed.`). Decoding it at once would build its dive from the newest message, and the float's reprocess would then add the older messages to that dive out of order. Instead the float's reprocess selects it with the others (step 2) and decodes all of them in MOMSN order. New mail from a float already reprocessed, or not in the list, is decoded as usual, after that float's reprocessed messages.
+
+For step 2 to find a held message, it must be saved before the next float's messages are selected. So when any new mail was fetched, stage 1 waits until stage 2 has processed (saved or rejected) everything queued (`WaitUntilProcessed()`, counting the messages queued and processed). Each float is released (step 0) only after that wait, so none of its new mail is still queued when it is released. With no new mail, the next float starts at once.
+
+If the decoder stops before the list is done, a held message stays saved but undecoded until its float is reprocessed, as at the next start with `-A` (active floats) or the float in `-r`.
 
 ### 11.2 Building the reprocessing list
 

@@ -472,6 +472,8 @@ class XFloatMailRetrievalService:
 
     size_t FetchMailMessagesFromServer();
 
+    void FetchInboxBetweenFloats();
+
     string GenerateMailServerUrlString() const;
 
     const vmime::shared_ptr<vmime::net::session>& mail_session();

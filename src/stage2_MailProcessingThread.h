@@ -37,7 +37,9 @@
 /* Includes: */
 
 // std
+#include <atomic>
 #include <mutex>
+#include <set>
 
 // local
 #include "stage3_TelemetryDecoderThread.h"
@@ -151,9 +153,34 @@ class XFloatMailProcessingService:
      *  thread when it moves processed messages out of the inbox). */
     static std::atomic<bool> track_processed_msg_uids_;
 
+    /** Mail messages queued (@ref MsgProcessingQueuePush()) and finished, that is saved or
+     *  rejected (@ref MarkMsgProcessed()), so that the mail retrieval thread can wait until the
+     *  queue has been processed (@ref WaitUntilProcessed()). */
+    static std::atomic<unsigned long> num_queued_;
+
+    /** See @ref num_queued_. */
+    static std::atomic<unsigned long> num_done_;
+
+    /** Floats waiting to be reprocessed: a new mail message from one of them is saved but not
+     *  decoded, as its float's reprocess decodes it in order (@ref HoldFloats()). */
+    static std::set<int> held_floats_;
+
+    /** Mutex for @ref held_floats_. */
+    static std::mutex held_floats_mutex_;
+
   public:
 
     /* Public Static Member Functions: */
+
+    static void HoldFloats(const vector<unsigned int>& instrument_ids);
+
+    static void ReleaseFloat(int instrument_id);
+
+    static void ReleaseAllFloats();
+
+    static bool IsFloatHeld(int instrument_id);
+
+    static bool WaitUntilProcessed();
 
     static void set_track_processed_msg_uids(bool track);
 

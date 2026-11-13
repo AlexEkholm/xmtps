@@ -59,6 +59,14 @@ std::mutex XFloatMailProcessingService::processed_msg_uids_mutex_;
 
 std::atomic<bool> XFloatMailProcessingService::track_processed_msg_uids_(false);
 
+std::atomic<unsigned long> XFloatMailProcessingService::num_queued_(0);
+
+std::atomic<unsigned long> XFloatMailProcessingService::num_done_(0);
+
+std::set<int> XFloatMailProcessingService::held_floats_;
+
+std::mutex XFloatMailProcessingService::held_floats_mutex_;
+
 /* Function Definitions: */
 
 /** Pop a mail message out of the mail processing queue.
@@ -202,6 +210,14 @@ void XFloatMailProcessingService::ProcessMailMsg(const shared_ptr<XFloatMailMess
     // only decoded once it is saved.
     msg->SaveObjectToDatabase();
 
+    // While floats are reprocessed, a new message from a float still waiting for its turn is only
+    // saved: its float's reprocess reads it back from the database and decodes it in order with
+    // the float's other messages (see HoldFloats()).
+    if(push && IsFloatHeld(msg->id_instrument())) {
+      linf() << "Saved; decoded when the float is reprocessed.";
+      push = false;
+    }
+
     // An Iridium session without SBD data (an empty upload or a failed transfer) is not decoded,
     // but passed on so that it is listed with its dive (SBE and SBF lines).
     if(msg->is_session_without_data()) {
@@ -305,6 +321,8 @@ bool XFloatMailProcessingService::ProcessMailMsgWhenSqlAvailable(
  *  @param[in]      msg         A shared reference to the processed mail message.
  */
 void XFloatMailProcessingService::MarkMsgProcessed(const shared_ptr<XFloatMailMessage>& msg) {
+
+  ++num_done_;
 
   if(!track_processed_msg_uids_ || !msg)
     return;
@@ -485,7 +503,10 @@ void XFloatMailProcessingService::operator ()() ATTR_NO_EXCEPTIONS {
  */
 bool XFloatMailProcessingService::MsgProcessingQueuePush(const shared_ptr<XFloatMailMessage>& msg,
 bool block) {
-  return msg_processing_queue_.push(msg, block);
+  if(!msg_processing_queue_.push(msg, block))
+    return false;
+  ++num_queued_;
+  return true;
 }
 
 /** Push multiple mail messages into the mail processing queue.
@@ -505,6 +526,76 @@ void XFloatMailProcessingService::MsgProcessingQueuePushAll(
     vector<shared_ptr<XFloatMailMessage>>::const_iterator first,
     vector<shared_ptr<XFloatMailMessage>>::const_iterator last) {
   msg_processing_queue_.push(first, last);
+  num_queued_ += std::distance(first, last);
+}
+
+/** Hold the new mail messages of the floats about to be reprocessed.
+ *
+ *  While the mail retrieval thread reprocesses floats, it also fetches new mail between them. A
+ *  new message from a float that is still waiting to be reprocessed is saved but not decoded:
+ *  decoding it first would build its dive from the newest message, and the float's reprocess
+ *  would then add the older messages to the same dive out of order. The reprocess reads it back
+ *  from the database with the float's other messages instead. Each float is released
+ *  (@ref ReleaseFloat()) just before its messages are queued.
+ *
+ *  @param[in]      instrument_ids  The floats to be reprocessed.
+ */
+void XFloatMailProcessingService::HoldFloats(const vector<unsigned int>& instrument_ids) {
+
+  std::lock_guard<std::mutex> guard(held_floats_mutex_);
+  held_floats_.insert(instrument_ids.begin(), instrument_ids.end());
+}
+
+/** Stop holding the new mail messages of a float (see @ref HoldFloats()).
+ *
+ *  @param[in]      instrument_id   The float.
+ */
+void XFloatMailProcessingService::ReleaseFloat(int instrument_id) {
+
+  std::lock_guard<std::mutex> guard(held_floats_mutex_);
+  held_floats_.erase(instrument_id);
+}
+
+/** Stop holding the new mail messages of every float (see @ref HoldFloats()). */
+void XFloatMailProcessingService::ReleaseAllFloats() {
+
+  std::lock_guard<std::mutex> guard(held_floats_mutex_);
+  held_floats_.clear();
+}
+
+/** Is a float's new mail held until it is reprocessed (see @ref HoldFloats())?
+ *
+ *  @param[in]      instrument_id   The float.
+ *
+ *  @return         TRUE if the float is waiting to be reprocessed.
+ */
+bool XFloatMailProcessingService::IsFloatHeld(int instrument_id) {
+
+  std::lock_guard<std::mutex> guard(held_floats_mutex_);
+  return held_floats_.count(instrument_id) > 0;
+}
+
+/** Wait until every mail message queued so far has been processed (saved or rejected).
+ *
+ *  The mail retrieval thread calls this after fetching new mail between reprocessed floats, so
+ *  that a held message is in the database before its float's messages are read from it. While
+ *  the SQL server is unavailable, the messages are held and this waits for them too.
+ *
+ *  @return         TRUE once they have been processed, FALSE if termination was signaled first.
+ */
+bool XFloatMailProcessingService::WaitUntilProcessed() {
+
+  if(num_threads_ == 0)
+    return true;
+
+  const unsigned long target = num_queued_;
+  while(num_done_ < target) {
+    if(termination_signaled_)
+      return false;
+    sleep(millisec(XFLT_THREAD_SLEEP_MS));
+  }
+
+  return true;
 }
 
 /** Get the number of mail message processing threads.

@@ -52,6 +52,16 @@ Python tools:
   (`RBR/WIMS`, `SBE/WIMS`) for floats with valid WIMS wave data, as the summary page does. The
   check (`HasWimsData`) and the label (`FloatSubtype`) are shared in `PageStatus.py`.
 
+## 2026-11-13
+
+Decoder:
+
+- Reprocessing (`-r`, `-R`, `-A`) fetches the new mail after each float, instead of leaving it in
+  the inbox until every float is done (hours for a full reprocess). New mail from a float still
+  waiting to be reprocessed is saved but decoded only by its float's reprocess, in order with its
+  other messages; stage 1 waits for the new mail to be saved before the next float. See
+  `spec/database-schema.md` 11.3.
+
 ## 2026-11-10
 
 Python tools:

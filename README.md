@@ -157,7 +157,7 @@ libraries are the Ubuntu packages; other versions may work but are not tested.
 | `-d`, `--debug` | | Log at debug level. |
 | `-v`, `--verbose` | | Log informational messages as well (used if `-d` is not given). |
 | `-q`, `--quiet` | | Log only warnings and errors (used if neither `-d` nor `-v` is given). |
-| `-r`, `--reprocess ID ...` | none | Reprocess all stored mail messages for the given instrument serial numbers before normal operation: their dive data is deleted and rebuilt from the database. Repeatable, and accepts several IDs. |
+| `-r`, `--reprocess ID ...` | none | Reprocess all stored mail messages for the given instrument serial numbers before normal operation: their dive data is deleted and rebuilt from the database. Repeatable, and accepts several IDs. New mail is fetched between the floats; a float still waiting for its turn has its new mail saved and decoded with its reprocess ([database-schema.md](spec/database-schema.md) 11.3). |
 | `-R`, `--reprocess-all` | off | Reprocess the stored mail messages of every cached instrument at startup. |
 | `-A`, `--reprocess-active 0\|1` | `1` | Reprocess every instrument that reported in the last 90 days at startup. **On by default.** |
 | `--phy-enable ID` | none | Deprecated: PHY files are no longer written. Still reprocesses the instrument at startup. |

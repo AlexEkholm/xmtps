@@ -864,6 +864,46 @@ XFloatMailRetrievalService::~XFloatMailRetrievalService() {
     /* Do nothing. */
 }
 
+/** Fetch the new mail between two reprocessed floats.
+ *
+ *  Fetches every new message from the mail server (or, in @c MAIL_FETCH_FILESYSTEM mode, the
+ *  RAW mail input directory) and queues it, as the primary loop does, unless the SQL server is
+ *  unavailable. If any was fetched, waits until the mail processing thread has processed
+ *  everything queued (@ref XFloatMailProcessingService::WaitUntilProcessed()): a message from a
+ *  float still waiting to be reprocessed is then in the database before that float's messages
+ *  are read from it. With no new mail the next float starts at once, overlapping this one.
+ */
+void XFloatMailRetrievalService::FetchInboxBetweenFloats() {
+
+    size_t num_fetched = 0, total = 0;
+
+    try {
+
+        do {
+
+            if(!SqlServerAvailableForFetching())
+                break;
+
+            num_fetched = (mail_fetch_mode_ == MAIL_FETCH_SERVER)
+                    ? FetchMailMessagesFromServer()
+                    : FetchMailMessagesFromFileSystem();
+            total += num_fetched;
+
+        } while(num_fetched && !termination_signaled_);
+
+    }CATCH_NOTHROW("Failed to fetch new mail messages between reprocessed floats!")
+
+    if(mail_fetch_mode_ == MAIL_FETCH_SERVER)
+        DisconnectFromMailServer();
+
+    if(total) {
+        static const format fmt("Fetched %d new message(s) between reprocessed floats; waiting "
+                "for them to be saved...");
+        lout() << format(fmt) % total;
+        XFloatMailProcessingService::WaitUntilProcessed();
+    }
+}
+
 /** Functor operator overload function: the main entry point for the mail retrieval thread.
  *
  *  This function defines the behavior of the mail retrieval thread, which is responsible for
@@ -962,14 +1002,29 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
 
     if(reprocess_by_inst_ids_.size() > 0) {
 
+        /*  New mail is fetched after each float (FetchInboxBetweenFloats()), so that it is not
+         *  held up for the whole reprocess. Until a float's turn comes, its new mail is saved but
+         *  not decoded (XFloatMailProcessingService::HoldFloats()): its reprocess reads it back
+         *  from the database and decodes it in order with the float's other messages.
+         */
+        const bool fetch_between = (mail_fetch_mode_ == MAIL_FETCH_SERVER
+                                    || mail_fetch_mode_ == MAIL_FETCH_FILESYSTEM);
+        if(fetch_between)
+            XFloatMailProcessingService::HoldFloats(reprocess_by_inst_ids_);
+
         // Reprocess messages for selected instruments.
         for(auto it = reprocess_by_inst_ids_.begin();
-                it != reprocess_by_inst_ids_.end() && !termination_signaled_; ++it)
+                it != reprocess_by_inst_ids_.end() && !termination_signaled_; ++it) {
 
             try {
 
                 static const format fmt1("Reprocessing messages for instrument #%04d...");
                 lout() << format(fmt1) % *it;
+
+                // Its new mail is decoded from now on. None is queued: the queue was processed
+                // after the last fetch (FetchInboxBetweenFloats()), so it is all in the database,
+                // and mail fetched from now on is queued after this float's messages.
+                XFloatMailProcessingService::ReleaseFloat(*it);
 
                 // Delete existing dive data from database.
                 XFloatDiveData::DeleteFromDatabase(*it);
@@ -1008,11 +1063,20 @@ void XFloatMailRetrievalService::operator()() ATTR_NO_EXCEPTIONS {
                 for(auto msg_it = xmsgs.begin(); msg_it != xmsgs.end(); ++msg_it)
                     if(!PushForProcessing(*msg_it))
                         break;
+                xmsgs.clear();
 
                 // Reset instrument pointer.
                 xfloat.reset();
 
             }CATCH_NOTHROW("Failed to reprocess messages for instrument " << *it << "!")
+
+            // Let the new mail through before the next float.
+            if(fetch_between && !termination_signaled_)
+                FetchInboxBetweenFloats();
+        }
+
+        // Nothing is held once the floats are reprocessed (or termination is signaled).
+        XFloatMailProcessingService::ReleaseAllFloats();
 
         /*  Sleep for a short duration to allow time for the daemon thread to signal
          *  termination if the application is not configured to run as a daemon/service.
