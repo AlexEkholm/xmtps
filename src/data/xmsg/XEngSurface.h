@@ -289,6 +289,20 @@ private:
 
     ptime surface_sampling_end_time_;
 
+    /* Private Data Members - Fields added in version 0x15 (firmware 10.14, inferred): */
+
+    /** The time of an event during the ascent, of a kind not yet identified (version 0x15).
+     *
+     *  Inferred from float 11773 (firmware 10.14, 2026-11): a 6-byte entry before the error count,
+     *  shaped like an error-code entry (an @c s2000 time, then a 16-bit value). It was zero on the
+     *  diagnostic dive and 1 with a time during the ascent on dives 1 and 2 (3.5 and 19 minutes
+     *  before surfacing), when the float pumped during its ascent. Its meaning is unconfirmed.
+     */
+    ptime unidentified_event_time_;
+
+    /** The 16-bit value of the unidentified event (see @ref unidentified_event_time_). */
+    uint16_t unidentified_event_value_;
+
     /* Private Data Members - Fields added in version 0x12: */
 
     int16_t gps_rtc_time_delta_;
@@ -354,6 +368,8 @@ public:
                     pressure_offset_reading_(XMSG_BAD_I16),
                     surface_sampling_end_time_(not_a_date_time),
                     surface_sampling_start_time_(not_a_date_time),
+                    unidentified_event_time_(not_a_date_time),
+                    unidentified_event_value_(XMSG_BAD_U16),
                     system_current_ma_(XMSG_BAD_U16),
                     gps_rtc_time_delta_(XMSG_BAD_I16),
                     prof_raw_sample_first_pres_(XMSG_BAD_U16),
@@ -572,9 +588,13 @@ public:
               break;
           }
 
-            case 0x14: { // Engineering (Surface) message version 0x14.
+            case 0x14:   // Engineering (Surface) message version 0x14.
+            case 0x15: { // Version 0x15 (firmware 10.14): 0x14 plus a 6-byte event entry (inferred).
 
-              static const unsigned int MIN_SIZE = 76;
+              // Version 0x15 inserts the unidentified event (time, 16-bit value) at byte 74,
+              // before the error count; the error count and codes follow 6 bytes later.
+              const unsigned int x = (engineering_version() == 0x15) ? 6 : 0;
+              const unsigned int MIN_SIZE = 76 + x;
 
               if(data.size() < MIN_SIZE) {
                   ostringstream os;
@@ -618,13 +638,19 @@ public:
               set_oil_valve_open_cal_position_mv(                 u16(    d, 68));
               set_oil_valve_closed_cal_position_mv(               u16(    d, 70));
               set_pressure_offset_reading(                        i16(    d, 72));
-              set_num_errors(                                     u08(    d, 74));
+              if(x) {
+                  // A zero time means no event (the diagnostic dive of 11773).
+                  if(u32(d, 74))
+                      set_unidentified_event_time(                s2000(  d, 74));
+                  set_unidentified_event_value(                   u16(    d, 78));
+              }
+              set_num_errors(                                     u08(    d, 74 + x));
 
               // Parse the error codes.
-              for(size_t i = 0; 6 * i + 80 < xmsg_size_bytes(); i++)
+              for(size_t i = 0; 6 * i + 80 + x < xmsg_size_bytes(); i++)
                   error_codes_.push_back(
-                          make_shared<XEngErrorCode>(             s2000(  d, (6 * i) + 75),
-                                                                  u16(    d, (6 * i) + 79)));
+                          make_shared<XEngErrorCode>(             s2000(  d, (6 * i) + 75 + x),
+                                                                  u16(    d, (6 * i) + 79 + x)));
 
               break;
             }
@@ -1137,7 +1163,8 @@ public:
             }
                 break;
 
-            case 0x14: { // Engineering (Surface) version 0x14.
+            case 0x14:   // Engineering (Surface) version 0x14.
+            case 0x15: { // Version 0x15: as 0x14, plus the unidentified event before the errors.
 
                 unsigned int midx = 0;
 
@@ -1350,6 +1377,32 @@ public:
                          % id_instrument()      % id_dive()             % midx++
                          % GenerateIso8601String(surface_sampling_start_time())
                          %  GenerateIso8601String(surface_sampling_end_time())
+                         << endl;
+                }
+
+                // Version 0x15: the event entry inferred from float 11773 (meaning unconfirmed).
+                if(engineering_version() == 0x15) {
+                    os << "# --- Unidentified Event (inferred, v0x15) ----------------------------"
+                            "-----------------------------"
+                        << endl;
+                    static const format fmt1(
+                        "#   %5s %4s %4s "
+                        "%20s %15s");
+                    static const format fmt2(
+                        "E0A %05d %4d %4d "
+                        "%20s %15d");
+                    os << format(fmt1)
+                         % "SN"                 % "dive"                % "midx"
+                         % "eventTime"          % "eventValue"
+                         << endl;
+                    os << format(fmt1)
+                         % ""                   % ""                    % ""
+                         % ""                   % ""
+                         << endl;
+                    os << format(fmt2)
+                         % id_instrument()      % id_dive()             % midx++
+                         % GenerateIso8601String(unidentified_event_time())
+                         % unidentified_event_value()
                          << endl;
                 }
 
@@ -1843,6 +1896,22 @@ protected:
 
     void set_surface_sampling_start_time(const ptime& surface_sampling_start_time) {
       surface_sampling_start_time_ = surface_sampling_start_time;
+    }
+
+    const ptime& unidentified_event_time() const {
+      return unidentified_event_time_;
+    }
+
+    uint16_t unidentified_event_value() const {
+      return unidentified_event_value_;
+    }
+
+    void set_unidentified_event_time(const ptime& unidentified_event_time) {
+      unidentified_event_time_ = unidentified_event_time;
+    }
+
+    void set_unidentified_event_value(uint16_t unidentified_event_value) {
+      unidentified_event_value_ = unidentified_event_value;
     }
 };
 

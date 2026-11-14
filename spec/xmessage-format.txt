@@ -202,7 +202,7 @@ Message type index
 +-----------+--------------------------+------------+-----------------------+----------------------+
 | 0xE9      | Engineering, ascent      | B.5        | versions 0x10–0x12    | E09                  |
 +-----------+--------------------------+------------+-----------------------+----------------------+
-| 0xEA      | Engineering, surface     | B.6        | versions 0x10–0x14    | E0A, e0A             |
+| 0xEA      | Engineering, surface     | B.6        | versions 0x10–0x15    | E0A, e0A             |
 +-----------+--------------------------+------------+-----------------------+----------------------+
 | 0xEB      | Valve operations         | A.5.4      | yes                   | VLV/vlv              |
 +-----------+--------------------------+------------+-----------------------+----------------------+
@@ -891,9 +891,10 @@ XProfileSalinityCorrected.h)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Purpose. A second binned-profile salinity channel, corrected on the float (RBR dynamic correction).
-It is sent only when mission parameter PPE (dynamic correction mode) = 2 [O]. Values use the
-salinity gain and offset, and differ from the uncorrected salinity by a few thousandths of a PSU (at
-most about 0.07). Not in any MRV or spreadsheet document.
+It is sent when mission parameter PPE (dynamic correction mode) is non-zero: PPE = 2 on 10.12 floats
+[O], PPE = 1 on the 10.14 float 11773 [O] (2026-11). Values use the salinity gain and offset, and
+differ from the uncorrected salinity by a few thousandths of a PSU (at most about 0.07). Not in any
+MRV or spreadsheet document.
 
 +--------+------+---------+--------------------+-------------+-------------------------------------+
 | Offset | Size | Type    | Field              | Scale/units | Notes                               |
@@ -938,8 +939,9 @@ Decoder [D]:
   includes VVV.
 - The total count equals the 0x3n salinity count. The parts can split differently from 0x3n [O].
 - The salnCorr column is added to pro only when the corrected channel is complete (contiguous
-  indices and the same count as salinity). Otherwise # (Incomplete Corrected Salinity Data) is
-  printed.
+  indices and the same count as salinity, or as pressure when the float sends no 0x3n salinity, as
+  VOP 10.14 floats with PPE = 2 do; since 2026-11-13). Otherwise
+  # (Incomplete Corrected Salinity Data) is printed.
 - In the JSON output it is saln_corr (NaN when absent).
 
 
@@ -3154,7 +3156,7 @@ pump and valve measurements, the surface pressure offset reading, profile bookke
 raw CTD sample, bin counts), the GPS–RTC clock difference, and the list of system errors recorded
 during the dive cycle.
 
-Decoder: XEngSurface, minimum 46 bytes. Versions 0x10–0x14.
+Decoder: XEngSurface, minimum 46 bytes. Versions 0x10–0x15 (0x15 inferred, B.6.6a).
 
 
 B.6.1 Error list
@@ -3162,12 +3164,12 @@ B.6.1 Error list
 
 Every version ends with an error count N (u8) followed by N entries and the terminator.
 
-+-----------+------------+---------------------------------------------+-------------------+
-| Version   | Entry size | Entry layout                                | First entry at    |
-+===========+============+=============================================+===================+
-| 0x10      | 4          | u32 error code (no timestamp)               | 47                |
-| 0x11–0x14 | 6          | u32 time (s2000), then u16 error code (B.9) | 45 / 49 / 67 / 75 |
-+-----------+------------+---------------------------------------------+-------------------+
++-----------+------------+---------------------------------------------+------------------------+
+| Version   | Entry size | Entry layout                                | First entry at         |
++===========+============+=============================================+========================+
+| 0x10      | 4          | u32 error code (no timestamp)               | 47                     |
+| 0x11–0x15 | 6          | u32 time (s2000), then u16 error code (B.9) | 45 / 49 / 67 / 75 / 81 |
++-----------+------------+---------------------------------------------+------------------------+
 
 The message size is therefore first + entry × N + 1. The decoder reads entries while the next entry
 ends before the terminator, then requires the number read to equal N (XMSG_DEBUG_ENG_SURF is false,
@@ -3489,11 +3491,49 @@ start time, and the clock/packet fields reordered. Firmware 7.3.5, 10.5.0 and 10
 +--------+------+---------+----------------------------+--------------+----------------------------+
 
 
+B.6.6a Version 0x15 (82 + 6N bytes, inferred)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Inferred from data, not from MRV documentation (2026-11-13): seen only from float 11773, VOP
+firmware 10.14, which the firmware change log (up to 10.13.0) does not cover. Three messages (dives
+0, 1, 2) decode as version 0x14 through offset 73, with every field consistent with the float's
+other data (the surface start equals the end of the ascent in the A lines, the case vacuum at start
+equals the E09 end-of-ascent vacuum, the first raw pressure equals the ascent's starting pressure,
+the air bladder reaches the 7.5 psi target). One 6-byte entry follows, shaped like an error entry,
+before the error count:
+
++--------+------+------+------------------------------+-------------+------------------------------+
+| Offset | Size | Type | Field                        | Scale/units | Notes                        |
++========+======+======+==============================+=============+==============================+
+| 0–73   |      |      | as version 0x14 (B.6.6),     |             |                              |
+|        |      |      | with size = 82 + 6N and      |             |                              |
+|        |      |      | version = 0x15               |             |                              |
++--------+------+------+------------------------------+-------------+------------------------------+
+| 74     | 4    | u32  | unidentified event: time     | s2000       | 0 = none (listed as          |
+|        |      |      |                              |             | 0000-00-00T00:00:00Z)        |
++--------+------+------+------------------------------+-------------+------------------------------+
+| 78     | 2    | u16  | unidentified event: value    |             |                              |
++--------+------+------+------------------------------+-------------+------------------------------+
+| 80     | 1    | u8   | error count N                |             |                              |
++--------+------+------+------------------------------+-------------+------------------------------+
+| 81     | 6N   |      | error entries (B.6.1)        |             |                              |
++--------+------+------+------------------------------+-------------+------------------------------+
+| 81+6N  | 1    | char | ;                            |             |                              |
++--------+------+------+------------------------------+-------------+------------------------------+
+
+Observed on 11773: dive 0 (diagnostic dive) all zeros; dive 1 2026-11-12T21:00:22Z, 1 (during the
+ascent, 3.4 min before surfacing, near 21 dbar); dive 2 2026-11-12T22:56:31Z, 1 (during the ascent,
+19 min before surfacing, while the float stayed at 167.8 dbar and pumped). Both dives had a second
+oil-pump operation during the ascent. The meaning (an ascent event such as an extra ascent pump or a
+valve action) is unconfirmed; the decoder stores it as
+unidentified_event_time/unidentified_event_value and lists it as eventTime, eventValue.
+
+
 B.6.7 Decoding notes
 ~~~~~~~~~~~~~~~~~~~~
 
-- Minimum sizes: 48 (0x10), 46 (0x11), 50 (0x12), 68 (0x13), 76 (0x14); longer messages carry error
-  entries. Unknown versions are rejected.
+- Minimum sizes: 48 (0x10), 46 (0x11), 50 (0x12), 68 (0x13), 76 (0x14), 82 (0x15); longer messages
+  carry error entries. Unknown versions are rejected.
 - The pressure offset reading is listed with XMsgFormatPressure() (two decimals, fill −9.999 if
   outside −5…2610 dbar).
 - First/last raw samples are converted with the profile gains/offsets and range-checked.
@@ -3557,9 +3597,12 @@ B.6.8 Listing output (E0A, e0A)
 | 10   | —                | —                | —              | —                | E0A nErr        |
 +------+------------------+------------------+----------------+------------------+-----------------+
 
+Version 0x15 lists as 0x14, with one more group, Unidentified Event (inferred, v0x15), at midx 10
+(eventTime, eventValue), so its E0A nErr line is midx 11.
+
 When there are errors, a heading and one e0A line per entry follow: e0A SN dive idx date-time 0x%08X
 (idx counts from 0; version 0x10 prints 0000-00-00T00:00:00Z for the missing time). The nErr line is
-tagged e0A in versions 0x11 and 0x12 but E0A in 0x13 and 0x14. The CTD status is listed only by
+tagged e0A in versions 0x11 and 0x12 but E0A in 0x13 to 0x15. The CTD status is listed only by
 version 0x10; the 0x11 fields nSBD/nPrevAttempt are printed for all later versions.
 
 (Fixed in build 3309.) In version 0x10 the error heading's format string had five fields but was
@@ -3725,9 +3768,10 @@ B.8 Version summary
 |                  |                       |                        | 10.5.0, 10.12.0 (0x12        |
 |                  |                       |                        | layout)                      |
 +------------------+-----------------------+------------------------+------------------------------+
-| 0xEA             | 0x10–0x14             | 48+4N, 46+6N, 50+6N,   | spreadsheet (0x11–0x13);     |
-|                  |                       | 68+6N, 76+6N           | 7.3.5, 10.5.0, 10.12.0       |
-|                  |                       |                        | (0x14)                       |
+| 0xEA             | 0x10–0x15             | 48+4N, 46+6N, 50+6N,   | spreadsheet (0x11–0x13);     |
+|                  |                       | 68+6N, 76+6N, 82+6N    | 7.3.5, 10.5.0, 10.12.0       |
+|                  |                       |                        | (0x14); 0x15 inferred from   |
+|                  |                       |                        | 11773 data (10.14)           |
 +------------------+-----------------------+------------------------+------------------------------+
 | 0xEC             | 0x10, 0x11            | 21, 24+6N              | spreadsheet (0x10, 0x11);    |
 |                  |                       |                        | 10.5.0 (0x11)                |
@@ -3737,7 +3781,7 @@ B.8 Version summary
 B.9 System error codes
 ----------------------
 
-The 0xEA (versions 0x10–0x14) and 0xEC (version 0x11) error lists carry ALAMO firmware system error
+The 0xEA (versions 0x10–0x15) and 0xEC (version 0x11) error lists carry ALAMO firmware system error
 codes. A code is 16 bits on the wire (32 bits in 0xEA v0x10; the firmware enum ASSERT_LOG_ERROR_* is
 32 bits wide). The low byte names the module or mission state and the high byte the specific error
 within it; a high byte of 0 is the generic error of that module. For example, 0x010C is module 0x0C
@@ -3909,7 +3953,7 @@ Decoder behavior worth knowing (not format discrepancies):
 
 - 0xEA v0x10 with errors: the error heading has more format fields than values, which makes
   boost::format throw during listing generation (inferred).
-- 0xEA nErr lines are tagged e0A in v0x11/0x12 and E0A in v0x13/0x14.
+- 0xEA nErr lines are tagged e0A in v0x11/0x12 and E0A in v0x13–v0x15.
 - BIT formats 9–11 are accepted at any size (warning only) because XMSG_DEBUG_BIST is on.
 - XEngAscent, XEngIce and XAlamoBit2 leave some members uninitialized; the listings do not print
   those members.
@@ -5184,9 +5228,11 @@ D1 (71 bytes without the CTD correction parameters, 88 bytes with them)
 |          |      |      |          |               | the 88-byte form.                            |
 +----------+------+------+----------+---------------+----------------------------------------------+
 |       86 |    1 | U1   | PPE      | enum          | PPE: RBR post-processing (dynamic            |
-|          |      |      |          |               | correction) enable. Floats with PPE = 2 send |
-|          |      |      |          |               | corrected salinity (0xDC). Only in the       |
-|          |      |      |          |               | 88-byte form.                                |
+|          |      |      |          |               | correction) enable. Floats with PPE ≠ 0 send |
+|          |      |      |          |               | corrected salinity (0xDC): PPE = 2 on 10.12  |
+|          |      |      |          |               | floats, PPE = 1 on 10.14.0.40 (11773). Only  |
+|          |      |      |          |               | in the 88-byte form. Listed since            |
+|          |      |      |          |               | 2026-11-13.                                  |
 +----------+------+------+----------+---------------+----------------------------------------------+
 | 70 or 87 |    1 | char | ;        |               | Terminator.                                  |
 +----------+------+------+----------+---------------+----------------------------------------------+
@@ -5199,19 +5245,22 @@ when the blob is 88 bytes long.
 Variants of the current D1
 ..........................
 
-+-------------------------------------------+----------+-------------------------------------------+
-| Layout (firmware)                         | D1 bytes | Difference from the table above           |
-+===========================================+==========+===========================================+
-| Fw0A070101 (10.7.1.1)                     |       88 | Only 88 bytes is accepted. [decoder]      |
-|                                           |          | PPC0-PPE at offsets 70-86 are not decoded |
-|                                           |          | (the lines are commented out), so they    |
-|                                           |          | keep their unset values.                  |
-+-------------------------------------------+----------+-------------------------------------------+
-| Fw0A080031 (WIMS: 10.7.1.31, 10.8.0.31,   |       90 | WMT (U2, s, WIMS timeout) at offset 70.   |
-| 10.9.1.31, 10.10.0.31, 10.12.1.31)        |          | PPC0 at 72, PPC1 at 76, PPC2 at 80, PPC3  |
-|                                           |          | at 84 (R4), PPE at 88 (U1), terminator at |
-|                                           |          | 89.                                       |
-+-------------------------------------------+----------+-------------------------------------------+
++------------------------------------------+----------+--------------------------------------------+
+| Layout (firmware)                        | D1 bytes | Difference from the table above            |
++==========================================+==========+============================================+
+| Fw0A070101 (10.7.1.1)                    |       88 | [decoder] Since 2026-11-13 decoded with    |
+|                                          |          | the Fw0A080004 code, which reads PPC0–PPC3 |
+|                                          |          | (R4) at 70, 74, 78, 82 and PPE (U1) at 86  |
+|                                          |          | from the 88-byte form. Before,             |
+|                                          |          | DecodeXMsgDataFw0A070101 left them         |
+|                                          |          | undecoded (its lines were commented out    |
+|                                          |          | and used the WIMS offsets).                |
++------------------------------------------+----------+--------------------------------------------+
+| Fw0A080031 (WIMS: 10.7.1.31, 10.8.0.31,  |       90 | WMT (U2, s, WIMS timeout) at offset 70.    |
+| 10.9.1.31, 10.10.0.31, 10.12.1.31)       |          | PPC0 at 72, PPC1 at 76, PPC2 at 80, PPC3   |
+|                                          |          | at 84 (R4), PPE at 88 (U1), terminator at  |
+|                                          |          | 89.                                        |
++------------------------------------------+----------+--------------------------------------------+
 
 
 C.1.8 The 10.5/10.6 layout (Fw0A050000, Fw0A060200, Fw0A060231)
@@ -5439,15 +5488,16 @@ styles exist.
      decimals.
    - Sections, in order: General; BIT (layouts before 10.7 only); Calibration Coefficients;
      Start-of-Mission Trigger; Diagnostic Dive; Mission Phase; Profile; Profile - Dynamic Salinity
-     Correction (only in the 0A050000, 0A060231 and 0A080031 listings); Profile - Binning
-     Configuration (CPN/CPP depend on the CTD type: RBR scaled, SBE raw dBar, unknown raw); Profile
-     - Raw Sampling; Profile - Surface Offset Correction; Pump Characteristics; Descent (General,
-     Fall Time-Series, Stages 1-3); Drift/Park (General, Seek, Start of Profile Trigger, Fall to
-     Profile Pressure); Ascent/Profile (General, Rise Time-Series, Ice-Detection, Ice-Detection
-     Summer and Winter); Surface (General, Air Pump, Sampling, Sat./Comm., Abort/Beacon Mode);
-     Surface - Wave-Field Measurement (WST, only in the WIMS listings 08000000, 0A060231 and
-     0A080031; the 06057700 listing prints WMT instead, which that layout never decodes, so it
-     always shows 65535).
+     Correction (PPE, PPC0–PPC3: always in the WIMS listings 0A060231 and 0A080031; in the 0A050000
+     and 0A070101 listings since 2026-11-13, for RBR floats whose message carried them; before then
+     those two listings had the lines commented out); Profile - Binning Configuration (CPN/CPP
+     depend on the CTD type: RBR scaled, SBE raw dBar, unknown raw); Profile - Raw Sampling; Profile
+     - Surface Offset Correction; Pump Characteristics; Descent (General, Fall Time-Series, Stages
+     1-3); Drift/Park (General, Seek, Start of Profile Trigger, Fall to Profile Pressure);
+     Ascent/Profile (General, Rise Time-Series, Ice-Detection, Ice-Detection Summer and Winter);
+     Surface (General, Air Pump, Sampling, Sat./Comm., Abort/Beacon Mode); Surface - Wave-Field
+     Measurement (WST, only in the WIMS listings 08000000, 0A060231 and 0A080031; the 06057700
+     listing prints WMT instead, which that layout never decodes, so it always shows 65535).
    - A 10.12.0.x listing has 177 m lines.
    - The Python tools keep each m line (section, index, name, value, units) in the dive JSON as
      mission.entries, and keep cfgver, fwver and ctdtype from the MIS line.

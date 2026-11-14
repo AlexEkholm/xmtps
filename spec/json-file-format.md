@@ -535,7 +535,7 @@ The message layouts are in [xmessage-format.md](xmessage-format.md) part B.
 | `dt_fall_start` | `start-of-fall` | `DateTime` | 0x12 |
 | `fall_start_pres_dbar` | `fallP` | dBar | 0x12 |
 
-#### 3.14.6 `EngineeringSurface` (`E0A`, versions 0x10–0x14)
+#### 3.14.6 `EngineeringSurface` (`E0A`, versions 0x10–0x15)
 
 | Attribute | Listing column | Units | Versions |
 |---|---|---|---|
@@ -573,6 +573,8 @@ The message layouts are in [xmessage-format.md](xmessage-format.md) part B.
 | `gps_rtc_offset_s` | `gpsOffset` | s | 0x13+ |
 | `dt_sampling_start` | `start` (surface sampling) | `DateTime` | 0x14 |
 | `dt_sampling_end` | `end` (surface sampling) | `DateTime` | 0x14 |
+| `dt_event` | `eventTime` (unidentified event, meaning unconfirmed) | `DateTime` | 0x15 |
+| `event_value` | `eventValue` (unidentified event) | integer | 0x15 |
 | `num_errors` | `nErr` | count | 0x11+ [inferred] |
 
 "First" and "last" refer to the first and last profile bin.

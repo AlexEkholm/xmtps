@@ -897,7 +897,7 @@ class EngineeringAscent(EngineeringData):
         self.fall_start_pres_dbar            = np.nan   # fallP (dBar), v0x12
 
 class EngineeringSurface(EngineeringData):
-    """Surface engineering message (E0A, versions 0x10-0x14)."""
+    """Surface engineering message (E0A, versions 0x10-0x15)."""
 
     def __init__(self, dt_start = None, vac0 = -9.99, vac1 = -9.99):
         """Initialize every attribute to its not-reported default (dt_start None: unset).
@@ -944,6 +944,8 @@ class EngineeringSurface(EngineeringData):
         self.gps_rtc_offset_s                = np.nan   # gpsOffset (sec), v0x13+
         self.dt_sampling_start               = DateTime()   # start (surface sampling), v0x14
         self.dt_sampling_end                 = DateTime()   # end (surface sampling), v0x14
+        self.dt_event                        = DateTime()   # eventTime (unidentified event), v0x15
+        self.event_value                     = np.nan   # eventValue (unidentified event), v0x15
         self.num_errors                      = np.nan   # nErr
 
 class EngineeringIce:

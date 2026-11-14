@@ -985,6 +985,7 @@ Version differences, in short (details in B.6.8):
 - 0x12: adds Surface Pressure at `midx` 4; error count on an `e0A` line at `midx` 5.
 - 0x13: adds first/last sample, meta and clock (`midx` 5–8); error count on an `E0A` line at `midx` 9.
 - 0x14: adds Surface Sampling (`midx` 9); error count at `midx` 10.
+- 0x15 (firmware 10.14, layout inferred, [xmessage-format.md B.6.6a](xmessage-format.md)): adds `Unidentified Event (inferred, v0x15)` at `midx` 10 (`eventTime`, `eventValue`; `0000-00-00T00:00:00Z` and 0 when the float sent no event); error count at `midx` 11. Since 2026-11-13.
 - The header label `ACVpenCal` is a typo for the air valve open calibration position; the parser keys on the typo.
 
 ### 9.8 Engineering parser notes

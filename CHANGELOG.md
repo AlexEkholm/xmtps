@@ -7,6 +7,12 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Decoder:
 
+- Surface engineering messages (0xEA) of version 0x15, sent by firmware 10.14 (11773), are
+  decoded instead of rejected. The layout was inferred from 11773's messages: version 0x14 with
+  one more entry, a time and a 16-bit value, before the error count. Its meaning is not yet
+  known (it was set during the ascent of dives 1 and 2); it is listed as an `Unidentified Event`
+  group (`eventTime`, `eventValue`) and kept in the dive JSON as `surface.dt_event` and
+  `surface.event_value`. See `spec/xmessage-format.md` B.6.6a.
 - Listings of RBR floats on 10.7–10.14 firmware whose mission configuration carries the dynamic
   salinity correction parameters (the 88-byte form) show them: `PPE` (dynamic correction mode) and
   `PPC0`–`PPC3`, in a `Profile - Dynamic Salinity Correction` group. They were decoded, but the

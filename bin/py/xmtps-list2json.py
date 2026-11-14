@@ -308,6 +308,7 @@ ENG_COLUMNS = {
         'numBins': 'prof_num_bins', 'numEmptyBins': 'prof_num_empty_bins',
         'numRawSamples': 'prof_num_raw_samples', 'gpsOffset': 'gps_rtc_offset_s',
         'start': 'dt_sampling_start', 'end': 'dt_sampling_end', 'nErr': 'num_errors',
+        'eventTime': 'dt_event', 'eventValue': 'event_value',
         },
     'ice': {
         'engVer': 'version', 'mode': 'mode', 'ice-status': 'ice_status', 'urgency': 'urgency',

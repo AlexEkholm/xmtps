@@ -96,7 +96,7 @@ The MRV documents and the SOLO-II PDF are in the Float Group's `mrv/doc` folder.
 | 0xE7 | Engineering, descent | B.3 | versions 0x10–0x11 | `E07` |
 | 0xE8 | Engineering, drift/park | B.4 | versions 0x10–0x12 | `E08` |
 | 0xE9 | Engineering, ascent | B.5 | versions 0x10–0x12 | `E09` |
-| 0xEA | Engineering, surface | B.6 | versions 0x10–0x14 | `E0A`, `e0A` |
+| 0xEA | Engineering, surface | B.6 | versions 0x10–0x15 | `E0A`, `e0A` |
 | 0xEB | Valve operations | A.5.4 | yes | `VLV`/`vlv` |
 | 0xEC | Engineering, ice detection | B.7 | versions 0x10–0x11 | `E0C`, `e0c` |
 | 0xF0 | Argo data (mission summary, gains and offsets) | A.6 | v2.1–v2.4 | `A` |
@@ -1929,7 +1929,7 @@ vacuum, air pump and valve measurements, the surface pressure offset reading, pr
 bookkeeping (first/last raw CTD sample, bin counts), the GPS–RTC clock difference, and the list
 of system errors recorded during the dive cycle.
 
-**Decoder:** `XEngSurface`, minimum 46 bytes. Versions 0x10–0x14.
+**Decoder:** `XEngSurface`, minimum 46 bytes. Versions 0x10–0x15 (0x15 inferred, B.6.6a).
 
 #### B.6.1 Error list
 
@@ -1938,7 +1938,7 @@ Every version ends with an error count `N` (`u8`) followed by `N` entries and th
 | Version | Entry size | Entry layout | First entry at |
 |---|---|---|---|
 | 0x10 | 4 | `u32` error code (no timestamp) | 47 |
-| 0x11–0x14 | 6 | `u32` time (`s2000`), then `u16` error code (B.9) | 45 / 49 / 67 / 75 |
+| 0x11–0x15 | 6 | `u32` time (`s2000`), then `u16` error code (B.9) | 45 / 49 / 67 / 75 / 81 |
 
 The message size is therefore `first + entry × N + 1`. The decoder reads entries while the
 next entry ends before the terminator, then requires the number read to equal `N`
@@ -2112,9 +2112,35 @@ the start time, and the clock/packet fields reordered. Firmware 7.3.5, 10.5.0 an
 | 75 | 6N | | error entries (B.6.1) | | 10.5.0 lists room for 10 entries |
 | 75+6N | 1 | char | `;` | | |
 
+#### B.6.6a Version 0x15 (82 + 6N bytes, inferred)
+
+*Inferred from data, not from MRV documentation* (2026-11-13): seen only from float 11773, VOP
+firmware 10.14, which the firmware change log (up to 10.13.0) does not cover. Three messages
+(dives 0, 1, 2) decode as version 0x14 through offset 73, with every field consistent with the
+float's other data (the surface start equals the end of the ascent in the `A` lines, the case
+vacuum at start equals the `E09` end-of-ascent vacuum, the first raw pressure equals the ascent's
+starting pressure, the air bladder reaches the 7.5 psi target). One 6-byte entry follows,
+shaped like an error entry, before the error count:
+
+| Offset | Size | Type | Field | Scale/units | Notes |
+|---|---|---|---|---|---|
+| 0–73 | | | as version 0x14 (B.6.6), with size = 82 + 6N and version = 0x15 | | |
+| 74 | 4 | u32 | **unidentified event: time** | `s2000` | 0 = none (listed as `0000-00-00T00:00:00Z`) |
+| 78 | 2 | u16 | **unidentified event: value** | | |
+| 80 | 1 | u8 | error count N | | |
+| 81 | 6N | | error entries (B.6.1) | | |
+| 81+6N | 1 | char | `;` | | |
+
+Observed on 11773: dive 0 (diagnostic dive) all zeros; dive 1 `2026-11-12T21:00:22Z`, 1 (during
+the ascent, 3.4 min before surfacing, near 21 dbar); dive 2 `2026-11-12T22:56:31Z`, 1 (during the
+ascent, 19 min before surfacing, while the float stayed at 167.8 dbar and pumped). Both dives had
+a second oil-pump operation during the ascent. The meaning (an ascent event such as an extra
+ascent pump or a valve action) is unconfirmed; the decoder stores it as
+`unidentified_event_time`/`unidentified_event_value` and lists it as `eventTime`, `eventValue`.
+
 #### B.6.7 Decoding notes
 
-- Minimum sizes: 48 (0x10), 46 (0x11), 50 (0x12), 68 (0x13), 76 (0x14); longer messages carry
+- Minimum sizes: 48 (0x10), 46 (0x11), 50 (0x12), 68 (0x13), 76 (0x14), 82 (0x15); longer messages carry
   error entries. Unknown versions are rejected.
 - The pressure offset reading is listed with `XMsgFormatPressure()` (two decimals, fill −9.999
   if outside −5…2610 dbar).
@@ -2138,10 +2164,13 @@ the start time, and the clock/packet fields reordered. Firmware 7.3.5, 10.5.0 an
 | 9 | — | — | — | `E0A` nErr | surface sampling start, end |
 | 10 | — | — | — | — | `E0A` nErr |
 
+Version 0x15 lists as 0x14, with one more group, `Unidentified Event (inferred, v0x15)`, at
+midx 10 (`eventTime`, `eventValue`), so its `E0A` nErr line is midx 11.
+
 When there are errors, a heading and one `e0A` line per entry follow: `e0A SN dive idx
 date-time 0x%08X` (`idx` counts from 0; version 0x10 prints `0000-00-00T00:00:00Z` for the
-missing time). The `nErr` line is tagged `e0A` in versions 0x11 and 0x12 but `E0A` in 0x13 and
-0x14. The CTD status is listed only by version 0x10; the 0x11 fields `nSBD`/`nPrevAttempt` are
+missing time). The `nErr` line is tagged `e0A` in versions 0x11 and 0x12 but `E0A` in 0x13 to
+0x15. The CTD status is listed only by version 0x10; the 0x11 fields `nSBD`/`nPrevAttempt` are
 printed for all later versions.
 
 *(Fixed in build 3309.)* In version 0x10 the error heading's format string had five fields but was given four values;
@@ -2247,14 +2276,14 @@ e0c 09213    8    0 2026-09-29T00:56:40Z      0x00000114
 | 0xE7 | 0x10, 0x11 | 23/27, 22 | spreadsheet, 7.3.5, 10.5.0, 10.12.0 (0x11) |
 | 0xE8 | 0x10, 0x11, 0x12 | 19, 28, 22 | spreadsheet (0x11); 7.3.5, 10.5.0, 10.12.0 (0x12 layout) |
 | 0xE9 | 0x10, 0x11, 0x12 | 13, 13, 19 | spreadsheet (0x11); 7.3.5, 10.5.0, 10.12.0 (0x12 layout) |
-| 0xEA | 0x10–0x14 | 48+4N, 46+6N, 50+6N, 68+6N, 76+6N | spreadsheet (0x11–0x13); 7.3.5, 10.5.0, 10.12.0 (0x14) |
+| 0xEA | 0x10–0x15 | 48+4N, 46+6N, 50+6N, 68+6N, 76+6N, 82+6N | spreadsheet (0x11–0x13); 7.3.5, 10.5.0, 10.12.0 (0x14); 0x15 inferred from 11773 data (10.14) |
 | 0xEC | 0x10, 0x11 | 21, 24+6N | spreadsheet (0x10, 0x11); 10.5.0 (0x11) |
 
 ---
 
 ### B.9 System error codes
 
-The 0xEA (versions 0x10–0x14) and 0xEC (version 0x11) error lists carry ALAMO firmware system
+The 0xEA (versions 0x10–0x15) and 0xEC (version 0x11) error lists carry ALAMO firmware system
 error codes. A code is 16 bits on the wire (32 bits in 0xEA v0x10; the firmware enum
 `ASSERT_LOG_ERROR_*` is 32 bits wide). The **low byte** names the module or mission state and
 the **high byte** the specific error within it; a high byte of 0 is the generic error of that
@@ -2423,7 +2452,7 @@ Decoder behavior worth knowing (not format discrepancies):
 
 - 0xEA v0x10 with errors: the error heading has more format fields than values, which makes
   boost::format throw during listing generation (inferred).
-- 0xEA `nErr` lines are tagged `e0A` in v0x11/0x12 and `E0A` in v0x13/0x14.
+- 0xEA `nErr` lines are tagged `e0A` in v0x11/0x12 and `E0A` in v0x13–v0x15.
 - BIT formats 9–11 are accepted at any size (warning only) because `XMSG_DEBUG_BIST` is on.
 - `XEngAscent`, `XEngIce` and `XAlamoBit2` leave some members uninitialized; the listings do not
   print those members.
