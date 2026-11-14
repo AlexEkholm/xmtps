@@ -35,6 +35,7 @@ import json
 import numpy as np
 
 G0 = 9.81
+PUMP_POWER = {'ALTO': (2.93, 0.00491), 'ALAMO': (3.07, 0.00396)}   # W, W/dBar (fleet fit)
 
 # ---------------------------------------------------------------- plant
 
@@ -89,6 +90,11 @@ class Float:
         self.n_pump = 0
         self.n_valve = 0
         self.pump_on = self.valve_on = 0.0               # remaining run time (s)
+        # Pump power against pressure, fitted to the fleet's pump records (W); the valve's
+        # energy is negligible. Energy per mL = power / flow: ALTO ~10 J near the surface,
+        # 26 J at 1000 dBar, 42 J at 2000 dBar.
+        self.pw0, self.pw1 = PUMP_POWER[ftype]
+        self.energy = 0.0                                # pump energy (J)
 
     def eta(self, t=None):
         t = self.t if t is None else t
@@ -128,6 +134,7 @@ class Float:
         if self.pump_on > 0:
             d = min(dt, self.pump_on)
             self.O += self.q_p * d
+            self.energy += (self.pw0 + self.pw1 * max(self.p, 0.0)) * d
             self.pump_on -= d
         if self.valve_on > 0:
             d = min(dt, self.valve_on)
@@ -578,6 +585,226 @@ def run_ekf(fl, horizon, dt, cda_nom=0.07, k_prior=0.035, q_p_nom=0.317, q_v_pri
     return ts, ps
 
 
+def run_eco(fl, horizon, dt, win_d=600.0, win_t=1800.0, t_cal=90.0, f_commit=0.9, tol=20.0,
+            tol_v=40.0, damp=0.8, max_ops=8, t_min=2.0, cda_nom=0.07, k_prior=0.035,
+            q_p_nom=0.317, q_v_prior=0.09, p_cal_frac=0.15, p_commit_frac=0.4, log=None,
+            fall_frac=None, p_fall=None, n_post=2):
+    """Energy-aware second-order seek: pump the oil shallow, finish with small trims.
+
+    Pump energy per mL rises with pressure (about 10 J near the surface, 26 J at 1000 dBar on the
+    ALTO), so oil is cheapest pumped shallow, and oil let out through the valve is energy
+    wasted. The rule:
+      1. calibration pump at p_cal_frac * p_T (shallow, cheap): its response gives the gain G;
+      2. at p_commit_frac * p_T, extrapolate the y(p) line of the descent windows to the target
+         and pump f_commit of the oil still needed, so the float ends slightly heavy (deep);
+      3. trims every win_t s on window averages: pump when the neutral pressure is more than tol
+         deep; open the valve only when it is more than tol_v shallow.
+    """
+
+    tr = Track()
+    ts, ps = [], []
+    W = []
+    G = 2 * G0 * q_p_nom * 1e-6 / cda_nom
+    s_est = 2 * G0 * k_prior * 1e-6 / cda_nom
+    Gv = None
+    state = 'fall'
+    t_next = win_d
+    t_last_op = -1e9
+    pre = None
+    post = []
+    ops = 0
+    last_valve = None
+    while fl.t < horizon:
+        p = fl.measure()
+        tr.add(fl.t, p)
+        if fl.t >= t_next and not fl.busy():
+            wn = win_t if state == 'trim' else win_d
+            t_next = fl.t + wn
+            tt = np.array(tr.t)
+            m = tt >= max(fl.t - wn, t_last_op + 60)
+            if m.sum() > 20 and (tt[m][-1] - tt[m][0]) > 0.6 * wn:
+                pp = np.array(tr.p)[m]
+                c = np.polyfit(tt[m] - fl.t, pp, 1)
+                w_m = -c[0]
+                p_m = float(np.mean(pp))
+                y_m = w_m * abs(w_m)
+                if state == 'fall':
+                    W.append((p_m, y_m))
+                    p_cal = p_fall if p_fall is not None else p_cal_frac * fl.p_T
+                    if fall_frac is not None:          # the calibration pump is the fall pump
+                        t_cal = fall_frac * fl.D_nom / q_p_nom
+                    if p_m > p_cal and len(W) >= 2:
+                        P = np.array(W[-3:])
+                        sl = np.polyfit(P[:, 0], P[:, 1], 1)[0] if len(P) > 1 else s_est
+                        pre = (p_m, y_m, sl if sl > 0 else s_est)
+                        fl.pump(t_cal); ops += 1
+                        t_last_op = fl.t + t_cal
+                        state = 'postcal'
+                elif state == 'postcal':
+                    post.append((p_m, y_m))
+                    if len(post) >= n_post:
+                        P = np.array(post)
+                        if len(P) > 1:
+                            sl = np.polyfit(P[:, 0], P[:, 1], 1)[0]
+                            if sl > 0:
+                                s_est = sl
+                        # gain: jump of the line at the calibration pressure
+                        y_post_at = P[0, 1] + s_est * (pre[0] - P[0, 0])
+                        dy = y_post_at - pre[1]
+                        if dy > 0:
+                            G = dy / t_cal
+                        state = 'descend'
+                elif state == 'descend':
+                    post.append((p_m, y_m))
+                    P = np.array(post[-4:])
+                    sl = np.polyfit(P[:, 0], P[:, 1], 1)[0]
+                    if sl > 0:
+                        s_est = sl
+                    if p_m > p_commit_frac * fl.p_T or w_m > -0.02:
+                        y_T = y_m + s_est * (fl.p_T - p_m)
+                        need = -y_T / G
+                        if log is not None: log.append(('commit', fl.t, p_m, y_T, need, s_est, G))
+                        if need * f_commit >= t_min:
+                            fl.pump(need * f_commit); ops += 1
+                            t_last_op = fl.t + need * f_commit
+                        state = 'trim'
+                        t_next = t_last_op + win_t
+                elif state == 'trim' and ops < max_ops:
+                    p_n = p_m - y_m / s_est
+                    e = p_n - fl.p_T
+                    if last_valve is not None:
+                        t_v, pn0 = last_valve
+                        dyv = s_est * (pn0 - p_n)
+                        if dyv > 0:
+                            Gv = -dyv / t_v
+                        last_valve = None
+                    if log is not None: log.append(('trim', fl.t, p_m, p_n, e))
+                    if e > tol:
+                        t = damp * s_est * e / G
+                        if t >= t_min:
+                            fl.pump(min(t, 1020)); ops += 1; t_last_op = fl.t + t
+                    elif e < -tol_v:
+                        gv = Gv if Gv else -G * q_v_prior / q_p_nom
+                        t = min(damp * s_est * -e / -gv, 1800)
+                        if t >= t_min:
+                            fl.valve(t); ops += 1; t_last_op = fl.t + t
+                            last_valve = (t, p_n)
+        fl.step(dt)
+        ts.append(fl.t)
+        ps.append(fl.p)
+    return ts, ps
+
+
+def run_prog(fl, horizon, dt, win=900.0, win_t=1800.0, p_fall=150.0, fall_frac=0.25,
+             sig_w=0.005, sig_s=0.25, sig_g=0.15, n_sig=2.0, tol=20.0, tol_v=40.0, damp=0.8,
+             max_ops=10, t_min=2.0, cda_nom=0.07, k_prior=0.035, q_p_nom=0.317, q_v_prior=0.09,
+             log=None):
+    """Progressive second-order seek: pump only the oil the estimate is sure of.
+
+    The rate predicts the neutral pressure p_n = p - y / s with an error that shrinks as the
+    float approaches it (2 |w| dw / s from the rate, (p - p_n) ds / s from the slope). At each
+    window on the way down the float pumps the predicted remaining need minus n_sig standard
+    deviations, so the bulk of the oil goes in early, shallow and cheap, nothing overshoots
+    (no oil let out and pumped again), and only small trims are left for depth.
+      1. fall pump at p_fall, sized at fall_frac of the nominal need (below any plausible
+         need); its response gives the gain G;
+      2. every `win` s while descending: progressive pump;
+      3. near rest: trims every win_t s (pump if > tol deep, valve only if > tol_v shallow).
+    """
+
+    tr = Track()
+    ts, ps = [], []
+    G = 2 * G0 * q_p_nom * 1e-6 / cda_nom
+    s_est = 2 * G0 * k_prior * 1e-6 / cda_nom
+    g_sd = 0.35                                   # relative uncertainty of G before calibration
+    Gv = None
+    state = 'fall'
+    t_next = win
+    t_last_op = -1e9
+    W = []
+    pre = None
+    t_fall = fall_frac * fl.D_nom / q_p_nom
+    ops = 0
+    last_valve = None
+    while fl.t < horizon:
+        p = fl.measure()
+        tr.add(fl.t, p)
+        if state == 'fall' and p > p_fall and fl.t > 600:
+            # fall pump on the pressure sample (as the firmware's DSD), rate from the last window
+            tt = np.array(tr.t)
+            m = tt >= fl.t - min(win, fl.t)
+            pp = np.array(tr.p)[m]
+            c = np.polyfit(tt[m] - fl.t, pp, 1)
+            pre = (float(np.mean(pp)), -c[0] * abs(c[0]))
+            fl.pump(t_fall); ops += 1
+            t_last_op = fl.t + t_fall
+            state = 'cal'
+            t_next = t_last_op + win
+        if fl.t >= t_next and not fl.busy():
+            wn = win_t if state == 'trim' else win
+            t_next = fl.t + wn
+            tt = np.array(tr.t)
+            m = tt >= max(fl.t - wn, t_last_op + 60)
+            if m.sum() > 20 and (tt[m][-1] - tt[m][0]) > 0.6 * wn:
+                pp = np.array(tr.p)[m]
+                c = np.polyfit(tt[m] - fl.t, pp, 1)
+                w_m = -c[0]
+                p_m = float(np.mean(pp))
+                y_m = w_m * abs(w_m)
+                if state in ('fall', 'descend'):
+                    W.append((p_m, y_m, fl.t))
+                    seg = [x for x in W if x[2] > t_last_op]
+                    if len(seg) >= 3:
+                        P = np.array(seg[-4:])
+                        sl = np.polyfit(P[:, 0], P[:, 1], 1)[0]
+                        if sl > 0:
+                            s_est = 0.5 * s_est + 0.5 * sl
+                if state == 'cal':
+                    y_pre_here = pre[1] + s_est * (p_m - pre[0])
+                    dy = y_m - y_pre_here
+                    if dy > 0:
+                        G = dy / t_fall
+                        g_sd = sig_g
+                    state = 'descend'
+                elif state == 'descend':
+                    y_T = y_m + s_est * (fl.p_T - p_m)
+                    need = -y_T / G                          # pump s still needed
+                    dist = abs(y_m / s_est)                  # dBar to the predicted neutral point
+                    sd_pn = np.hypot(2 * abs(w_m) * sig_w / s_est, sig_s * dist)
+                    sd_need = np.hypot(s_est * sd_pn / G, g_sd * max(need, 0))
+                    t = need - n_sig * sd_need
+                    if log is not None: log.append(('desc', fl.t, p_m, w_m, need, sd_need, t))
+                    if t >= t_min:
+                        fl.pump(min(t, 1020)); ops += 1; t_last_op = fl.t + t
+                    if abs(w_m) < 0.01 or p_m > fl.p_T:
+                        state = 'trim'
+                        t_next = fl.t + win_t
+                elif state == 'trim' and ops < max_ops:
+                    p_n = p_m - y_m / s_est
+                    e = p_n - fl.p_T
+                    if last_valve is not None:
+                        t_v, pn0 = last_valve
+                        dyv = s_est * (pn0 - p_n)
+                        if dyv > 0:
+                            Gv = -dyv / t_v
+                        last_valve = None
+                    if log is not None: log.append(('trim', fl.t, p_m, p_n, e))
+                    if e > tol:
+                        t = damp * s_est * e / G
+                        if t >= t_min:
+                            fl.pump(min(t, 1020)); ops += 1; t_last_op = fl.t + t
+                    elif e < -tol_v:
+                        gv = Gv if Gv else -G * q_v_prior / q_p_nom
+                        t = min(damp * s_est * -e / -gv, 1800)
+                        if t >= t_min:
+                            fl.valve(t); ops += 1; t_last_op = fl.t + t
+                            last_valve = (t, p_n)
+        fl.step(dt)
+        ts.append(fl.t)
+        ps.append(fl.p)
+    return ts, ps
+
+
 # ---------------------------------------------------------------- ascent
 
 
@@ -680,6 +907,13 @@ def seek_case(c):
         elif ctrl == 'so_t60d5':         # trims on 1 h windows, damping 0.5, tolerance 20
             ts, ps = run_so(fl, horizon, dt, win_trim=3600.0, damp=0.5, tol=20.0,
                             cda_nom=CDA_NOM[ftype], k_prior=0.035 if ftype == 'ALTO' else 0.017)
+        elif ctrl == 'prog':             # progressive second order: energy-efficient
+            ts, ps = run_prog(fl, horizon, dt, win=1200.0, fall_frac=0.9, n_sig=2.0,
+                              p_fall=200.0 if ftype == 'ALTO' else 50.0, cda_nom=CDA_NOM[ftype],
+                              k_prior=0.035 if ftype == 'ALTO' else 0.017)
+        elif ctrl == 'eco':              # energy-aware second order: oil pumped shallow
+            ts, ps = run_eco(fl, horizon, dt, cda_nom=CDA_NOM[ftype],
+                             k_prior=0.035 if ftype == 'ALTO' else 0.017)
         elif ctrl == 'ekf':              # Kalman filter state estimate, same decisions
             ts, ps = run_ekf(fl, horizon, dt, cda_nom=CDA_NOM[ftype],
                              k_prior=0.035 if ftype == 'ALTO' else 0.017)
@@ -707,7 +941,8 @@ def seek_case(c):
                         err_6h=float(ps[ts.searchsorted(6 * 3600)] - p_T),
                         err_end=float(ps[-1] - p_T), ops=fl.n_pump + fl.n_valve,
                         n_pump=fl.n_pump, n_valve=fl.n_valve, pump_s=fl.pump_s,
-                        valve_s=fl.valve_s, max_over=float(ps.max() - p_T)))
+                        valve_s=fl.valve_s, max_over=float(ps.max() - p_T),
+                        energy=fl.energy))
     med = lambda k: float(np.nanmedian([o[k] for o in out])) if np.isfinite([o[k] for o in out]).any() else float('nan')
     return dict(type=ftype, p_T=p_T, strat=strat, iw=iw, prior_err=prior_err, ctrl=ctrl, n=n,
                 settled_mean25=float(np.mean([np.isfinite(o['settle_mean25_h']) for o in out])),
@@ -720,7 +955,8 @@ def seek_case(c):
                 abs_err_6h=float(np.median([abs(o['err_6h']) for o in out])),
                 abs_err_end=float(np.median([abs(o['err_end']) for o in out])),
                 ops=med('ops'), n_pump=med('n_pump'), n_valve=med('n_valve'),
-                pump_s=med('pump_s'), valve_s=med('valve_s'), max_over=med('max_over'))
+                pump_s=med('pump_s'), valve_s=med('valve_s'), max_over=med('max_over'),
+                energy=med('energy'), energy_mean=float(np.mean([o['energy'] for o in out])))
 
 
 def ascent_case(c):
@@ -748,7 +984,7 @@ def ascent_case(c):
                 **{k: float(np.median([o[k] for o in out])) for k in out[0]})
 
 
-CTRLS = ('fw', 'fw_dca8', 'fw_gainK', 'drag', 'so', 'so_t60d5', 'ekf')
+CTRLS = ('fw', 'fw_dca8', 'fw_gainK', 'so', 'prog', 'ekf')
 
 
 def main():
@@ -760,7 +996,7 @@ def main():
     from multiprocessing import Pool
     seek = [(ft, pT, st, iw, pe, ctrl, args.n)
             for ft, pT in (('ALTO', 1000.0), ('ALTO', 500.0), ('ALAMO', 500.0))
-            for st in ('strong', 'weak') for iw in (0.0, 5.0, 15.0) for pe in (0.25, 0.75)
+            for st in ('strong', 'weak') for iw in (0.0, 5.0, 15.0) for pe in (0.1, 0.75)
             for ctrl in CTRLS]
     asc = [(ft, st, iw, ctrl, args.n)
            for ft in ('ALTO', 'ALAMO') for st in ('strong', 'weak') for iw in (0.0, 5.0)

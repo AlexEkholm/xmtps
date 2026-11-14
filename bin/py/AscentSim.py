@@ -3,7 +3,8 @@
 """Ascent-rate control: the bang-bang rule against a predictive band rule and a feed-forward
 rule (stiffness profile from the descent, slow correction from the hour-mean rate).
 
-    python AscentSim.py      # sweep, writes ascsweep.json
+    python AscentSim.py        # bang-bang vs feed-forward with pump energy, ascenergy.json
+    python AscentSim.py band   # bang-bang vs predictive band rule, ascsweep.json
 """
 import numpy as np, json
 from multiprocessing import Pool
@@ -59,15 +60,6 @@ def case(c):
                         p10=(np.percentile(r, 10) - ARR) * 100, n_pump=fl.n_pump, pump_s=fl.pump_s, t_h=fl.t / 3600))
     return dict(type=ftype, strat=strat, iw=iw, ctrl=ctrl, par=par, **{k: float(np.median([o[k] for o in out])) for k in out[0]})
 
-if __name__ == '__main__':
-    cs = [(ft, st, iw, 'bangbang', apn, 60) for ft in ('ALTO', 'ALAMO') for st in ('strong', 'weak') for iw in (0.0, 5.0) for apn in (5, 10, 20, 40, 80)]
-    cs += [(ft, st, iw, 'band', d, 60) for ft in ('ALTO', 'ALAMO') for st in ('strong', 'weak') for iw in (0.0, 5.0) for d in (0.5, 1.0, 1.5, 2.0)]
-    with Pool(24) as p: res = p.map(case, cs, chunksize=1)
-    json.dump(res, open('ascsweep.json', 'w'), indent=1)
-    import pandas as pd; pd.set_option('display.width', 200)
-    print(pd.DataFrame(res).round(2).to_string())
-
-
 def ff_ctrl(fl, dt, ARR, T=600.0, k_prior=0.035, cda_nom=0.07, q_nom=0.317, Kp=0.5, win=3600.0,
             t_min=2.0, k_of_p=None):
     """Feed-forward ascent: start pump sized for ARR from the drag prior; then every T s a pump of
@@ -99,3 +91,53 @@ def ff_ctrl(fl, dt, ARR, T=600.0, k_prior=0.035, cda_nom=0.07, q_nom=0.317, Kp=0
         fl.step(dt)
         rates.append(fl.w() + fl.w_iw)
     return np.array(rates)
+
+
+def one(c):
+    ft, strat, iw, kind, par = c
+    out = []
+    for i in range(24):
+        rng = np.random.default_rng([i, 7, int(iw * 10), len(strat), len(ft)])
+        p0 = 2000. if ft == 'ALTO' else 1000.
+        fl = S.Float(rng, ft, p0, iw, strat, 0.0, 0.05 if ft == 'ALTO' else 0.5)
+        fl.O, fl.p = 0.0, p0
+        if kind == 'bb':
+            APS, APF = (120, 100) if ft == 'ALTO' else (60, 20)
+            r = S.ascent_bangbang(fl, 5.0, ARR=0.1, APS=APS, APN=par, APF=APF)
+        else:
+            nz = 1 + 0.2 * rng.normal()
+            kf = lambda p, fl=fl, nz=nz: nz * (fl.k_c + fl.k_w + fl.k_s0 * np.exp(-p / fl.h_s))
+            r = ff_ctrl(fl, 5.0, 0.1, T=par, Kp=2.0, k_of_p=kf,
+                          k_prior=0.035 if ft == 'ALTO' else 0.017, cda_nom=0.07 if ft == 'ALTO' else 0.033)
+        r = r[len(r) // 20:]
+        rm = np.convolve(r, np.ones(720) / 720, 'valid')
+        out.append((np.sqrt(np.mean((rm - 0.1) ** 2)) * 100, (np.mean(r) - 0.1) * 100, fl.n_pump,
+                    fl.pump_s * fl.q_p, fl.energy))
+    return dict(type=ft, strat=strat, iw=iw, kind=kind, par=par,
+                **dict(zip(('rms_1h', 'bias', 'runs', 'oil_ml', 'energy_j'), np.median(np.array(out), 0).tolist())))
+
+
+def sweep_energy():
+    """Bang-bang against feed-forward: rate error, pump runs, oil and energy (ascenergy.json)."""
+    cs = [(ft, st, iw, k, p) for ft in ('ALTO', 'ALAMO') for st in ('strong', 'weak') for iw in (0., 5., 15.)
+          for k, p in (('bb', 20 if ft == 'ALTO' else 10), ('bb', 40 if ft == 'ALTO' else 20), ('ff', 1200.), ('ff', 2400.))]
+    with Pool(8) as pool:
+        res = pool.map(one, cs)
+    json.dump(res, open('ascenergy.json', 'w'), indent=1)
+    for r in res:
+        print('%(type)-5s %(strat)-6s iw %(iw)4.1f %(kind)-2s %(par)6.0f | rms_1h %(rms_1h).2f bias %(bias)+.2f runs %(runs)4.0f oil %(oil_ml)5.1f mL E %(energy_j)5.0f J' % r)
+
+
+def sweep_band():
+    """Bang-bang against the predictive band rule (ascsweep.json)."""
+    cs = [(ft, st, iw, 'bangbang', apn, 60) for ft in ('ALTO', 'ALAMO') for st in ('strong', 'weak') for iw in (0.0, 5.0) for apn in (5, 10, 20, 40, 80)]
+    cs += [(ft, st, iw, 'band', d, 60) for ft in ('ALTO', 'ALAMO') for st in ('strong', 'weak') for iw in (0.0, 5.0) for d in (0.5, 1.0, 1.5, 2.0)]
+    with Pool(24) as p: res = p.map(case, cs, chunksize=1)
+    json.dump(res, open('ascsweep.json', 'w'), indent=1)
+    import pandas as pd; pd.set_option('display.width', 200)
+    print(pd.DataFrame(res).round(2).to_string())
+
+
+if __name__ == '__main__':
+    import sys
+    sweep_band() if 'band' in sys.argv[1:] else sweep_energy()
