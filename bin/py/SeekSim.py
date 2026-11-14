@@ -62,6 +62,7 @@ class Float:
             self.q_v_shallow = self.q_v_deep * 3
             self.p_fuse = 25.0
             D_nom = 20.0
+        self.V, self.k_rel = V, k_rel
         gamma_w = 4.2e-6                                 # seawater compressibility, 1/dBar (mid-depth)
         self.k_c = V * (gamma_w - k_rel)                 # ~0.033 mL/dBar ALTO
         # stratification term: strong thermocline (k_s0) decaying with depth
@@ -95,6 +96,10 @@ class Float:
         # 26 J at 1000 dBar, 42 J at 2000 dBar.
         self.pw0, self.pw1 = PUMP_POWER[ftype]
         self.energy = 0.0                                # pump energy (J)
+
+    def stiffness(self, p):
+        """Buoyancy gained per dBar of sinking at pressure p (mL/dBar)."""
+        return (self.K(p + 5.0) - self.K(p - 5.0)) / 10.0
 
     def eta(self, t=None):
         t = self.t if t is None else t
@@ -888,7 +893,7 @@ def seek_case(c):
         elif ctrl == 'fw_dca8':           # fleet rule with more attempts: DCA 8, DSW 1 h
             ts, ps = run_firmware(fl, horizon, dt, **dict(fw, DCA=8, DSW=3600))
         elif ctrl == 'fw_gainK':          # first order, gain matched to the true stiffness
-            kT = fl.k_c + fl.k_s0 * np.exp(-p_T / fl.h_s)
+            kT = fl.stiffness(p_T)
             ts, ps = run_firmware(fl, horizon, dt, DPT=100 * kT / 0.317,
                                   DUT=100 * kT / fl.q_v_deep, DUC=1.0, DCT=3600, DSW=3600, DCA=6,
                                   PST=3600, PSD=10, DCP=2, DCF=2)
@@ -984,6 +989,138 @@ def ascent_case(c):
                 **{k: float(np.median([o[k] for o in out])) for k in out[0]})
 
 
+class ProfileFloat(Float):
+    """A float in a real water column: buoyancy from a measured CTD profile.
+
+    The excess volume relative to neutral at the target p_T, with the oil O:
+        dV = O + V_T [ (1 - gamma_h (p - p_T)) (1 + alpha (T - T_T)) - rho_T / rho ]
+    with rho and T the in-situ density and temperature of the profile at the heaved pressure
+    p - eta (the water parcel moved by eta is compressed by gamma_w eta), gamma_h the lab's
+    hull compressibility and alpha the hull's bulk thermal expansion. The profile is extended
+    linearly beyond its ends.
+    """
+
+    ALPHA = 8.74e-5                    # 1/K, bulk thermal expansion used in ballasting
+    GAMMA_W = 4.4e-6                   # 1/dBar, seawater compressibility (heave correction)
+    MASS = {'ALTO': 18.9, 'ALAMO': 10.0}
+
+    def __init__(self, rng, prof, iw_sigma, prior_err):
+        ftype = prof['type']
+        super().__init__(rng, ftype, prof['dtd'], iw_sigma, 'weak', prior_err,
+                         0.05 if ftype == 'ALTO' else 0.5)
+        self.pp = np.asarray(prof['p'], float)
+        self.rr = np.asarray(prof['rho'], float)
+        self.tt = np.asarray(prof['T'], float)
+        self.rho_T = self._interp(self.rr, self.p_T)
+        self.T_T = self._interp(self.tt, self.p_T)
+        self.V_T = self.MASS[ftype] / self.rho_T * 1e6           # mL
+
+    def _interp(self, v, q):
+        pp = self.pp
+        n = min(10, len(pp) - 1)
+        if q < pp[0]:
+            return v[0] + (v[n] - v[0]) / (pp[n] - pp[0]) * (q - pp[0])
+        if q > pp[-1]:
+            return v[-1] + (v[-1] - v[-1 - n]) / (pp[-1] - pp[-1 - n]) * (q - pp[-1])
+        return np.interp(q, pp, v)
+
+    def K(self, p, eta=0.0):
+        q = p - eta
+        rho = self._interp(self.rr, q) * (1 + self.GAMMA_W * eta)
+        T = self._interp(self.tt, q)
+        hull = (1 - self.k_rel * (p - self.p_T)) * (1 + self.ALPHA * (T - self.T_T))
+        return self.V_T * (hull - self.rho_T / rho)
+
+
+PROFILES = []
+
+
+def _load_profiles(path):
+    global PROFILES
+    PROFILES = json.load(open(path))
+
+
+def profile_seek_case(c):
+    """Seek on a real water column (PROFILES[idx]) with the float's own target and DSD."""
+    idx, iw, prior_err, ctrl, n = c
+    prof = PROFILES[idx]
+    ftype, p_T, dsd = prof['type'], prof['dtd'], prof['dsd']
+    dt, horizon = 10.0, 12 * 3600
+    out = []
+    for i in range(n):
+        rng = np.random.default_rng([i, idx, int(iw * 10), int(prior_err * 100), 7])
+        fl = ProfileFloat(rng, prof, iw, prior_err)
+        fl.p = min(50.0, 0.5 * p_T)
+        dsd_ = min(max(dsd, fl.p + 10.0), p_T)
+        if ftype == 'ALTO':
+            fw = dict(DPT=10, DUT=10, DUC=0.5, DCT=10800, DSW=10800, DCA=3, PST=21600, PSD=200,
+                      DCP=2, DCF=2, DSD=dsd_)
+        else:
+            fw = dict(DPT=6, DUT=6, DUC=1.0, DCT=10800, DSW=3600, DCA=3, PST=21600, PSD=200,
+                      DCP=2, DCF=2, DSD=dsd_)
+        kp = 0.035 if ftype == 'ALTO' else 0.017
+        if ctrl == 'fw':
+            ts, ps = run_firmware(fl, horizon, dt, **fw)
+        elif ctrl == 'fw_gainK':
+            kT = max(fl.stiffness(p_T), 1e-3)
+            ts, ps = run_firmware(fl, horizon, dt, DPT=100 * kT / 0.317,
+                                  DUT=100 * kT / fl.q_v_deep, DUC=1.0, DCT=3600, DSW=3600, DCA=6,
+                                  PST=3600, PSD=10, DCP=2, DCF=2, DSD=dsd_)
+        elif ctrl == 'so':
+            ts, ps = run_so(fl, horizon, dt, cda_nom=CDA_NOM[ftype], k_prior=kp)
+        elif ctrl == 'prog':
+            ts, ps = run_prog(fl, horizon, dt, win=1200.0, fall_frac=0.9, n_sig=2.0, p_fall=dsd_,
+                              cda_nom=CDA_NOM[ftype], k_prior=kp)
+        else:
+            ts, ps = run_ekf(fl, horizon, dt, cda_nom=CDA_NOM[ftype], k_prior=kp)
+        ts, ps = np.array(ts), np.array(ps)
+        k = int(round(3600 / dt))
+        pm = np.convolve(ps, np.ones(k) / k, mode='valid')
+        st = settle_time(ts[k - 1:], pm, p_T, max(25.0, 0.05 * p_T))
+        out.append(dict(settled=bool(np.isfinite(st)), settle_h=st / 3600,
+                        err_last4h=float(np.mean(ps[ts >= horizon - 4 * 3600]) - p_T),
+                        ops=fl.n_pump + fl.n_valve, pump_s=fl.pump_s, valve_s=fl.valve_s,
+                        energy=fl.energy, stiff_T=fl.stiffness(p_T)))
+    o = {k2: [r[k2] for r in out] for k2 in out[0]}
+    sh = [v for v, ok in zip(o['settle_h'], o['settled']) if ok]
+    return dict(idx=idx, sn=prof['sn'], type=ftype, p_T=p_T, dsd=dsd, iw=iw, prior_err=prior_err,
+                ctrl=ctrl, n=n, settled=float(np.mean(o['settled'])),
+                settle_h=float(np.median(sh)) if sh else float('nan'),
+                abs_err_last4h=float(np.median(np.abs(o['err_last4h']))),
+                ops=float(np.median(o['ops'])), pump_s=float(np.median(o['pump_s'])),
+                valve_s=float(np.median(o['valve_s'])), energy=float(np.median(o['energy'])),
+                stiff_T=float(np.median(o['stiff_T'])))
+
+
+def profile_ascent_case(c):
+    """Ascent through a real water column from the bottom of the profile (up to 2000 dBar)."""
+    idx, iw, ctrl, n = c
+    prof = PROFILES[idx]
+    ftype = prof['type']
+    import AscentSim as A
+    out = []
+    for i in range(n):
+        rng = np.random.default_rng([i, idx, int(iw * 10), 11])
+        p0 = min(max(prof['p']) - 10.0, 2000.0)
+        fl = ProfileFloat(rng, dict(prof, dtd=p0), iw, 0.0)
+        fl.O, fl.p = 0.0, p0
+        if ctrl == 'bangbang':
+            APS, APN, APF = (120, 20, 100) if ftype == 'ALTO' else (60, 10, 20)
+            r = ascent_bangbang(fl, 5.0, ARR=0.10, APS=APS, APN=APN, APF=APF)
+        else:
+            nz = 1 + 0.2 * rng.normal()
+            kf = lambda p, fl=fl, nz=nz: nz * max(fl.stiffness(p), 1e-3)
+            r = A.ff_ctrl(fl, 5.0, 0.10, T=1200.0, Kp=2.0, k_of_p=kf,
+                          k_prior=0.035 if ftype == 'ALTO' else 0.017, cda_nom=CDA_NOM[ftype])
+        r = r[len(r) // 20:]
+        rm = np.convolve(r, np.ones(720) / 720, 'valid') if len(r) > 720 else r
+        out.append(dict(rms_1h=float(np.sqrt(np.mean((rm - 0.10) ** 2))) * 100,
+                        bias=float(np.mean(r) - 0.10) * 100, runs=fl.n_pump,
+                        oil_ml=fl.pump_s * fl.q_p, energy=fl.energy, p0=p0))
+    return dict(idx=idx, sn=prof['sn'], type=ftype, iw=iw, ctrl=ctrl, n=n,
+                **{k2: float(np.median([r[k2] for r in out])) for k2 in out[0]})
+
+
 CTRLS = ('fw', 'fw_dca8', 'fw_gainK', 'so', 'prog', 'ekf')
 
 
@@ -992,8 +1129,20 @@ def main():
     ap.add_argument('--n', type=int, default=60)
     ap.add_argument('--jobs', type=int, default=16)
     ap.add_argument('--out', default='seek2sim.json')
+    ap.add_argument('--profiles', default='', help='profiles.json: simulate on real water columns')
     args = ap.parse_args()
     from multiprocessing import Pool
+    if args.profiles:
+        _load_profiles(args.profiles)
+        cs = [(i, iw, pe, ctrl, args.n) for i in range(len(PROFILES)) for iw in (0.0, 5.0, 15.0)
+              for pe in (0.1, 0.75) for ctrl in ('fw', 'so', 'prog', 'ekf', 'fw_gainK')]
+        ca = [(i, iw, ctrl, max(args.n // 2, 4)) for i in range(len(PROFILES))
+              for iw in (0.0, 5.0, 15.0) for ctrl in ('bangbang', 'ff')]
+        with Pool(args.jobs, initializer=_load_profiles, initargs=(args.profiles,)) as pool:
+            rs = pool.map(profile_seek_case, cs, chunksize=1)
+            ra = pool.map(profile_ascent_case, ca, chunksize=1)
+        json.dump(dict(seek=rs, ascent=ra), open(args.out, 'w'), indent=1)
+        return
     seek = [(ft, pT, st, iw, pe, ctrl, args.n)
             for ft, pT in (('ALTO', 1000.0), ('ALTO', 500.0), ('ALAMO', 500.0))
             for st in ('strong', 'weak') for iw in (0.0, 5.0, 15.0) for pe in (0.1, 0.75)

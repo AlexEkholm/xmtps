@@ -25,6 +25,7 @@ directory, what each tool reads and writes, and all of their command-line option
 | `xmtps-control-fleet.py` | analysis | How the present seek and ascent control perform: park level against target, seek and ascent pump runs, rise-rate statistics per dive |
 | `xmtps-control-neutral.py` | analysis | How well the vertical rate predicts the neutral pressure on real descents, by distance still to go and window length |
 | `xmtps-control-predtest.py` | analysis | Tests the neutral-pressure estimate (straight line of w\|w\| against pressure) on real descents |
+| `xmtps-control-profiles.py` | analysis | Picks a representative sample of real CTD profiles with the floats' own targets, for simulating the control rules on real water columns |
 | `SeekSim.py` | analysis | Simulates first-descent seek: the present rule against second-order rules with windowed and Kalman-filter state estimation, with internal waves |
 | `AscentSim.py` | analysis | Simulates ascent-rate control: bang-bang against predictive and feed-forward rules |
 | `ControlFigures.py` | analysis | Figures for the depth-control report |
