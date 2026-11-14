@@ -20,15 +20,7 @@ directory, what each tool reads and writes, and all of their command-line option
 | `EnergyModel.py` | module | The energy model's battery outlook: cycles left on the current mission (`RemainingCycles`), a falling oil-pump voltage (`PumpVoltageFallDive`) and their constants, shared by `xmtps-aggregate-json.py` and the energy page |
 | `FloatStatus.py` | module | A float's status (PREDEPLOYMENT, ACTIVE, OVERDUE, ARCHIVED) and last known location, shared by the summary and mission parameters pages |
 | `SeaNames.py` | module | Names the sea or ocean of a position ("WHOI" near Woods Hole) for the summary page's status column, from `data/marine-areas.json` (Natural Earth marine areas, public domain) |
-| `xmtps-buoyancy-model.py` | analysis | Fits a buoyancy model per float from telemetry (drag area, pump flow, valve flow with the hydraulic fuse; ALTO compressibility held at the lab's measurement, `--lab-csv` for per-float lab values); not run by the plot service |
-| `BuoyancyPlots.py` | analysis | Figures and group statistics of a `xmtps-buoyancy-model.py` fit |
-| `xmtps-control-fleet.py` | analysis | How the present seek and ascent control perform: park level against target, seek and ascent pump runs, rise-rate statistics per dive |
-| `xmtps-control-neutral.py` | analysis | How well the vertical rate predicts the neutral pressure on real descents, by distance still to go and window length |
-| `xmtps-control-predtest.py` | analysis | Tests the neutral-pressure estimate (straight line of w\|w\| against pressure) on real descents |
-| `xmtps-control-profiles.py` | analysis | Picks a representative sample of real CTD profiles with the floats' own targets, for simulating the control rules on real water columns |
-| `SeekSim.py` | analysis | Simulates first-descent seek: the present rule against second-order rules with windowed and Kalman-filter state estimation, with internal waves |
-| `AscentSim.py` | analysis | Simulates ascent-rate control: bang-bang against predictive and feed-forward rules |
-| `ControlFigures.py` | analysis | Figures for the depth-control report |
+| (moved) | analysis | The buoyancy-model, depth-control and simulation scripts (`xmtps-buoyancy-*`, `xmtps-control-*`, `SeekSim.py`, `AscentSim.py`, `BuoyancyPlots.py`, `ControlFigures.py` and the tuning and experiment scripts) moved to the separate repository `xmtps-control` |
 | `img/` | assets | The status icons `s0.png` to `s3.png`, served from `<plots>/img/` (copy them there on a new install) |
 
 ## Contents
