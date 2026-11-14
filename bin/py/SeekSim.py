@@ -203,7 +203,7 @@ def run_firmware(fl, horizon, dt, DPT, DUT, DUC, DCT=10800, DSW=3600, DCA=3, PST
     seeks every PST when off by more than PSD. Run times: DUC * DPT (DUT) per 100 dBar of error."""
 
     if DFT is None:
-        DFT = fl.D_nom / 0.317                         # firmware's plan from PFR = 19 mL/min
+        DFT = fl.D_nom / 0.317                         # nominal plan at 19 mL/min
     ts, ps = [], []
     state, t_next, n_seek = 'fall', None, 0
     while fl.t < horizon:

@@ -12,7 +12,7 @@ The figures follow spec/plot-style-guide.md where it applies to static plots:
   - no grid and a white background (3.4);
   - pressure axes reversed with an explicit [deep, 0] range (4.2);
   - named colors (5.2): the bright phase colors for lines and points, neutral bars for
-    histograms, blue for configured values (firmware PFR, the usability threshold) and gray
+    histograms, blue for configured values (the usability threshold) and gray
     for reference lines (5.3, 5.4).
 The guide's hover rules are for the interactive Plotly plots and don't apply here. Deliberate
 departures, which the guide does not cover: the model's vertical speed w (cm s^-1, positive
@@ -137,10 +137,6 @@ def FigPumpFlow(flow, fl, path, kind='pump'):
         med = med[med['n'] >= 3]
         ax.fill_betweenx(med.index, med['q25'], med['q75'], color=COLORS[ftype], alpha=0.25, lw=0)
         ax.plot(med['median'], med.index, color=COLORS[ftype], lw=2.2, label='Median, Interquartile Range')
-        if kind == 'pump':
-            pfr = use.loc[sns, 'pfr_ml_min'].median()
-            if np.isfinite(pfr):
-                ax.axvline(pfr, color=CONFIG, lw=1.5, ls='--', label='Firmware PFR ({:.0f} mL min$^{{-1}}$)'.format(pfr))
         ax.set_title('{} ({} Floats)'.format(ftype, g['sn'].nunique()), fontsize=9)
         ax.set_xlabel(AX_PUMP if kind == 'pump' else AX_VALVE)
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=1)   # below the axis
@@ -353,8 +349,7 @@ def WriteFigures(out_dir, sens_dirs=None, example=None):
              r'Net Pressure Coefficient, $\kappa - V\gamma_w$ [mL dBar$^{-1}$]',
              os.path.join(fdir, 'fig_net_compress.png'), ref=(0, 'Neutral'))
     FigStrip(fl, 'q0_ml_min', 'Pump Flow at the Surface, $q_0$ [mL min$^{-1}$]',
-             os.path.join(fdir, 'fig_q0.png'), ref=(19, 'Firmware PFR (19 mL min$^{-1}$)'),
-             ref_config=True)
+             os.path.join(fdir, 'fig_q0.png'))
     FigStrip(fl, 'fuse_dbar', 'Hydraulic Fuse Pressure, $p_f$ [dBar]',
              os.path.join(fdir, 'fig_fuse.png'), mask=FuseUsable(fl))
     FigStrip(fl, 'air_ml', 'Residual Bladder Air at the Surface [mL]',

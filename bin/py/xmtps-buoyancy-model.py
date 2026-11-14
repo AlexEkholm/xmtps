@@ -35,8 +35,7 @@ least-squares problem (with Huber reweighting); C_dA is found by a 1-D search on
 log-likelihood. Uncertainties come from a dive-block bootstrap at the chosen fuse.
 
 The absolute scale of C_dA and of the flow rates is set only by the assumed float volume (the
-seawater-density term), so both scale roughly in proportion to NOMINAL_MASS_KG. The firmware's
-own pump flow rate (mission parameter PFR, mL/min) is reported next to the fit as a check.
+seawater-density term), so both scale roughly in proportion to NOMINAL_MASS_KG.
 
 Inputs (read-only):
     the aggregate JSON files that xmtps-aggregate-json.py writes, <json>/<sn>/<sn>_<key>.json
@@ -179,17 +178,12 @@ def MostCommon(series):
 
 
 def FloatInfo(sn, mission):
-    """Type (ALAMO/ALTO), CTD, firmware and the firmware's pump model (PFR, PFC)."""
+    """Type (ALAMO/ALTO), CTD and firmware version."""
 
-    info = dict(sn=sn, type='ALTO' if sn >= ALTO_MIN_SERIAL else 'ALAMO', ctd='', fwver='',
-                pfr_ml_min=np.nan, pfc_ul_dbar=np.nan)
+    info = dict(sn=sn, type='ALTO' if sn >= ALTO_MIN_SERIAL else 'ALAMO', ctd='', fwver='')
     if mission is not None and len(mission):
         info['ctd'] = str(MostCommon(mission['ctdtype']) or '') if 'ctdtype' in mission else ''
         info['fwver'] = str(MostCommon(mission['fwver']) or '') if 'fwver' in mission else ''
-        for col, key in (('PFR', 'pfr_ml_min'), ('PFC', 'pfc_ul_dbar')):
-            if col in mission:
-                value = MostCommon(pd.to_numeric(mission[col], errors='coerce'))
-                info[key] = float(value) if value is not None else np.nan
     return info
 
 
@@ -722,7 +716,7 @@ def FitFloat(sn, pts, info, n_boot, rng):
     other = 'const' if law == 'sqrt' else 'sqrt'
     d_other = min(v for _, v in profile[other]) - best_nll
 
-    # Linear pump form (q0 + q1 p), same fuse, for comparison with PFR
+    # Linear pump form (q0 + q1 p), same fuse
     des_lin = Design(pts, mass, pump_form='linear', kappa_prior=kappa_prior, fit_air=FIT_AIR)
     des_lin.set_fuse(p_fuse, law)
     des_lin.sigma_wm = des.sigma_wm
