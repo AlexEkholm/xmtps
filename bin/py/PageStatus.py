@@ -313,7 +313,7 @@ FOOTER_IMAGE_HEIGHT_PX = 30
 
 def WriteFooterImage(doc, tag, img_url):
     """Write the footer image (FOOTER_IMAGE) into a yattag document, as the right-hand part of the
-    footer: a div with id 'rfoot', floated right of the status text.
+    footer: a div with id 'rfoot', at the bottom right (the footer is a flex row, items aligned to the end).
 
     Args:
         doc, tag: the yattag Doc and its tag function.
@@ -321,7 +321,7 @@ def WriteFooterImage(doc, tag, img_url):
             summary page, '../img' for the float pages, '<plots-url>/img' for the pages in
             engineering/).
     """
-    with tag('div', id='rfoot', style='float: right; margin: 0 0 30px 0;'):
+    with tag('div', id='rfoot', style='margin: 0 0 30px 0;'):
         doc.stag('img', src='{}/{}'.format(img_url, FOOTER_IMAGE), alt='',
                  style='height: {:d}px; width: auto; display: block;'.format(FOOTER_IMAGE_HEIGHT_PX))
 

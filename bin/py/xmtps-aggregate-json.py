@@ -3241,7 +3241,7 @@ def WriteHtmlFile(float_id, runtime_s=None):
                     
                     # Create styles - footer
                     
-                    text('.footer { font-size: 12px; color: #aaa; padding: 40px; } ')
+                    text('.footer { font-size: 12px; color: #aaa; padding: 40px; display: flex; justify-content: space-between; align-items: flex-end; } ')
 
             # Create body
 
@@ -3794,9 +3794,9 @@ def WriteHtmlFile(float_id, runtime_s=None):
                 # Update time (with the time since, filled in by the browser) and this float's
                 # plot run time, the Python utility version and the decoder version
                 with tag('div', klass='footer'):
-                    WriteFooterImage(doc, tag, '../img')
                     with tag('i'):
                         WriteStatusFooter(doc, tag, text, JSON_VERSION, runtime_s, decoder_status=False)
+                    WriteFooterImage(doc, tag, '../img')
                         
         
         

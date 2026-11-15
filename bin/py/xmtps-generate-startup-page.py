@@ -507,8 +507,8 @@ def WriteStartupFile(dpath):
 
                     # Create styles - footer
 
-                    text('#foot { font-size: 12px; color: #aaa; margin: 30px 0px; width: 100%;   } ')
-                    text('#lfoot { float: left; width: 50%; white-space: preserve; margin: 0 0 30px 0;  } ')
+                    text('#foot { font-size: 12px; color: #aaa; margin: 30px 0px; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; } ')
+                    text('#lfoot { width: 50%; white-space: preserve; margin: 0 0 30px 0;  } ')
                     text('#lfoot i { display: inline-block; margin 3px; } ')
 
             with tag('body'):
