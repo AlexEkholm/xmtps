@@ -53,7 +53,7 @@ while [ 1 ]; do
     NPROC=`ps --no-headers -o pid --ppid="$PID" | wc -w`
     if [ "$NPROC" -le "1" ]; then break; fi
 
-    # kill processes if they hang (runtime exceeded))
+    # kill processes if they hang (runtime exceeded)
     epoch_now=`date +%s`
     run_time="$(($epoch_now - $epoch_start))" 
     if [ "$run_time" -gt "$MAX_RUN_T" ]; then
@@ -68,14 +68,33 @@ done
 
 # make summary, mission parameters, startup and battery/energy pages, with the run time of the JSON and plot updates in their footers
 epoch_now=`date +%s`
-python $DBIN/xmtps-generate-summary-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT" --runtime "$(($epoch_now - $epoch_start))" $DJSON
+python $DBIN/xmtps-generate-summary-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT" --runtime "$(($epoch_now - $epoch_start))" $DJSON &
 # engineering pages, published at /etcetc/alamo/engineering/ (a link to $DPLOT/engineering); their
 # float links go to the float pages at /alamo/
 mkdir -p "$DPLOT/engineering"
-python $DBIN/xmtps-generate-mission-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" --plots-url /alamo --runtime "$(($epoch_now - $epoch_start))" $DJSON
-python $DBIN/xmtps-generate-startup-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" --plots-url /alamo --runtime "$(($epoch_now - $epoch_start))" $DJSON
-python $DBIN/xmtps-generate-energy-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" --plots-url /alamo --runtime "$(($epoch_now - $epoch_start))" $DJSON
+python $DBIN/xmtps-generate-mission-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" --plots-url /alamo --runtime "$(($epoch_now - $epoch_start))" $DJSON &
+python $DBIN/xmtps-generate-startup-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" --plots-url /alamo --runtime "$(($epoch_now - $epoch_start))" $DJSON &
+python $DBIN/xmtps-generate-energy-page.py -i"$DJSON/[0-9]+/[0-9]+_summary.json" -o"$DPLOT/engineering" --plots-url /alamo --runtime "$(($epoch_now - $epoch_start))" $DJSON &
 
+
+# wait for processes to complete
+while [ 1 ]; do
+
+    # check how many processes are still running
+    NPROC=`ps --no-headers -o pid --ppid="$PID" | wc -w`
+    if [ "$NPROC" -le "1" ]; then break; fi
+
+    # kill processes if they hang (runtime exceeded)
+    epoch_now=`date +%s`
+    run_time="$(($epoch_now - $epoch_start))" 
+    if [ "$run_time" -gt "$MAX_RUN_T" ]; then
+        echo "Run time exceeded. Killing children..."
+        kill `ps --no-headers -o pid --ppid=$PID`
+        break
+    fi
+
+    sleep 1
+done
 
 epoch_now=`date +%s`
 run_time="$(($epoch_now - $epoch_start))" 
