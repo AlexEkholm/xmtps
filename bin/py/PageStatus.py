@@ -308,7 +308,7 @@ def WriteAutoRefresh(doc, tag, text):
 # The image on the right of every page footer (bin/py/img/, installed in <plots>/img/), and the
 # height it is shown at (it is 150 x 118 px)
 FOOTER_IMAGE = 'flying-pig.png'
-FOOTER_IMAGE_HEIGHT_PX = 59
+FOOTER_IMAGE_HEIGHT_PX = 30
 
 
 def WriteFooterImage(doc, tag, img_url):

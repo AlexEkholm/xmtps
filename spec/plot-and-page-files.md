@@ -560,7 +560,7 @@ A static page (since 2026-11-09), not generated: `bin/py/html/energy-model.html`
 
 ## 8. Page footer and decoder status
 
-The summary, mission, startup and energy pages, and the float plot pages (without the decoder and database status lines; section 4), share a footer written by `WriteStatusFooter` in `bin/py/PageStatus.py`, inside `<div id="foot"><div id="lfoot"><i>`. On its right, `<div id="rfoot">` holds the footer image `img/flying-pig.png` (`WriteFooterImage`, `FOOTER_IMAGE`, shown 59 px high; since 2026-11-15), linked as `img/` from the summary page, `../img/` from the float pages and `<plots-url>/img/` from the pages in `engineering/`; the static energy model page (7.2) shows it too. Production example (summary page, 2026-10-30):
+The summary, mission, startup and energy pages, and the float plot pages (without the decoder and database status lines; section 4), share a footer written by `WriteStatusFooter` in `bin/py/PageStatus.py`, inside `<div id="foot"><div id="lfoot"><i>`. On its right, `<div id="rfoot">` holds the footer image `img/flying-pig.png` (`WriteFooterImage`, `FOOTER_IMAGE`, shown 30 px high, a quarter of its 118 px; since 2026-11-15), linked as `img/` from the summary page, `../img/` from the float pages and `<plots-url>/img/` from the pages in `engineering/`; the static energy model page (7.2) shows it too. Production example (summary page, 2026-10-30):
 
 ```
 Page last updated 2026-10-30T18:25Z <span class="page-updated" epoch="1793384720" runtime="55 seconds">(runtime: 55 seconds)</span>
