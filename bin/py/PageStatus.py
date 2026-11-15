@@ -298,7 +298,7 @@ def WriteAutoRefresh(doc, tag, text):
     """Write the "Auto Refresh" checkbox (URL parameter 'r', TABLE_URL_SCRIPT) into a yattag
     document, in its own div with id 'refresh', placed above the footer (since 2026-11-15; it was
     the right-hand part of the footer)."""
-    with tag('div', id='refresh', style='margin: 20px 0 0 0; font-size: 12px; color: #aaa;'):
+    with tag('div', id='refresh', style='margin: 20px 0 0 0; font-size: 12px; color: #aaa; text-align: right;'):
         with tag('label', ('for', 'autorefresh')):
             text('Auto Refresh ')
             doc.input(name='autorefresh', type='checkbox', id='autorefresh', value='no',
