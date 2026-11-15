@@ -77,7 +77,7 @@ from EnergyModel import (ENERGY_COMPONENTS, ENERGY_PIE_ONLY, ENERGY_SECONDS_PER_
                          ENERGY_CONTROLLER_UNCERTAINTY, ENERGY_REMAINING_RECENT_DIVES,
                          ENERGY_VOLTAGE_FALL_FRACTION, PumpVoltageFallDive, RemainingCycles)
 from geographiclib.geodesic import Geodesic
-from PageStatus import WriteStatusFooter
+from PageStatus import WriteFooterImage, WriteStatusFooter
 
 # Set library options
 
@@ -3794,6 +3794,7 @@ def WriteHtmlFile(float_id, runtime_s=None):
                 # Update time (with the time since, filled in by the browser) and this float's
                 # plot run time, the Python utility version and the decoder version
                 with tag('div', klass='footer'):
+                    WriteFooterImage(doc, tag, '../img')
                     with tag('i'):
                         WriteStatusFooter(doc, tag, text, JSON_VERSION, runtime_s, decoder_status=False)
                         

@@ -45,7 +45,7 @@ from EnergyModel import (ENERGY_REMAINING_RECENT_DIVES, ENERGY_SECONDS_PER_YEAR,
                          ENERGY_CONTROLLER_UNCERTAINTY, ENERGY_VOLTAGE_EARLY_DIVES,
                          ENERGY_VOLTAGE_FALL_FRACTION, CycleEnergy, PumpVoltageFallDive, RemainingCycles)
 from FloatStatus import FloatStatus, LastLocation
-from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
+from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WriteFooterImage, WritePageLinks, WriteStatusFooter
 
 """
 Constants:
@@ -659,6 +659,7 @@ def WriteEnergyFile(dpath):
                             with tag('div', id='lfoot'):
                                 with tag('i'):
                                     WriteStatusFooter(doc, tag, text, JSON_VERSION, args.runtime)
+                            WriteFooterImage(doc, tag, args.plots_url + '/img')
 
         with open(fpath, 'w', encoding='utf-8') as fout:
             fout.write(doc.getvalue())

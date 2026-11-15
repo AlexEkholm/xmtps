@@ -30,7 +30,8 @@ import plotly.io as pio
 import re
 from yattag import Doc
 
-from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
+from PageStatus import (FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WriteAutoRefresh,
+                        WriteFooterImage, WritePageLinks, WriteStatusFooter)
 from FloatStatus import FloatStatus, LastLocation
 
 # local
@@ -341,8 +342,6 @@ $(document).ready(function () {
                     text('#foot { font-size: 12px; color: #aaa; margin: 30px 0px; width: 100%;   } ')
                     text('#lfoot { float: left; width: 50%; white-space: preserve; margin: 0 0 30px 0;  } ')
                     text('#lfoot i { display: inline-block; margin 3px; } ')
-                    text('#rfoot { float: right; white-space: preserve; margin: 0 0 30px 0; } ')
-                    text('#rfoot label,input { margin: 3px; inline-block; vertical-align:middle; } ')
                     
                     
                     # text('label,input { display:  }')
@@ -619,15 +618,14 @@ $(document).ready(function () {
                               
                         # Create footer
                         
+                        # The Auto Refresh checkbox, in its own div above the footer
+                        WriteAutoRefresh(doc, tag, text)
+
                         with tag('div', id='foot'):
                             with tag('div', id='lfoot'):
                                 with tag('i'):
                                     WriteStatusFooter(doc, tag, text, JSON_VERSION, args.runtime)
-                                # text('Page last updated ' + datetime.datetime.now(datetime.UTC).isoformat()[:16] + 'Z' + ' - v' + JSON_VERSION + ' - Float Group, Department of Physical Oceanography, Woods Hole Oceanographic Institution, Woods Hole, MA, USA')
-                            with tag('div', id='rfoot'): 
-                                with tag('label', ( 'for', 'autorefresh')):
-                                    text('Auto Refresh ')
-                                    doc.input(name = 'autorefresh', type = 'checkbox', id = 'autorefresh', value = 'no', onclick="toggleAutoRefresh(this);")
+                            WriteFooterImage(doc, tag, 'img')
             
         # Write Summary file:
         

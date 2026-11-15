@@ -3,6 +3,15 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-15
+
+Python tools:
+
+- Pages: the summary and startup pages' Auto Refresh checkbox is in its own line above the
+  footer instead of on the right of it, and every page footer (table pages, float pages, the
+  energy model page) has a flying-pig drawing on its right (`img/flying-pig.png`,
+  `PageStatus.WriteFooterImage`).
+
 ## 2026-11-13
 
 Decoder:

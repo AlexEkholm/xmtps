@@ -41,7 +41,7 @@ import re
 from yattag import Doc
 
 from FloatStatus import FloatStatus, LastLocation
-from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WritePageLinks, WriteStatusFooter
+from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WriteFooterImage, WritePageLinks, WriteStatusFooter
 
 """
 Static configuration:
@@ -797,6 +797,7 @@ def WriteMissionFile(dpath):
                             with tag('div', id='lfoot'):
                                 with tag('i'):
                                     WriteStatusFooter(doc, tag, text, JSON_VERSION, args.runtime)
+                            WriteFooterImage(doc, tag, args.plots_url + '/img')
 
         # Write mission file:
 

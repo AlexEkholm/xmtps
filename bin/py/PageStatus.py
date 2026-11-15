@@ -296,12 +296,34 @@ $(document).ready(checkAutoRefresh);
 
 def WriteAutoRefresh(doc, tag, text):
     """Write the "Auto Refresh" checkbox (URL parameter 'r', TABLE_URL_SCRIPT) into a yattag
-    document, as the right-hand part of the footer: a div with id 'rfoot', next to 'lfoot'."""
-    with tag('div', id='rfoot', style='float: right; margin: 0 0 30px 0;'):
+    document, in its own div with id 'refresh', placed above the footer (since 2026-11-15; it was
+    the right-hand part of the footer)."""
+    with tag('div', id='refresh', style='margin: 20px 0 0 0; font-size: 12px; color: #aaa;'):
         with tag('label', ('for', 'autorefresh')):
             text('Auto Refresh ')
             doc.input(name='autorefresh', type='checkbox', id='autorefresh', value='no',
                       onclick='toggleAutoRefresh(this);', style='margin: 3px; vertical-align: middle;')
+
+
+# The image on the right of every page footer (bin/py/img/, installed in <plots>/img/), and the
+# height it is shown at (it is 150 x 118 px)
+FOOTER_IMAGE = 'flying-pig.png'
+FOOTER_IMAGE_HEIGHT_PX = 59
+
+
+def WriteFooterImage(doc, tag, img_url):
+    """Write the footer image (FOOTER_IMAGE) into a yattag document, as the right-hand part of the
+    footer: a div with id 'rfoot', floated right of the status text.
+
+    Args:
+        doc, tag: the yattag Doc and its tag function.
+        img_url: the URL of the plots directory's img/ folder relative to the page ('img' for the
+            summary page, '../img' for the float pages, '<plots-url>/img' for the pages in
+            engineering/).
+    """
+    with tag('div', id='rfoot', style='float: right; margin: 0 0 30px 0;'):
+        doc.stag('img', src='{}/{}'.format(img_url, FOOTER_IMAGE), alt='',
+                 style='height: {:d}px; width: auto; display: block;'.format(FOOTER_IMAGE_HEIGHT_PX))
 
 
 def WritePageLinks(doc, tag, text, current, plots_url):

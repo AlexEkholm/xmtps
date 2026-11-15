@@ -451,7 +451,7 @@ Written by `bin/py/xmtps-generate-summary-page.py` from all `<serial>_summary.js
 1. Heading `ALAMO/ALTO Float Summary`, and under it the links to the table pages, in `<div id="tlinks">` (`WritePageLinks` in `bin/py/PageStatus.py`, since 2026-11-09; `TABLE_PAGES`): "Summary" (this page, as plain text), "Startups" (`engineering/startup.html`), "Parameters" (`engineering/params.html`) and "Energy" (`engineering/energy.html`), separated by " | ". The paths are relative and assume the production layout of section 11, with the other pages in `engineering/` below the summary page. The startup, mission and energy pages have the same links under their headings, built from `--plots-url` (`/alamo/` and `/alamo/engineering/...` in production).
 2. Map (`div#pit`, 390 × 420 px): a Plotly figure embedded as a `div` (`to_html(full_html=False, include_plotlyjs='cdn', div_id='plot')`), so it also loads plotly.js from the Plotly CDN. Orthographic globe centered on 30° N, 45° W; 15°/30° graticule; dashed lines at the tropics and polar circles; equator line. One marker per float at its latest valid GPS position (`latest.gps`), colored by status (`FloatStatus`, as in the table): orange `rgb(255,168,64)` size 6 PREDEPLOYMENT (last seen at WHOI), green `rgb(123,255,123)` size 6 under 30 days since the latest SBD message, blue `rgb(123,123,255)` size 5 under 180 days, red `rgb(255,123,123)` size 4 otherwise. Hover shows the serial. Mode bar hidden. The map includes floats the table leaves out (it does not check the cycle or profiled distance).
 3. Table `#stable` (class `stripe`), one row per float, most recent report first. A float is listed once end-of-dive data (profile, rise or surface data) of dive 0 or a later dive has arrived (`end_of_dive` in its summary; since 2026-11-13). A summary without `end_of_dive`, written before then, uses the old rule: left out if `latest.cycle` < 1 or `profdepthsum` is not positive. Production on 2026-10-30: 250 rows (40 ACTIVE, 11 OVERDUE, 199 ARCHIVED).
-4. Footer (section 8) on the left, and an "Auto Refresh" checkbox on the right.
+4. An "Auto Refresh" checkbox in its own `<div id="refresh">` (`WriteAutoRefresh`; the startup page has it too), then the footer (section 8). Until 2026-11-15 the checkbox was on the right of the footer.
 
 ### 5.3 Table columns
 
@@ -560,7 +560,7 @@ A static page (since 2026-11-09), not generated: `bin/py/html/energy-model.html`
 
 ## 8. Page footer and decoder status
 
-The summary, mission, startup and energy pages, and the float plot pages (without the decoder and database status lines; section 4), share a footer written by `WriteStatusFooter` in `bin/py/PageStatus.py`, inside `<div id="foot"><div id="lfoot"><i>`. Production example (summary page, 2026-10-30):
+The summary, mission, startup and energy pages, and the float plot pages (without the decoder and database status lines; section 4), share a footer written by `WriteStatusFooter` in `bin/py/PageStatus.py`, inside `<div id="foot"><div id="lfoot"><i>`. On its right, `<div id="rfoot">` holds the footer image `img/flying-pig.png` (`WriteFooterImage`, `FOOTER_IMAGE`, shown 59 px high; since 2026-11-15), linked as `img/` from the summary page, `../img/` from the float pages and `<plots-url>/img/` from the pages in `engineering/`; the static energy model page (7.2) shows it too. Production example (summary page, 2026-10-30):
 
 ```
 Page last updated 2026-10-30T18:25Z <span class="page-updated" epoch="1793384720" runtime="55 seconds">(runtime: 55 seconds)</span>
@@ -596,6 +596,7 @@ No page uses a local script or stylesheet; all CSS is inline.
 | `img/s1.png` | `<plots>/img/` | as above | 7 × 7 px, blue `rgb(120,120,255)`: OVERDUE. |
 | `img/s2.png` | `<plots>/img/` | as above | 7 × 7 px, green `rgb(120,255,120)`: ACTIVE. |
 | `img/s3.png` | `<plots>/img/` | summary page | 7 × 7 px, orange `rgb(255,168,64)` (`s0.png` recolored): PREDEPLOYMENT. Made 2026-11-08. |
+| `img/flying-pig.png` | `<plots>/img/` | the footer of every page (section 8) | 150 × 118 px PNG drawing, copy in `bin/py/img/`. Added 2026-11-15. |
 | `engineering/energy-model/fig*.png` | `<plots>/engineering/energy-model/` | energy model page (7.2) | the report's figures, copied from `bin/py/html/energy-model/` (2026-11-09) |
 | `engineering/energy-depletion-report.pdf` | `<plots>/engineering/` | energy model page (7.2) | the report *Energy use of ALAMO/ALTO floats that ran out of battery* (LaTeX, not in the repository), copied by hand when it changes (2026-11-09) |
 | `js/datatables.min.js`, `js/datatables.min.css` | `<plots>/js/` | none (the code that loads them, `/alamo/js/...`, is commented out) | local copy of DataTables, 2025-11-18 |

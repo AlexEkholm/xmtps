@@ -36,7 +36,7 @@ import os
 import re
 from yattag import Doc
 
-from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WriteAutoRefresh, WritePageLinks, WriteStatusFooter
+from PageStatus import FloatSubtype, HasWimsData, TABLE_PAGING, TABLE_URL_SCRIPT, WriteAutoRefresh, WriteFooterImage, WritePageLinks, WriteStatusFooter
 
 """
 Static configuration:
@@ -627,11 +627,14 @@ def WriteStartupFile(dpath):
 
                         # Create footer
 
+                        # The Auto Refresh checkbox, in its own div above the footer
+                        WriteAutoRefresh(doc, tag, text)
+
                         with tag('div', id='foot'):
                             with tag('div', id='lfoot'):
                                 with tag('i'):
                                     WriteStatusFooter(doc, tag, text, JSON_VERSION, args.runtime)
-                            WriteAutoRefresh(doc, tag, text)
+                            WriteFooterImage(doc, tag, args.plots_url + '/img')
 
         # Write startup file:
 
