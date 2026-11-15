@@ -3796,7 +3796,7 @@ def WriteHtmlFile(float_id, runtime_s=None):
                 with tag('div', klass='footer'):
                     with tag('i'):
                         WriteStatusFooter(doc, tag, text, JSON_VERSION, runtime_s, decoder_status=False)
-                    WriteFooterImage(doc, tag, '../img')
+                    WriteFooterImage(doc, tag, '../img', margin_bottom_px=0)
                         
         
         

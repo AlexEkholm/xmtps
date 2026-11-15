@@ -308,10 +308,10 @@ def WriteAutoRefresh(doc, tag, text):
 # The image on the right of every page footer (bin/py/img/, installed in <plots>/img/), and the
 # height it is shown at (it is 150 x 118 px)
 FOOTER_IMAGE = 'flying-pig.png'
-FOOTER_IMAGE_HEIGHT_PX = 30
+FOOTER_IMAGE_HEIGHT_PX = 20
 
 
-def WriteFooterImage(doc, tag, img_url):
+def WriteFooterImage(doc, tag, img_url, margin_bottom_px=30):
     """Write the footer image (FOOTER_IMAGE) into a yattag document, as the right-hand part of the
     footer: a div with id 'rfoot', at the bottom right (the footer is a flex row, items aligned to the end).
 
@@ -320,8 +320,10 @@ def WriteFooterImage(doc, tag, img_url):
         img_url: the URL of the plots directory's img/ folder relative to the page ('img' for the
             summary page, '../img' for the float pages, '<plots-url>/img' for the pages in
             engineering/).
+        margin_bottom_px: the image's bottom margin, the same as the status text's so that the two
+            end level: 30 on the table pages (#lfoot), 0 on the float pages (whose text has none).
     """
-    with tag('div', id='rfoot', style='margin: 0 0 30px 0;'):
+    with tag('div', id='rfoot', style='margin: 0 0 {:d}px 0;'.format(margin_bottom_px)):
         doc.stag('img', src='{}/{}'.format(img_url, FOOTER_IMAGE), alt='',
                  style='height: {:d}px; width: auto; display: block;'.format(FOOTER_IMAGE_HEIGHT_PX))
 
