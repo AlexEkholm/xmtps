@@ -14627,45 +14627,36 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
 
 # ------------------------------------------------------------------------------------------------
 # Buoyancy plots, from the buoyancy model fitted in the xmtps-control repository
-# (bin/xmtps-buoyancy-model.py; --buoyancy-fit, its buoyancy_floats.csv)
+# (bin/xmtps-buoyancy-model.py), with one set of parameters per float type
 # ------------------------------------------------------------------------------------------------
 
-BUOYANCY_FIT_FILE = '/data1/alamo/etc/buoyancy_floats.csv'   # --buoyancy-fit default, if it exists
-BUOYANCY_FIT = None             # sn -> fitted parameters (LoadBuoyancyFit), loaded on first use
+# The buoyancy model of xmtps-control (report doc/latex/float.tex 'The float as a plant' and
+# fit.tex; bin/SeekSim.py, bin/alamo_hull.py), with its bulk values per float type: volume, mass,
+# drag area C_dA and pump flow q_p as the controller's priors (SeekSim.Float), hull compressibility
+# the ALTO lab value per unit volume, 2.42e-6 1/dBar, for both types (K_REL_BULK), and thermal
+# expansion 8.74e-5 V per K (the ballasting value). The ALAMO is the standard (RBR) hull.
+BUOYANCY_GAMMA_H = 2.42e-6          # 1/dBar, hull compressibility per unit volume
+BUOYANCY_ALPHA = 8.74e-5            # 1/K, bulk thermal expansion of the aluminium hull
+BUOYANCY_MODEL = {                  # volume (mL), mass (kg), C_dA (m^2), pump flow (mL/min)
+    'ALAMO': dict(volume = 9500.0,  mass = 9.76, cda = 0.039, q_p = 18.0),
+    'ALTO':  dict(volume = 18300.0, mass = 18.9, cda = 0.070, q_p = 18.0),
+    }
+for _m in BUOYANCY_MODEL.values():
+    _m.update(kappa = BUOYANCY_GAMMA_H * _m['volume'], beta = BUOYANCY_ALPHA * _m['volume'])
+BUOYANCY_ALTO_MIN_SERIAL = 10000   # ALTO serial numbers start here
 BUOYANCY_G = 9.80665            # m/s^2
 BUOYANCY_T_REF = 10.0           # degC, reference temperature of the thermal-expansion term
 BUOYANCY_MIN_PRES = 10.0        # dBar; shallower samples ride surface waves (as in the model fit)
 BUOYANCY_MAX_SPEED = 1.0        # m/s; faster samples are implausible
-BUOYANCY_Q_FALLBACK = 19.0      # mL/min, fleet pump flow when the fitted flow at DSD is not positive
 BUOYANCY_MIN_DIVES = 5          # calibration dives needed for the neutral fall-pump time plots
 BUOYANCY_DSD_TOL = 30.0         # dBar; the first pump is the fall pump if this close to DSD
 
 
-def LoadBuoyancyFit():
-    """Read the fitted buoyancy model (--buoyancy-fit, buoyancy_floats.csv of
-    xmtps-buoyancy-model.py) once: a dict of WHOI serial -> dict of the parameters used here,
-    for the floats whose fit status is 'ok'. Empty if the option is not given or the file can't
-    be read (logged)."""
-    global BUOYANCY_FIT
-    if BUOYANCY_FIT is not None:
-        return BUOYANCY_FIT
-    BUOYANCY_FIT = {}
-    fpath = getattr(args, 'buoyancy_fit', None)
-    if not fpath:
-        return BUOYANCY_FIT
-    try:
-        df = pd.read_csv(fpath)
-        for _, r in df[df['status'] == 'ok'].iterrows():
-            q1 = r.get('q1_ml_min_per_kdbar')
-            BUOYANCY_FIT[int(r['sn'])] = dict(
-                type = r.get('type'), ctd = r.get('ctd'),
-                cda = float(r['cda_m2']), kappa = float(r['kappa_ml_dbar']), beta = float(r['beta_ml_k']),
-                mass = float(r['mass_kg']), q0 = float(r['q0_ml_min']),
-                q1 = float(q1) if pd.notna(q1) else 0.0)
-        logger.info('Read the buoyancy model of {} floats: {}'.format(len(BUOYANCY_FIT), fpath))
-    except Exception as exc:
-        logger.error('Failed to read the buoyancy model {} ({}: {})'.format(fpath, type(exc).__name__, exc))
-    return BUOYANCY_FIT
+def BuoyancyModel(float_id):
+    """The bulk buoyancy model of a float's type (BUOYANCY_MODEL) and the type: ALTO from serial
+    BUOYANCY_ALTO_MIN_SERIAL on, ALAMO below."""
+    ftype = 'ALTO' if int(float_id) >= BUOYANCY_ALTO_MIN_SERIAL else 'ALAMO'
+    return BUOYANCY_MODEL[ftype], ftype
 
 
 def BuoyancyExcessVolume(rate, cda):
@@ -14739,7 +14730,7 @@ def BuoyancyFallPumps(float_aggregate_data):
 
 
 def WriteBuoyancyPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
-    """Write the buoyancy plots of a float with a fitted buoyancy model (--buoyancy-fit).
+    """Write the buoyancy plots of a float, from the bulk buoyancy model of its type (BuoyancyModel).
 
     Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
     max_dive).
@@ -14751,8 +14742,8 @@ def WriteBuoyancyPlots(float_id, float_aggregate_data, dpath_float, dives, max_d
       min./max., ±1σ and mean, drawn as the other *_avg plots.
     - neutral_pump_time (category 'pump'): pressure against the fall-pump time (at DSD) that would
       make the float neutral there: t(p) = 60 (C + oil(p)) / q_p(DSD), with oil(p) from the latest
-      full-depth profile and the fitted hull compressibility, thermal expansion and mass
-      (BuoyancyNeutralOil) and q_p the fitted pump flow at DSD. The constant C is calibrated on
+      full-depth profile and the type's hull compressibility, thermal expansion and mass
+      (BuoyancyNeutralOil) and q_p the type's pump flow at DSD. The constant C is calibrated on
       the dives that reached their park level with the fall pump alone (no seek pumps), each with
       its own profile at its level; the band is ±1 robust standard deviation of those dives' C.
       Those dives are marked at their park level and fall-pump time.
@@ -14762,13 +14753,10 @@ def WriteBuoyancyPlots(float_id, float_aggregate_data, dpath_float, dives, max_d
       level reached minus the time used; a drift over the mission shows a change in the float's
       buoyancy (oil, mass) that one constant C does not follow.
 
-    Returns the list of figure metadata dicts from WritePlotImageFiles; empty for a float without
-    a fit. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    Returns the list of figure metadata dicts from WritePlotImageFiles. A failure is logged and swallowed unless --halt-on-error (-H) is given.
     """
     figs_meta = []
-    fit = LoadBuoyancyFit().get(int(float_id))
-    if fit is None:
-        return figs_meta
+    fit, ftype = BuoyancyModel(float_id)
     figs = dict()
     fig_size = dict()
     hoverlabel = dict(font = dict(family = 'Consolas, monospace', size = 14))
@@ -14880,9 +14868,7 @@ def WriteBuoyancyPlots(float_id, float_aggregate_data, dpath_float, dives, max_d
         cal = cal[[int(d) in prof and lv <= prof[int(d)][-1, 0] + 20 for d, lv in zip(cal['dive'], cal['level'])]]
         if len(cal) >= BUOYANCY_MIN_DIVES and len(prof):
             dsd = float(np.median(cal['dsd']))
-            q = fit['q0'] + fit['q1'] * dsd / 1000.0
-            if not q > 1:
-                q = BUOYANCY_Q_FALLBACK
+            q = fit['q_p']                    # mL/min, nearly independent of pressure
             c_i = np.array([q * t / 60 - BuoyancyNeutralOil(fit, prof[int(d)], lv)
                             for d, t, lv in zip(cal['dive'], cal['t_fall'], cal['level'])])
             c = float(np.median(c_i))
@@ -15661,13 +15647,6 @@ parser.add_argument(
     default=BATHYMETRY_FILE,
     dest='bathymetry',
     help='read bathymetry for trajectory plots from classic netCDF ETOPO file FILE (default=\'{}\')'.format(BATHYMETRY_FILE),
-    metavar='FILE')
-
-parser.add_argument(
-    '--buoyancy-fit',
-    default=BUOYANCY_FIT_FILE if os.path.isfile(BUOYANCY_FIT_FILE) else None,
-    dest='buoyancy_fit',
-    help='read the fitted buoyancy model (buoyancy_floats.csv of xmtps-buoyancy-model.py in the xmtps-control repository) from FILE and plot the buoyancy and neutral fall-pump time of the floats it fits (default: "{}" if it exists, else no buoyancy plots)'.format(BUOYANCY_FIT_FILE),
     metavar='FILE')
 
 parser.add_argument(

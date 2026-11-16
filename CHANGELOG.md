@@ -12,9 +12,10 @@ Python tools:
   microstructure plots), Wave Data, Descent, Drift, Ascent and Surface Data, then Engineering Data
   in subsections: Energy and Battery, Buoyancy Control, Oil Pump, Air Pump, Case Vacuum, GPS and
   Iridium; the figure files last. The subsections are indented in the navigation.
-- Buoyancy plots, for floats with a fitted buoyancy model (`--buoyancy-fit`, default
-  `/data1/alamo/etc/buoyancy_floats.csv` when it exists; the
-  `buoyancy_floats.csv` of `xmtps-buoyancy-model.py` in the xmtps-control repository):
+- Buoyancy plots, from the buoyancy model of xmtps-control with its bulk values per float type
+  (`BUOYANCY_MODEL`: ALAMO 9.5 L, 9.76 kg, C_dA 0.039 m^2; ALTO 18.3 L, 18.9 kg, C_dA 0.070 m^2;
+  pump flow 18 mL/min, hull compressibility 2.42e-6 per dBar and thermal expansion 8.74e-5 per K
+  of the volume for both):
   `buoyancy_descent` and `buoyancy_ascent` (excess volume δV = C_dA w|w|/(2g) per dive against
   time), `neutral_pump_time` (pressure against the fall-pump time that makes the float neutral
   there, from the latest full-depth profile, calibrated on the dives without seek pumps) and
