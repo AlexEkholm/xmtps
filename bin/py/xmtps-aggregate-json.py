@@ -14863,7 +14863,7 @@ def WriteBuoyancyPlots(float_id, float_aggregate_data, dpath_float, dives, max_d
 
         # Fall-pump time for neutral buoyancy
         prof = BuoyancyProfiles(float_aggregate_data.get('profile'))
-        fp = BuoyancyFallPumps(float_aggregate_data)
+        fp = BuoyancyFallPumps(float_aggregate_data).astype(np.double)   # float columns, also when empty
         cal = fp[(fp['n_seek'] == 0) & np.isfinite(fp['t_fall']) & np.isfinite(fp['level'])]
         cal = cal[[int(d) in prof and lv <= prof[int(d)][-1, 0] + 20 for d, lv in zip(cal['dive'], cal['level'])]]
         if len(cal) >= BUOYANCY_MIN_DIVES and len(prof):
