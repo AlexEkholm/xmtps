@@ -39,6 +39,8 @@ Use these symbols in hover text, and the same quantity names and units on the ax
 | Potential density | ρ<sub>Θ</sub> | kg m<sup>−3</sup> | `.2f` | `ρ<sub>Θ</sub> = 1027.80 kg m⁻³` | Prefer the anomaly σ<sub>Θ</sub>; use ρ<sub>Θ</sub> only where the full value is needed. The plots don't use it. |
 | Potential density anomaly | σ<sub>Θ</sub> | kg m<sup>−3</sup> | `.2f` | `σ<sub>Θ</sub> = 27.80 kg m⁻³` | ρ<sub>Θ</sub> − 1000. The plots carry this (`sigma0` in the data), so hovers show σ<sub>Θ</sub>. |
 | Vertical rate | dp/dt | mBar s<sup>−1</sup> | `.2f` | `dp/dt = −98.40 mBar s⁻¹` | Positive downward (pressure increasing). |
+| Vertical speed | w | cm s<sup>−1</sup> | `.1f` | `w = −14.0 cm s⁻¹` | Positive upward. The aggregate column `rate` is this speed (the older hovers that label it `dp/dt … mBar s⁻¹` have the sign and unit of w in cm/s). |
+| Excess volume (buoyancy) | δV | mL | `.1f` | `δV = −12.4 mL` | The float's volume beyond neutral, positive buoyant: δV = C<sub>d</sub>A w\|w\| / (2g) from the drag balance (buoyancy plots). |
 | Voltage | V | V | `.2f` | `V = 14.72 V` | |
 | Current | I | A | `.3f` | `I = 0.412 A` | |
 | Power | P | W | `.2f` | `P = 6.05 W` | |
@@ -572,7 +574,7 @@ A plot-group writer follows one pattern. Copy an existing writer of the same fam
 5. **Create the figures.** Build `figs = dict(<id_str> = go.Figure(layout=…), …)`, one entry per plot, with the standard layout (section 3.4). The `id_str` becomes the file name `<serial>_<id_str>` and the key in the float page's figure table.
 6. **Add traces.** Add background traces first, then loop over `dives` with the color counter `i` and add one trace per dive to each figure. Wrap each dive in `try/except`, logging the error, or raising it with `--halt-on-error` (`args.halt`).
 7. **Write.** Call `WritePlotImageFiles(id_str=fig, figure=figs[fig], float_id=float_id, dpath_float=dpath_float, category='<category>', size=fig_size.get(fig, 'fig'), showlegend=…)` for each figure, and collect the returned metadata.
-8. **Register.** Add the writer to `PLOT_WRITERS` and the plot ids to the float page's layout lists (`WriteHtmlFile`), and document the plots in [plot-and-page-files.md](plot-and-page-files.md) section 3.
+8. **Register.** Add the writer to `PLOT_WRITERS` and the plot ids to the right section of `FLOAT_PAGE_SECTIONS` (science data by dive phase, engineering data by subsystem; one list per row of small images), and document the plots in [plot-and-page-files.md](plot-and-page-files.md) sections 3 and 4.
 
 ## 11. What `WritePlotImageFiles` does to every figure
 

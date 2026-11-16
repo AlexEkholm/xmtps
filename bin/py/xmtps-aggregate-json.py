@@ -502,13 +502,109 @@ ENERGY_PACK_OVERRIDES.update({9179: 'tadiran', 9181: 'tadiran', 9207: 'tadiran'}
 # plots. Their color bars both put the shallowest value at the top.
 DEPTH_BLUES = [[0.0, 'rgb(8,38,90)'], [0.2, 'rgb(8,81,156)'], [0.45, 'rgb(66,146,198)'],
                [0.75, 'rgb(158,202,225)'], [1.0, 'rgb(222,235,247)']]
-ENGINEERING_PAGE_ROWS = [          # the float page's Engineering section, one list per row
-    ['energy_per_cycle'],          # the energy plots first (since 2026-11-09)
-    ['energy_by_component'],
-    ['energy_remaining_cycles'],
-    ['phase_vac'],
+# The float page (WriteHtmlFile), its sections in order. Each has
+#   anchor    the id of its heading and of its navigation link
+#   title     the heading and the link's text (None: no heading, the plots at the top of the page)
+#   level     2: a section (h2); 3: a subsection (h3), indented in the navigation
+#   data      the aggregate whose absence the section reports ('No ... data.'), or None
+#   show      'always'; 'data' (only when the aggregate has data); 'figs' (only when one of its
+#             plots exists); 'sub' (a heading only, shown when one of the following subsections is)
+#   rows      the plots, one list per row (small images side by side)
+#   fallback  plots shown in place of a missing one
+# Science data first, through one dive cycle, then the engineering data by subsystem. The figure
+# files table comes after the last section.
+FLOAT_PAGE_SECTIONS = [
+    dict(anchor = 'top', title = None, level = 2, data = None, show = 'always', rows = [
+        ['position_globe', 'position'],
+        ['displacement_submerged_velocity', 'displacement_surface_velocity'],
+        ['trajectory'],
+        ['cycle_timing'],
+        ], fallback = {'position': 'position_geo'}),
+    dict(anchor = 'prof', title = 'Profile Data', level = 2, data = 'profile', show = 'always', rows = [
+        ['profile_temp', 'profile_saln'],
+        ['profile_ts', 'profile_sigma0'],
+        ['profile_contour_temp'],
+        ['profile_contour_saln'],
+        ['profile_contour_sigma0'],
+        ['profile_num_bins'],
+        ['microstructure_profile'],            # Micro-ALTO floats
+        ['microstructure_shear_spectra'],
+        ]),
+    dict(anchor = 'wave', title = 'Wave Data', level = 2, data = 'wave', show = 'data', rows = [
+        ['wave_mwm'],
+        ['wave_swh'],
+        ['wave_period'],
+        ['wave_spectra_disp_Szz'],
+        ['wave_waterfall_disp_Szz'],
+        ['wave_direction_mean'],
+        ]),
+    dict(anchor = 'descent', title = 'Descent', level = 2, data = 'descent', show = 'always', rows = [
+        ['descent', 'descent_rate_v_pres'],
+        ['descent_rate_v_time', 'descent_rate_avg'],
+        ['descent_sample_count'],
+        ]),
+    dict(anchor = 'drift', title = 'Drift', level = 2, data = 'drift', show = 'always', rows = [
+        ['drift_pres', 'drift_pres_avg'],
+        ['drift_temp', 'drift_temp_avg'],
+        ['drift_saln', 'drift_saln_avg'],
+        ['drift_dens', 'drift_dens_avg'],
+        ['drift_sample_count'],
+        ]),
+    dict(anchor = 'ascent', title = 'Ascent', level = 2, data = 'ascent', show = 'always', rows = [
+        ['ascent', 'ascent_rate_v_pres'],
+        ['ascent_rate_v_time', 'ascent_rate_avg'],
+        ['ascent_sample_count'],
+        ]),
+    dict(anchor = 'surf', title = 'Surface Data', level = 2, data = 'surface', show = 'always', rows = [
+        ['surface_pres', 'surface_pres_avg'],
+        ['surface_temp', 'surface_temp_avg'],
+        ['surface_sample_count'],
+        ]),
+    dict(anchor = 'eng', title = 'Engineering Data', level = 2, data = None, show = 'sub', rows = []),
+    dict(anchor = 'energy', title = 'Energy and Battery', level = 3, data = None, show = 'figs', rows = [
+        ['energy_per_cycle'],
+        ['energy_by_component'],
+        ['energy_remaining_cycles'],
+        ]),
+    dict(anchor = 'control', title = 'Buoyancy Control', level = 3, data = None, show = 'figs', rows = [
+        ['pump_first_duration'],               # fall pump and seek adjustments
+        ['neutral_pump_time', 'neutral_pump_time_fit'],
+        ['neutral_pump_time_error'],
+        ['buoyancy_descent', 'buoyancy_descent_v_pres'],
+        ['buoyancy_descent_avg'],
+        ['buoyancy_ascent', 'buoyancy_ascent_v_pres'],
+        ['buoyancy_ascent_avg'],
+        ]),
+    dict(anchor = 'pump', title = 'Oil Pump', level = 3, data = None, show = 'figs', rows = [
+        ['pump_pres', 'pump_power_v_pres'],
+        ['pump_volt', 'pump_volt_avg'],
+        ['pump_curr', 'pump_curr_avg'],
+        ['pump_energy', 'pump_energy_v_max_pres'],
+        ['pump_time_sum'],
+        ['pump_energy_sum'],
+        ]),
+    dict(anchor = 'air', title = 'Air Pump', level = 3, data = None, show = 'figs', rows = [
+        ['air_pump_duration'],
+        ['air_pump_pres'],
+        ]),
+    dict(anchor = 'vac', title = 'Case Vacuum', level = 3, data = None, show = 'figs', rows = [
+        ['phase_vac'],
+        ['pump_vac', 'pump_vac_avg'],
+        ['pump_vac_v_time', 'pump_vac_v_pres'],
+        ]),
+    dict(anchor = 'gps', title = 'GPS', level = 3, data = None, show = 'figs', rows = [
+        ['position_gps', 'satcom_gps_cno'],
+        ['satcom_gps_hdop', 'satcom_gps_nsat'],
+        ['satcom_gps_ttf', 'satcom_gps_fix_cep'],
+        ], fallback = {'satcom_gps_cno': 'position_all'}),
+    dict(anchor = 'sat', title = 'Iridium', level = 3, data = None, show = 'figs', rows = [
+        ['satcom'],
+        ['satcom_iridium_fix_cep_avg', 'satcom_sbd_data_size_avg'],
+        ['satcom_sbd_count'],
+        ['satcom_sbd_data_size'],
+        ['satcom_sbd_data_type'],
+        ]),
     ]
-ENGINEERING_PAGE_FIGS = [ id for row in ENGINEERING_PAGE_ROWS for id in row ]
 def PumpCurrentInvalid(curr):
     """Return a boolean Series: pump records whose battery current is unusable (<= 0, >= 100 A or
     missing). The pump plots blank curr, power and energy of these records, and EnergyEstimates
@@ -3142,12 +3238,26 @@ def WriteAggregateJsonFiles():
     except:
         raise Exception('Failed to write aggregate JSON files.')
  
+def HasAggregateData(float_aggregate_data, key):
+    """True if the float's aggregate data has a non-empty table key."""
+    return key in float_aggregate_data and float_aggregate_data[key] is not None and len(float_aggregate_data[key]) > 0
+
+
+def PageFigure(figs_meta_dict, section, id):
+    """The figure metadata of plot id in a float page section (FLOAT_PAGE_SECTIONS), or of its
+    fallback plot when it was not written; None if neither exists."""
+    if id in figs_meta_dict:
+        return figs_meta_dict[id]
+    alt = section.get('fallback', {}).get(id)
+    return figs_meta_dict.get(alt) if alt else None
+
+
 def WriteHtmlFile(float_id, runtime_s=None):
     """Write the index.html page of one float's plots to <plots>/<id>/index.html.
 
-    The page has a fixed navigation pane, sections of small plot images (each linking to its
-    interactive HTML plot) for profile, wave (only when there is wave data), drift, surface,
-    ascent, descent, hydraulic system and satcom data, and a "Figure Files" table listing every
+    The page has a fixed navigation pane, the sections of FLOAT_PAGE_SECTIONS (small plot images,
+    each linking to its interactive HTML plot: positions and trajectory, profile, wave, descent,
+    drift, ascent and surface data, then the engineering data by subsystem), and a "Figure Files" table listing every
     figure with its thumbnail, category and the sizes of its HTML and PNG files. It is built from
     the figure metadata that WritePlotFiles stores in float_aggregate_map[float_id]['figures']. A
     failure is logged and swallowed unless --halt-on-error (-H) is given.
@@ -3180,6 +3290,19 @@ def WriteHtmlFile(float_id, runtime_s=None):
         if not 'figures' in float_aggregate_data.keys():
             raise Exception('Figure metadata data for float {} not found.'.format(float_id))
         figs_meta_dict = float_aggregate_data['figures']
+
+        # The sections shown for this float (FLOAT_PAGE_SECTIONS): those shown only with data or
+        # with a plot are left out, with their navigation links, when there is none; a
+        # heading-only section ('sub') when none of the subsections after it is shown.
+        page_sections = []
+        for section in FLOAT_PAGE_SECTIONS:
+            if section['show'] == 'always' or section['show'] == 'sub' \
+                    or (section['show'] == 'data' and HasAggregateData(float_aggregate_data, section['data'])) \
+                    or (section['show'] == 'figs' and any(PageFigure(figs_meta_dict, section, id) for row in section['rows'] for id in row)):
+                page_sections.append(section)
+        page_sections = [ x for k, x in enumerate(page_sections)
+                          if x['show'] != 'sub' or (k + 1 < len(page_sections) and page_sections[k + 1]['level'] > x['level']) ]
+
     
         # Create document
         
@@ -3212,6 +3335,7 @@ def WriteHtmlFile(float_id, runtime_s=None):
                     # Create styles - headings
                     
                     text('h2 { font-size: 24px; } ')
+                    text('h3 { font-size: 19px; color: #444; } ')
                     
                     # Create styles - tables
                     
@@ -3221,6 +3345,7 @@ def WriteHtmlFile(float_id, runtime_s=None):
                     
                     text('.nav { width: 125px; position: fixed; z-index: 1; top: 10px; left: 10px; overflow-x: hidden; background: #f9f9f9; padding: 2px 0 6px 0; line-height: 1.4; border: 1px solid #dcdcdc; border-radius: 5px; } ')
                     text('.nav a { font-size: 12px; padding: 5px 8px; } ')
+                    text('.nav a.sub { padding-left: 16px; font-size: 11px; white-space: nowrap; } ')
 
                     # Create styles - plot divs
 
@@ -3254,43 +3379,11 @@ def WriteHtmlFile(float_id, runtime_s=None):
                     with tag('a', href='#top'):
                         doc.asis('&#8679 Top')
                     doc.stag('br')
-                    with tag('a', href='#prof'):
-                        text('Profile Data')
-                    doc.stag('br') 
-                    if 'wave' in float_aggregate_data and len(float_aggregate_data['wave']) > 0:
-                        with tag('a', href='#wave'):
-                            text('Wave Data')
-                        doc.stag('br') 
-                    if 'microstructure' in float_aggregate_data:
-                        with tag('a', href='#microstructure'):
-                            text('Microstructure Data')
-                        doc.stag('br')
-                    with tag('a', href='#drift'):
-                        text('Drift Data')
-                    doc.stag('br') 
-                    with tag('a', href='#surf'):
-                        text('Surface Data')
-                    doc.stag('br') 
-                    with tag('a', href='#ascent'):
-                        text('Ascent')
-                    doc.stag('br') 
-                    with tag('a', href='#descent'):
-                        text('Descent')
-                    doc.stag('br') 
-                    with tag('a', href='#pump'):
-                        text('Hydraulic System')
-                    doc.stag('br')
-                    if 'air_pump_duration' in figs_meta_dict or 'air_pump_pres' in figs_meta_dict:
-                        with tag('a', href='#air'):
-                            text('Air Pump')
-                        doc.stag('br')
-                    if any(id in figs_meta_dict for id in ENGINEERING_PAGE_FIGS):
-                        with tag('a', href='#eng'):
-                            text('Engineering')
-                        doc.stag('br')
-                    with tag('a', href='#sat'):
-                        text('Satcom')
-                    doc.stag('br') 
+                    for section in page_sections:
+                        if section['title'] is not None:
+                            with tag('a', href='#' + section['anchor'], **({'klass': 'sub'} if section['level'] > 2 else {})):
+                                text(section['title'])
+                            doc.stag('br')
                     with tag('a', href='#figs'):
                         text('Figure Files')
                     doc.stag('br')
@@ -3303,408 +3396,38 @@ def WriteHtmlFile(float_id, runtime_s=None):
                 with tag('div', id='top', klass="plots-top-div"):
                     with tag('div', klass="plots-div"):
                     
-                        # General plots
-                    
-                        count = 0
-                        for id in [
-                            'position_globe', 'position', '', 
-                            'displacement_submerged_velocity', 'displacement_surface_velocity', '', 
-                            'trajectory', '', 
-                            'cycle_timing', '', 
-                            ]:
-                            
-                            if (len(id) == 0) and (count > 0) :
-                            
+                        # Plot sections, as in FLOAT_PAGE_SECTIONS
+                        
+                        for section in page_sections:
+                        
+                            if section['title'] is not None:
+                                with tag('h{}'.format(section['level']), id=section['anchor']):
+                                    text(section['title'])
+                        
+                            if section['data'] is not None and not HasAggregateData(float_aggregate_data, section['data']) \
+                                    and not any(PageFigure(figs_meta_dict, section, id) for row in section['rows'] for id in row):
+                                with tag('p'):
+                                    text('No {} data.'.format(section['title'].lower().replace(' data', '')))
                                 doc.stag('br')
-                                count = 0
                                 continue
-
-                            # Without bathymetry there is no 'position' plot; show the map version
-                            if id == 'position' and id not in figs_meta_dict:
-                                id = 'position_geo'
-                            if id in figs_meta_dict:
-                                fig_meta = figs_meta_dict[id]
-                                with tag('a', href=fig_meta['fpath_html']):
-                                    doc.stag(
-                                        'img',
-                                        alt=fig_meta['title'],
-                                        klass=fig_meta['size'], 
-                                        title=fig_meta['title'],
-                                        src=fig_meta['fpath_img_small'])
-                                count = count + 1
-                               
-
                         
-                        # Profile plots
-                        
-                        with tag('h2', id='prof'):
-                            text('Profile Data')
-                            
-                        if not 'profile' in float_aggregate_data or len(float_aggregate_data['profile']) < 1:
-                            with tag('p'):
-                                text('No profile data.')
-                            doc.stag('br')
-                        else:
-                        
-                            count = 0
-                            for id in [
-                                'profile_temp', 'profile_saln', '', 
-                                'profile_ts', 'profile_sigma0', '', 
-                                'profile_contour_temp', '', 
-                                'profile_contour_saln', '', 
-                                'profile_contour_sigma0', '', 
-                                'profile_num_bins', '', 
-                                ]:
-                                
-                                if (len(id) == 0) and (count > 0) :
-                                
-                                    doc.stag('br')
-                                    count = 0
-                                    continue
-                           
-                                if id in figs_meta_dict:
-                                    fig_meta = figs_meta_dict[id]
-                                    with tag('a', href=fig_meta['fpath_html']):
-                                        doc.stag(
-                                            'img',  
-                                            alt=fig_meta['title'],
-                                            klass=fig_meta['size'], 
-                                            title=fig_meta['title'],
-                                            # src=fig_meta['fpath_img_small'] if fig_meta['size_img_small'] < fig_meta['size_svg_small'] else fig_meta['fpath_svg_small'])
-                                            src=fig_meta['fpath_img_small'])
-                                    count = count + 1
-                                    
-                        # Wave data plots
-                        
-                        if 'wave' in float_aggregate_data and len(float_aggregate_data['wave']) > 0:
-
-                            with tag('h2', id='wave'):
-                                text('Wave Data')
-                                
-                            count = 0
-                            for id in [
-                                'wave_mwm', '', 
-                                'wave_swh', '', 
-                                'wave_period', '', 
-                                'wave_spectra_disp_Szz', '', 
-                                'wave_waterfall_disp_Szz', '', 
-                                'wave_direction_mean', '', 
-                                ]:
-                                
-                                if (len(id) == 0) and (count > 0) :
-                                
-                                    doc.stag('br')
-                                    count = 0
-                                    continue
-                           
-                                if id in figs_meta_dict:
-                                    fig_meta = figs_meta_dict[id]
-                                    with tag('a', href=fig_meta['fpath_html']):
-                                        doc.stag(
-                                            'img',  
-                                            alt=fig_meta['title'],
-                                            klass=fig_meta['size'], 
-                                            title=fig_meta['title'],
-                                            # src=fig_meta['fpath_img_small'] if fig_meta['size_img_small'] < fig_meta['size_svg_small'] else fig_meta['fpath_svg_small'])
-                                            src=fig_meta['fpath_img_small'])
-                                    count = count + 1
-
-                        # Microstructure data plots (micro-ALTO floats)
-
-                        if 'microstructure' in float_aggregate_data:
-
-                            with tag('h2', id='microstructure'):
-                                text('Microstructure Data')
-
-                            for id in ['microstructure_profile', 'microstructure_shear_spectra']:
-                                if id in figs_meta_dict:
-                                    fig_meta = figs_meta_dict[id]
-                                    with tag('a', href=fig_meta['fpath_html']):
-                                        doc.stag(
-                                            'img',
-                                            alt=fig_meta['title'],
-                                            klass=fig_meta['size'],
-                                            title=fig_meta['title'],
-                                            src=fig_meta['fpath_img_small'])
-                                    doc.stag('br')
-
-                        # Drift plots
-
-                        with tag('h2', id='drift'):
-                            text('Drift Data')
-                        
-                        if not 'drift' in float_aggregate_data or len(float_aggregate_data['drift']) < 1:
-                            with tag('p'):
-                                text('No drift data.')
-                            doc.stag('br')
-                        else:    
-                        
-                            count = 0
-                            for id in [
-                                'drift_pres', 'drift_pres_avg', '', 
-                                'drift_temp', 'drift_temp_avg', '', 
-                                'drift_saln', 'drift_saln_avg', '', 
-                                'drift_dens', 'drift_dens_avg', '', 
-                                'drift_sample_count', '', 
-                                ]:
-                                
-                                if (len(id) == 0) and (count > 0) :
-                                
-                                    doc.stag('br')
-                                    count = 0
-                                    continue
-                           
-                                if id in figs_meta_dict:
-                                    fig_meta = figs_meta_dict[id]
-                                    with tag('a', href=fig_meta['fpath_html']):
-                                        doc.stag(
-                                            'img',  
-                                            alt=fig_meta['title'], 
-                                            klass=fig_meta['size'], 
-                                            title=fig_meta['title'],
-                                            # src=fig_meta['fpath_img_small'] if fig_meta['size_img_small'] < fig_meta['size_svg_small'] else fig_meta['fpath_svg_small'])
-                                            src=fig_meta['fpath_img_small'])
-                                    count = count + 1
-                            
-                                                    
-                        # surface plots
-                        
-                        with tag('h2', id='surf'):
-                            text('Surface Data')
-                            
-                        if not 'surface' in float_aggregate_data or len(float_aggregate_data['surface']) < 1:
-                            with tag('p'):
-                                text('No surface data.')
-                            doc.stag('br')
-                        else:    
-                        
-                            count = 0
-                            for id in [
-                                'surface_pres', 'surface_pres_avg', '', 
-                                'surface_temp', 'surface_temp_avg', '', 
-                                'surface_sample_count', '', 
-                                ]:
-                                
-                                if (len(id) == 0) and (count > 0) :
-                                
-                                    doc.stag('br')
-                                    count = 0
-                                    continue
-                           
-                                if id in figs_meta_dict:
-                                    fig_meta = figs_meta_dict[id]
-                                    with tag('a', href=fig_meta['fpath_html']):
-                                        doc.stag(  
-                                            'img', 
-                                            alt=fig_meta['title'],
-                                            klass=fig_meta['size'], 
-                                            title=fig_meta['title'],
-                                            # src=fig_meta['fpath_img_small'] if fig_meta['size_img_small'] < fig_meta['size_svg_small'] else fig_meta['fpath_svg_small'])
-                                            src=fig_meta['fpath_img_small'])
-                                    count = count + 1
-                        
-                        # ascent plots
-                        
-                        with tag('h2', id='ascent'):
-                            text('Ascent')
-                            
-                        if not 'ascent' in float_aggregate_data or len(float_aggregate_data['ascent']) < 1:
-                            with tag('p'):
-                                text('No ascent data.')
-                            doc.stag('br')
-                        else: 
-                        
-                            count = 0
-                            for id in [
-                                'ascent', 'ascent_rate_v_pres', '', 
-                                'ascent_rate_v_time', 'ascent_rate_avg', '', 
-                                'ascent_sample_count', '', 
-                                ]:
-                                
-                                if (len(id) == 0) and (count > 0) :
-                                
-                                    doc.stag('br')
-                                    count = 0
-                                    continue
-                           
-                                if id in figs_meta_dict:
-                                    fig_meta = figs_meta_dict[id]
-                                    with tag('a', href=fig_meta['fpath_html']):
-                                        doc.stag(
-                                            'img',   
-                                            alt=fig_meta['title'],
-                                            klass=fig_meta['size'], 
-                                            title=fig_meta['title'],
-                                            # src=fig_meta['fpath_img_small'] if fig_meta['size_img_small'] < fig_meta['size_svg_small'] else fig_meta['fpath_svg_small'])
-                                            src=fig_meta['fpath_img_small'])
-                                    count = count + 1
-                        
-                        # descent plots
-                        
-                        with tag('h2', id='descent'):
-                            text('Descent')
-                            
-                        if not 'descent' in float_aggregate_data or len(float_aggregate_data['descent']) < 1:
-                            with tag('p'):
-                                text('No descent data.')
-                            doc.stag('br')
-                        else: 
-                        
-                            count = 0
-                            for id in [
-                                'descent', 'descent_rate_v_pres', '', 
-                                'descent_rate_v_time', 'descent_rate_avg', '', 
-                                'descent_sample_count', '', 
-                                ]:
-                                
-                                if (len(id) == 0) and (count > 0) :
-                                
-                                    doc.stag('br')
-                                    count = 0
-                                    continue
-                           
-                                if id in figs_meta_dict:
-                                    fig_meta = figs_meta_dict[id]
-                                    with tag('a', href=fig_meta['fpath_html']):
-                                        doc.stag(
-                                            'img',   
-                                            alt=fig_meta['title'],
-                                            klass=fig_meta['size'], 
-                                            title=fig_meta['title'],
-                                            # src=fig_meta['fpath_img_small'] if fig_meta['size_img_small'] < fig_meta['size_svg_small'] else fig_meta['fpath_svg_small'])
-                                            src=fig_meta['fpath_img_small'])
-                                    count = count + 1
-                        
-                        # pump plots
-                        
-                        with tag('h2', id='pump'):
-                            text('Hydraulic System')
-                            
-                        if not 'pump' in float_aggregate_data or len(float_aggregate_data['pump']) < 1:
-                            with tag('p'):
-                                text('No hydraulic system data.')
-                            doc.stag('br')
-                        else:      
-                        
-                        
-                            count = 0
-                            for id in [
-                                'pump_first_duration', '',
-                                'pump_pres', 'pump_power_v_pres', '',
-                                'pump_volt', 'pump_volt_avg', '', 
-                                'pump_curr', 'pump_curr_avg', '', 
-                                # 'pump_power', 'pump_power_avg', '', 
-                                'pump_energy', 'pump_energy_v_max_pres', '',
-                                'pump_time_sum', '',
-                                'pump_energy_sum', '',
-                                'pump_vac', 'pump_vac_avg', '',
-                                'pump_vac_v_time', 'pump_vac_v_pres', '',
-                                ]:
-                                
-                                if (len(id) == 0) and (count > 0) :
-                                
-                                    doc.stag('br')
-                                    count = 0
-                                    continue
-                           
-                                if id in figs_meta_dict:
-                                    fig_meta = figs_meta_dict[id]
-                                    with tag('a', href=fig_meta['fpath_html']):
-                                        doc.stag(
-                                            'img',   
-                                            alt=fig_meta['title'],
-                                            klass=fig_meta['size'], 
-                                            title=fig_meta['title'],
-                                            # src=fig_meta['fpath_img_small'] if fig_meta['size_img_small'] < fig_meta['size_svg_small'] else fig_meta['fpath_svg_small'])
-                                            src=fig_meta['fpath_img_small'])
-                                    count = count + 1                            
-                        
-                        # air pump plots
-
-                        if 'air_pump_duration' in figs_meta_dict or 'air_pump_pres' in figs_meta_dict:
-
-                            with tag('h2', id='air'):
-                                text('Air Pump')
-
-                            for id in ['air_pump_duration', 'air_pump_pres']:
-                                if id in figs_meta_dict:
-                                    fig_meta = figs_meta_dict[id]
-                                    with tag('a', href=fig_meta['fpath_html']):
-                                        doc.stag(
-                                            'img',
-                                            alt=fig_meta['title'],
-                                            klass=fig_meta['size'],
-                                            title=fig_meta['title'],
-                                            src=fig_meta['fpath_img_small'])
-                                    doc.stag('br')
-
-                        # engineering plots: case vacuum through the cycle and estimated energy use;
-                        # rows as in ENGINEERING_PAGE_ROWS (the pump vacuum plots are in the
-                        # Hydraulic System section)
-
-                        if any(id in figs_meta_dict for id in ENGINEERING_PAGE_FIGS):
-
-                            with tag('h2', id='eng'):
-                                text('Engineering')
-
-                            for row in ENGINEERING_PAGE_ROWS:
+                            for row in section['rows']:
                                 count = 0
                                 for id in row:
-                                    if id in figs_meta_dict:
-                                        fig_meta = figs_meta_dict[id]
-                                        with tag('a', href=fig_meta['fpath_html']):
-                                            doc.stag(
-                                                'img',
-                                                alt=fig_meta['title'],
-                                                klass=fig_meta['size'],
-                                                title=fig_meta['title'],
-                                                src=fig_meta['fpath_img_small'])
-                                        count = count + 1
+                                    fig_meta = PageFigure(figs_meta_dict, section, id)
+                                    if fig_meta is None:
+                                        continue
+                                    with tag('a', href=fig_meta['fpath_html']):
+                                        doc.stag(
+                                            'img',
+                                            alt=fig_meta['title'],
+                                            klass=fig_meta['size'],
+                                            title=fig_meta['title'],
+                                            src=fig_meta['fpath_img_small'])
+                                    count = count + 1
                                 if count > 0:
                                     doc.stag('br')
-
-                        # satcom plots
                         
-                        with tag('h2', id='sat'):
-                            text('Satcom')
-                            
-                                                        
-                        count = 0
-                        for id in [
-                            'satcom', '', 
-                            'position_gps', 'satcom_gps_cno', '', 
-                            'satcom_gps_hdop', 'satcom_gps_nsat', '', 
-                            'satcom_gps_ttf', 'satcom_gps_fix_cep', '', 
-                            'satcom_iridium_fix_cep_avg', 'satcom_sbd_data_size_avg', '', 
-                            'satcom_sbd_count', '', 
-                            'satcom_sbd_data_size', '',
-                            'satcom_sbd_data_type', '',
-                            ]:
-                            
-                            if (len(id) == 0) and (count > 0) :
-                            
-                                doc.stag('br')
-                                count = 0
-                                continue
-
-                            # Without bathymetry there is no 'position' plot; show the map version
-                            if id == 'position' and id not in figs_meta_dict:
-                                id = 'position_geo'
-                            # Without CNO data (all zeros) there is no CNO plot; show all positions
-                            if id == 'satcom_gps_cno' and id not in figs_meta_dict:
-                                id = 'position_all'
-                            if id in figs_meta_dict:
-                                fig_meta = figs_meta_dict[id]
-                                with tag('a', href=fig_meta['fpath_html']):
-                                    doc.stag(
-                                        'img',
-                                        alt=fig_meta['title'],
-                                        klass=fig_meta['size'], 
-                                        title=fig_meta['title'],
-                                        # src=fig_meta['fpath_img_small'] if fig_meta['size_img_small'] < fig_meta['size_svg_small'] else fig_meta['fpath_svg_small'])
-                                        src=fig_meta['fpath_img_small'])
-                                count = count + 1    
-
                         # TODO Generate table of data files
                         
 
@@ -14902,6 +14625,390 @@ def WriteEnergyPlots(float_id, float_aggregate_data, dpath_float, dives, max_div
     return figs_meta
 
 
+# ------------------------------------------------------------------------------------------------
+# Buoyancy plots, from the buoyancy model fitted in the xmtps-control repository
+# (bin/xmtps-buoyancy-model.py; --buoyancy-fit, its buoyancy_floats.csv)
+# ------------------------------------------------------------------------------------------------
+
+BUOYANCY_FIT_FILE = '/data1/alamo/etc/buoyancy_floats.csv'   # --buoyancy-fit default, if it exists
+BUOYANCY_FIT = None             # sn -> fitted parameters (LoadBuoyancyFit), loaded on first use
+BUOYANCY_G = 9.80665            # m/s^2
+BUOYANCY_T_REF = 10.0           # degC, reference temperature of the thermal-expansion term
+BUOYANCY_MIN_PRES = 10.0        # dBar; shallower samples ride surface waves (as in the model fit)
+BUOYANCY_MAX_SPEED = 1.0        # m/s; faster samples are implausible
+BUOYANCY_Q_FALLBACK = 19.0      # mL/min, fleet pump flow when the fitted flow at DSD is not positive
+BUOYANCY_MIN_DIVES = 5          # calibration dives needed for the neutral fall-pump time plots
+BUOYANCY_DSD_TOL = 30.0         # dBar; the first pump is the fall pump if this close to DSD
+
+
+def LoadBuoyancyFit():
+    """Read the fitted buoyancy model (--buoyancy-fit, buoyancy_floats.csv of
+    xmtps-buoyancy-model.py) once: a dict of WHOI serial -> dict of the parameters used here,
+    for the floats whose fit status is 'ok'. Empty if the option is not given or the file can't
+    be read (logged)."""
+    global BUOYANCY_FIT
+    if BUOYANCY_FIT is not None:
+        return BUOYANCY_FIT
+    BUOYANCY_FIT = {}
+    fpath = getattr(args, 'buoyancy_fit', None)
+    if not fpath:
+        return BUOYANCY_FIT
+    try:
+        df = pd.read_csv(fpath)
+        for _, r in df[df['status'] == 'ok'].iterrows():
+            q1 = r.get('q1_ml_min_per_kdbar')
+            BUOYANCY_FIT[int(r['sn'])] = dict(
+                type = r.get('type'), ctd = r.get('ctd'),
+                cda = float(r['cda_m2']), kappa = float(r['kappa_ml_dbar']), beta = float(r['beta_ml_k']),
+                mass = float(r['mass_kg']), q0 = float(r['q0_ml_min']),
+                q1 = float(q1) if pd.notna(q1) else 0.0)
+        logger.info('Read the buoyancy model of {} floats: {}'.format(len(BUOYANCY_FIT), fpath))
+    except Exception as exc:
+        logger.error('Failed to read the buoyancy model {} ({}: {})'.format(fpath, type(exc).__name__, exc))
+    return BUOYANCY_FIT
+
+
+def BuoyancyExcessVolume(rate, cda):
+    """Excess volume dV (mL, + buoyant) from the vertical rate (aggregate 'rate': the upward
+    speed in cm/s, - while sinking) under quadratic drag: 1/2 rho C_dA w|w| = g rho dV, so
+    dV = C_dA w|w| / (2 g)."""
+    w = np.asarray(rate, dtype = np.double) / 100.0                     # m/s, + up
+    dv = cda * w * np.abs(w) / (2 * BUOYANCY_G) * 1e6
+    return np.where(np.abs(w) <= BUOYANCY_MAX_SPEED, dv, np.nan)
+
+
+def BuoyancyProfiles(df_profile):
+    """Per-dive water columns from the aggregate 'profile' table: dive -> array of rows
+    (pres, temp, rho), sorted by pressure, one row per pressure, rho the in-situ density."""
+    out = {}
+    if df_profile is None or len(df_profile) < 1:
+        return out
+    df = df_profile[['dive', 'pres', 'temp', 'dens']].apply(pd.to_numeric, errors = 'coerce').dropna()
+    for dive, g in df.groupby('dive'):
+        a = g.sort_values('pres').drop_duplicates('pres')[['pres', 'temp', 'dens']].values.astype(np.double)
+        if len(a) >= 3:
+            a[:, 2] += 1000.0
+            out[int(dive)] = a
+    return out
+
+
+def BuoyancyNeutralOil(fit, prof, p):
+    """Oil (mL, up to a constant) the float needs in its bladder to be neutral at pressure p in
+    the water column prof (BuoyancyProfiles): m / rho(p) + kappa p - beta (T(p) - T_ref), from
+    dV = dOil - kappa dp + beta dT + V (1 - rho_ref / rho) of the model."""
+    T = np.interp(p, prof[:, 0], prof[:, 1])
+    rho = np.interp(p, prof[:, 0], prof[:, 2])
+    return fit['mass'] * 1e6 / rho + fit['kappa'] * p - fit['beta'] * (T - BUOYANCY_T_REF)
+
+
+def BuoyancyFallPumps(float_aggregate_data):
+    """Per dive (1 and later): the configured fall-pump pressure DSD, the fall pump's duration
+    (the first pump record, if within BUOYANCY_DSD_TOL of DSD), the number of seek pumps (the pump
+    records between the fall pump and the deepest pump, which starts the ascent) and the park
+    level reached (median of the middle half of the drift pressures), as in xmtps-control's
+    xmtps-control-fleet.py. Returns a DataFrame (dive, dsd, t_fall, n_seek, level)."""
+    df_pump = float_aggregate_data.get('pump')
+    df_drift = float_aggregate_data.get('drift')
+    df_mission = float_aggregate_data.get('mission')
+    if df_pump is None or df_drift is None or df_mission is None or len(df_pump) < 1:
+        return pd.DataFrame(columns = ['dive', 'dsd', 't_fall', 'n_seek', 'level'])
+    dsd = {}
+    for _, m in df_mission.iterrows():
+        v = next((pd.to_numeric(m[k], errors = 'coerce') for k in ('DSD0', 'DSD') if k in m and pd.notna(pd.to_numeric(m[k], errors = 'coerce'))), None)
+        if v is not None and 0 < v < 3000:
+            dsd[int(m['dive'])] = float(v)
+    pumps = df_pump[['dive', 'pres', 'time']].apply(pd.to_numeric, errors = 'coerce')
+    drift = df_drift[['dive', 'pres']].apply(pd.to_numeric, errors = 'coerce').dropna()
+    rows = []
+    last_dsd = None
+    for dive in sorted(int(d) for d in pumps['dive'].dropna().unique() if d >= 1):
+        last_dsd = dsd.get(dive, last_dsd)          # the configuration of the last dive that sent it
+        p = pumps[pumps['dive'] == dive]
+        prs, tms = p['pres'].values, p['time'].values
+        if last_dsd is None or len(prs) < 1 or not np.isfinite(prs).any():
+            continue
+        k = int(np.nanargmax(prs))
+        fall = np.isfinite(prs[0]) and abs(prs[0] - last_dsd) < BUOYANCY_DSD_TOL
+        n_seek = k - (1 if fall else 0)
+        d = drift[drift['dive'] == dive]['pres'].values
+        d = np.sort(d[np.isfinite(d)])
+        level = float(np.median(d[len(d) // 4: len(d) - len(d) // 4])) if len(d) > 8 else np.nan
+        rows.append(dict(dive = dive, dsd = last_dsd, t_fall = float(tms[0]) if fall else np.nan,
+                         n_seek = n_seek, level = level))
+    return pd.DataFrame(rows, columns = ['dive', 'dsd', 't_fall', 'n_seek', 'level'])
+
+
+def WriteBuoyancyPlots(float_id, float_aggregate_data, dpath_float, dives, max_dive):
+    """Write the buoyancy plots of a float with a fitted buoyancy model (--buoyancy-fit).
+
+    Takes the shared plot-group parameters (float_id, float_aggregate_data, dpath_float, dives,
+    max_dive).
+
+    - buoyancy_descent, buoyancy_ascent (categories 'descent', 'ascent'): the float's excess
+      volume dV over the descent and the ascent, from each sample's vertical rate and the fitted
+      drag area (BuoyancyExcessVolume), one line per dive against the time since the phase began;
+      buoyancy_<phase>_v_pres, the same against pressure; buoyancy_<phase>_avg, its per-dive
+      min./max., ±1σ and mean, drawn as the other *_avg plots.
+    - neutral_pump_time (category 'pump'): pressure against the fall-pump time (at DSD) that would
+      make the float neutral there: t(p) = 60 (C + oil(p)) / q_p(DSD), with oil(p) from the latest
+      full-depth profile and the fitted hull compressibility, thermal expansion and mass
+      (BuoyancyNeutralOil) and q_p the fitted pump flow at DSD. The constant C is calibrated on
+      the dives that reached their park level with the fall pump alone (no seek pumps), each with
+      its own profile at its level; the band is ±1 robust standard deviation of those dives' C.
+      Those dives are marked at their park level and fall-pump time.
+    - neutral_pump_time_fit (category 'pump'): for the same dives, the predicted fall-pump time
+      against the time used, with the 1:1 line.
+    - neutral_pump_time_error (category 'pump'): for the same dives, the time predicted for the
+      level reached minus the time used; a drift over the mission shows a change in the float's
+      buoyancy (oil, mass) that one constant C does not follow.
+
+    Returns the list of figure metadata dicts from WritePlotImageFiles; empty for a float without
+    a fit. A failure is logged and swallowed unless --halt-on-error (-H) is given.
+    """
+    figs_meta = []
+    fit = LoadBuoyancyFit().get(int(float_id))
+    if fit is None:
+        return figs_meta
+    figs = dict()
+    fig_size = dict()
+    hoverlabel = dict(font = dict(family = 'Consolas, monospace', size = 14))
+    margin = dict(l = 10, r = 10, b = 20, t = 50, pad = 4)
+
+    try:
+        colors = [colorsys.hsv_to_rgb(x*.666/((len(dives)-1) or 1), .8, 1) for x in range(len(dives))][::-1]
+        colors = ['rgb'+str(tuple([round(255*y/5)*5 for y in x])) for x in colors]
+        colors[len(dives)-1] = 'rgb(0,0,0)'
+        color_of = { int(d): colors[k] for k, d in enumerate(dives) }
+
+        # Excess volume over the descent and the ascent
+        for key, label, phase, min_unit in (('descent', 'Descent', 'Descent', 60.0), ('ascent', 'Ascent', 'Ascent', 60.0)):
+            df = float_aggregate_data.get(key)
+            if df is None or len(df) < 1:
+                continue
+            df = df[['dive', 'pres', 'dt_str', 'dt_ref_delta_sec', 'rate']].copy()
+            for c in ('dive', 'pres', 'dt_ref_delta_sec', 'rate'):
+                df[c] = pd.to_numeric(df[c], errors = 'coerce')
+            df = df[(df['dive'] >= 0) & (df['pres'] >= BUOYANCY_MIN_PRES)]
+            df['dv'] = BuoyancyExcessVolume(df['rate'].values, fit['cda'])
+            df = df[np.isfinite(df['dv']) & np.isfinite(df['dt_ref_delta_sec'])]
+            if len(df) < 3:
+                continue
+            df['dt_min'] = df['dt_ref_delta_sec'] / min_unit
+            fid = 'buoyancy_' + key
+            dv_range = FixedRange(PaddedRange(df['dv'], (1, 99), 0.05, 0))
+            fig = go.Figure(layout = dict(
+                title = dict(text = '{}: {} Buoyancy Estimate'.format(float_id, label)),
+                xaxis = dict(title = 'Time [minutes]', **FixedRange(PaddedRange(df['dt_min'], (0, 99), 0.02, 0, zero = True))),
+                yaxis = dict(title = 'Excess Volume, δV [mL]', **dv_range),
+                hoverlabel = hoverlabel, legend = dict(title = 'Dive'), plot_bgcolor = 'white', margin = margin))
+            fig.add_shape(type = 'line', xref = 'paper', x0 = 0, x1 = 1, y0 = 0, y1 = 0, layer = 'below',
+                          line = dict(color = 'rgb(222,222,222)', width = 1.5, dash = 'dash'))
+            fig_p = go.Figure(layout = dict(
+                title = dict(text = '{}: {} Buoyancy Estimate vs. Pressure'.format(float_id, label)),
+                xaxis = dict(title = 'Excess Volume, δV [mL]', **dv_range),
+                yaxis = dict(title = 'Pressure [dBar]', autorange = False, range = [round(float(np.nanmax(df['pres'])) + 10), 0]),
+                hoverlabel = hoverlabel, legend = dict(title = 'Dive'), plot_bgcolor = 'white', margin = margin))
+            fig_p.add_shape(type = 'line', yref = 'paper', y0 = 0, y1 = 1, x0 = 0, x1 = 0, layer = 'below',
+                            line = dict(color = 'rgb(222,222,222)', width = 1.5, dash = 'dash'))
+            hover = [
+                'Dive <b>{}</b>: ' + phase,
+                '%{customdata[0]|%Y-%m-%d %H:%M:%S}Z',
+                'Δt = %{customdata[3]} min',
+                'p = %{customdata[1]} dBar',
+                'δV = %{customdata[4]} mL',
+                'w = %{customdata[2]} cm s<sup>−1</sup>',
+                '<extra></extra>',
+                ]
+            for dive in dives:
+                d = df[df['dive'] == dive]
+                if len(d) < 2:
+                    continue
+                cd = np.stack((d['dt_str'].values, HoverStr(d['pres'], '{:.1f}'), HoverStr(d['rate'], '{:.1f}'),
+                               HoverStr(d['dt_min'], '{:.1f}'), HoverStr(d['dv'], '{:.1f}')), -1)
+                line = dict(color = color_of.get(int(dive), 'rgb(128,128,128)'), width = 2 if dive == dives[-1] else 1.2)
+                ht = '<br>'.join(hover).replace('{}', '{}'.format(dive), 1)
+                fig.add_trace(go.Scatter(x = np.round(d['dt_min'].values, 2), y = np.round(d['dv'].values, 2),
+                                         customdata = cd, hovertemplate = ht, line = line, mode = 'lines', name = '{}'.format(dive)))
+                fig_p.add_trace(go.Scatter(x = np.round(d['dv'].values, 2), y = np.round(d['pres'].values, 1),
+                                           customdata = cd, hovertemplate = ht, line = line, mode = 'lines', name = '{}'.format(dive)))
+            figs[fid] = (fig, key)
+            fig_size[fid] = 'fig'
+            figs[fid + '_v_pres'] = (fig_p, key)
+            fig_size[fid + '_v_pres'] = 'fig'
+
+            # Per-dive statistics of dV, drawn as the other *_avg plots: min./max. and ±1σ segments
+            # and the mean
+            g = df.groupby('dive')['dv']
+            st = pd.DataFrame(dict(vmin = g.min(), vmax = g.max(), mean = g.mean(), std = g.std(), n = g.count()))
+            st = st[st['n'] >= 2]
+            if len(st):
+                dv_ = st.index.values.astype(np.double)
+                vmin, vmax, mean, std = (st[c].values for c in ('vmin', 'vmax', 'mean', 'std'))
+                seg = lambda lo, hi: dict(x = np.vstack((dv_, dv_, [np.nan] * len(dv_))).flatten('F'),
+                                          y = np.round(np.vstack((lo, hi, [np.nan] * len(dv_))).flatten('F'), 2))
+                fig_a = go.Figure(layout = dict(
+                    title = dict(text = '{}: Average {} Buoyancy Estimate'.format(float_id, label)),
+                    xaxis = dict(title = 'Dive'),
+                    yaxis = dict(title = 'Excess Volume, δV [mL]', **FixedRange(PaddedRange(np.concatenate([vmin, vmax]), (1, 99), 0.05, 0))),
+                    hoverlabel = hoverlabel, hovermode = 'x', plot_bgcolor = 'white', margin = margin))
+                fig_a.add_shape(type = 'line', xref = 'paper', x0 = 0, x1 = 1, y0 = 0, y1 = 0, layer = 'below',
+                                line = dict(color = 'rgb(222,222,222)', width = 1.5, dash = 'dash'))
+                fig_a.add_trace(go.Scatter(**seg(vmin, vmax), mode = 'lines', name = 'min./max.', hoverinfo = 'none',
+                                           line = dict(color = 'rgb(194,204,204)', width = 1.5)))
+                fig_a.add_trace(go.Scatter(**seg(np.maximum(mean - np.nan_to_num(std), vmin), np.minimum(mean + np.nan_to_num(std), vmax)),
+                                           mode = 'lines', name = '±1σ', hoverinfo = 'none',
+                                           line = dict(color = 'rgb(123,123,123)', width = 1.5)))
+                fig_a.add_trace(go.Scatter(
+                    x = dv_, y = np.round(mean, 2), mode = 'lines', name = 'mean',
+                    customdata = np.stack((HoverStr(vmin, '{:.1f}'), HoverStr(vmax, '{:.1f}'), HoverStr(std, '{:.1f}')), -1),
+                    hovertemplate = '<br>'.join([
+                        'Dive <b>%{x}</b>: ' + phase,
+                        'min = %{customdata[0]} mL',
+                        'mean = %{y:.1f} mL',
+                        'max = %{customdata[1]} mL',
+                        'σ = %{customdata[2]} mL',
+                        '<extra></extra>',
+                        ]),
+                    line = dict(color = 'rgb(0,0,0)', width = 1.2)))
+                figs[fid + '_avg'] = (fig_a, key)
+                fig_size[fid + '_avg'] = 'fig2'
+
+        # Fall-pump time for neutral buoyancy
+        prof = BuoyancyProfiles(float_aggregate_data.get('profile'))
+        fp = BuoyancyFallPumps(float_aggregate_data)
+        cal = fp[(fp['n_seek'] == 0) & np.isfinite(fp['t_fall']) & np.isfinite(fp['level'])]
+        cal = cal[[int(d) in prof and lv <= prof[int(d)][-1, 0] + 20 for d, lv in zip(cal['dive'], cal['level'])]]
+        if len(cal) >= BUOYANCY_MIN_DIVES and len(prof):
+            dsd = float(np.median(cal['dsd']))
+            q = fit['q0'] + fit['q1'] * dsd / 1000.0
+            if not q > 1:
+                q = BUOYANCY_Q_FALLBACK
+            c_i = np.array([q * t / 60 - BuoyancyNeutralOil(fit, prof[int(d)], lv)
+                            for d, t, lv in zip(cal['dive'], cal['t_fall'], cal['level'])])
+            c = float(np.median(c_i))
+            c_sd = float(1.4826 * np.median(np.abs(c_i - c)))
+            deepest = max(a[-1, 0] for a in prof.values())
+            pdive = max(d for d, a in prof.items() if a[-1, 0] >= 0.9 * deepest)
+            pl = prof[pdive]
+            p = np.linspace(BUOYANCY_MIN_PRES, pl[-1, 0], 200)
+            t = 60 * (c + BuoyancyNeutralOil(fit, pl, p)) / q
+            tb = 60 * c_sd / q
+            pred = np.array([60 * (c + BuoyancyNeutralOil(fit, prof[int(d)], lv)) / q for d, lv in zip(cal['dive'], cal['level'])])
+            used = cal['t_fall'].values
+            cdive = cal['dive'].values.astype(int)
+            mcol = [color_of.get(int(d), 'rgb(128,128,128)') for d in cdive]
+            pmax = float(max(pl[-1, 0], np.nanmax(cal['level'])))
+            tmax = float(np.nanmax(np.concatenate([t + tb, used])))
+
+            fig = go.Figure(layout = dict(
+                title = dict(text = '{}: Neutral Fall Pump Time Estimate'.format(float_id)),
+                xaxis = dict(title = 'Fall Pump Time at DSD = {:.0f} dBar [seconds]'.format(dsd), autorange = False, range = [0, round(tmax * 1.05 + 5, -1)]),
+                yaxis = dict(title = 'Pressure [dBar]', autorange = False, range = [round(pmax + 10), 0]),
+                hoverlabel = hoverlabel, hovermode = 'closest', legend = dict(title = ''), plot_bgcolor = 'white', margin = margin))
+            fig.add_trace(go.Scatter(x = np.round(t + tb, 1), y = np.round(p, 1), mode = 'lines', line = dict(width = 0),
+                                     hoverinfo = 'skip', showlegend = False))
+            fig.add_trace(go.Scatter(x = np.round(t - tb, 1), y = np.round(p, 1), mode = 'lines', line = dict(width = 0),
+                                     fill = 'tonextx', fillcolor = 'rgba(31,119,180,0.18)', hoverinfo = 'skip', name = '±1σ'))
+            fig.add_trace(go.Scatter(
+                x = np.round(t, 1), y = np.round(p, 1), mode = 'lines',
+                line = dict(color = 'rgb(31,119,180)', width = 2),
+                hovertemplate = '<br>'.join([
+                    'Neutral, profile of dive <b>{}</b>'.format(pdive),
+                    'p = %{y:.1f} dBar',
+                    't = %{x:.0f} s (fall pump)',
+                    '<extra></extra>',
+                    ]),
+                name = 'neutral (dive {} profile)'.format(pdive)))
+            fig.add_trace(go.Scatter(
+                x = used, y = np.round(cal['level'].values, 1), mode = 'markers',
+                customdata = np.stack((cdive, HoverStr(pred, '{:.0f}')), -1),
+                hovertemplate = '<br>'.join([
+                    'Dive <b>%{customdata[0]}</b>: Park/Drift',
+                    'p = %{y:.1f} dBar (park level reached)',
+                    't = %{x:.0f} s (fall pump used)',
+                    't = %{customdata[1]} s (predicted)',
+                    '<extra></extra>',
+                    ]),
+                marker = dict(color = mcol, size = 8, opacity = 0.7, line = dict(color = 'rgb(0,0,0)', width = 0.3)),
+                name = 'dives without seek pumps'))
+            figs['neutral_pump_time'] = (fig, 'pump')
+            fig_size['neutral_pump_time'] = 'fig'
+
+            # Predicted against used fall-pump time, with the 1:1 line
+            lim = [0, round(float(np.nanmax(np.concatenate([pred, used]))) * 1.05 + 5, -1)]
+            err = pred - used
+            fig = go.Figure(layout = dict(
+                title = dict(text = '{}: Neutral Fall Pump Time Estimate, Fit<br><sup>{} dives without seek pumps: median |error| {:.0f} s, rms {:.0f} s</sup>'.format(
+                    float_id, len(err), np.median(np.abs(err)), np.sqrt(np.mean(err ** 2)))),
+                xaxis = dict(title = 'Fall Pump Time Used [seconds]', autorange = False, range = lim),
+                yaxis = dict(title = 'Fall Pump Time Predicted [seconds]', autorange = False, range = lim),
+                hoverlabel = hoverlabel, hovermode = 'closest', showlegend = False, plot_bgcolor = 'white',
+                margin = dict(l = 10, r = 10, b = 20, t = 70, pad = 4)))
+            fig.add_shape(type = 'line', x0 = lim[0], y0 = lim[0], x1 = lim[1], y1 = lim[1], layer = 'below',
+                          line = dict(color = 'rgb(150,150,150)', width = 1, dash = 'dash'))
+            fig.add_trace(go.Scatter(
+                x = used, y = np.round(pred, 1), mode = 'markers',
+                customdata = np.stack((cdive, HoverStr(cal['level'], '{:.1f}'), HoverStr(err, '{:+.0f}')), -1),
+                hovertemplate = '<br>'.join([
+                    'Dive <b>%{customdata[0]}</b>: Park/Drift',
+                    'p = %{customdata[1]} dBar (park level reached)',
+                    't = %{x:.0f} s (fall pump used)',
+                    't = %{y:.0f} s (predicted)',
+                    'error = %{customdata[2]} s',
+                    '<extra></extra>',
+                    ]),
+                marker = dict(color = mcol, size = 8, opacity = 0.7, line = dict(color = 'rgb(0,0,0)', width = 0.3))))
+            figs['neutral_pump_time_fit'] = (fig, 'pump')
+            fig_size['neutral_pump_time_fit'] = 'fig'
+
+            err = pred - used
+            rng = PaddedRange(np.append(err, [-5, 5]), (1, 99), 0.1, 0)
+            fig = go.Figure(layout = dict(
+                title = dict(text = '{}: Neutral Fall Pump Time Estimate, Error<br><sup>{} dives without seek pumps: median |error| {:.0f} s, rms {:.0f} s</sup>'.format(
+                    float_id, len(err), np.median(np.abs(err)), np.sqrt(np.mean(err ** 2)))),
+                xaxis = dict(title = 'Dive'),
+                yaxis = dict(title = 'Predicted − Used [seconds]', **FixedRange(rng)),
+                hoverlabel = hoverlabel, hovermode = 'closest', showlegend = False, plot_bgcolor = 'white',
+                margin = dict(l = 10, r = 10, b = 20, t = 70, pad = 4)))
+            fig.add_shape(type = 'line', xref = 'paper', x0 = 0, x1 = 1, y0 = 0, y1 = 0, layer = 'below',
+                          line = dict(color = 'rgb(222,222,222)', width = 1.5, dash = 'dash'))
+            fig.add_trace(go.Scatter(
+                x = cdive, y = np.round(err, 1), mode = 'markers',
+                customdata = np.stack((HoverStr(used, '{:.0f}'), HoverStr(pred, '{:.0f}'), HoverStr(cal['level'], '{:.1f}')), -1),
+                hovertemplate = '<br>'.join([
+                    'Dive <b>%{x}</b>: Park/Drift',
+                    'p = %{customdata[2]} dBar (park level reached)',
+                    't = %{customdata[0]} s (fall pump used)',
+                    't = %{customdata[1]} s (predicted)',
+                    'error = %{y:+.0f} s',
+                    '<extra></extra>',
+                    ]),
+                marker = dict(color = mcol, size = 8, opacity = 0.7, line = dict(color = 'rgb(0,0,0)', width = 0.3))))
+            figs['neutral_pump_time_error'] = (fig, 'pump')
+            fig_size['neutral_pump_time_error'] = 'figWideXS'
+
+        for fid, (fig, category) in figs.items():
+            fig_meta = WritePlotImageFiles(
+                id_str = fid,
+                figure = fig,
+                float_id = float_id,
+                dpath_float = dpath_float,
+                category = category,
+                size = fig_size.get(fid, 'fig'),
+                showlegend = fid not in ('neutral_pump_time_error', 'neutral_pump_time_fit'),
+                )
+            if fig_meta:
+                figs_meta.append(fig_meta)
+
+    except Exception as exc:
+        errstr = 'Failed to generate buoyancy plots for float {}'.format(float_id)
+        if hasattr(args, 'halt') and args.halt:
+            raise Exception(errstr)
+        logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
+
+    return figs_meta
+
+
 PLOT_WRITERS = [
     WriteGeoPlots,
     WriteSubmergedDisplacementPlots,
@@ -14916,6 +15023,7 @@ PLOT_WRITERS = [
     WritePumpPlots,
     WriteAirPumpPlots,
     WriteEngineeringPlots,
+    WriteBuoyancyPlots,
     WriteSurfacePlots,
     WriteSatcomPlots,
     WriteWavePlots,
@@ -15553,6 +15661,13 @@ parser.add_argument(
     default=BATHYMETRY_FILE,
     dest='bathymetry',
     help='read bathymetry for trajectory plots from classic netCDF ETOPO file FILE (default=\'{}\')'.format(BATHYMETRY_FILE),
+    metavar='FILE')
+
+parser.add_argument(
+    '--buoyancy-fit',
+    default=BUOYANCY_FIT_FILE if os.path.isfile(BUOYANCY_FIT_FILE) else None,
+    dest='buoyancy_fit',
+    help='read the fitted buoyancy model (buoyancy_floats.csv of xmtps-buoyancy-model.py in the xmtps-control repository) from FILE and plot the buoyancy and neutral fall-pump time of the floats it fits (default: "{}" if it exists, else no buoyancy plots)'.format(BUOYANCY_FIT_FILE),
     metavar='FILE')
 
 parser.add_argument(

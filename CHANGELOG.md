@@ -3,6 +3,24 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-16
+
+Python tools:
+
+- Float pages reorganized (`FLOAT_PAGE_SECTIONS`, one list that drives the page and its
+  navigation): the positions and trajectory at the top, then Profile Data (with the Micro-ALTO
+  microstructure plots), Wave Data, Descent, Drift, Ascent and Surface Data, then Engineering Data
+  in subsections: Energy and Battery, Buoyancy Control, Oil Pump, Air Pump, Case Vacuum, GPS and
+  Iridium; the figure files last. The subsections are indented in the navigation.
+- Buoyancy plots, for floats with a fitted buoyancy model (`--buoyancy-fit`, default
+  `/data1/alamo/etc/buoyancy_floats.csv` when it exists; the
+  `buoyancy_floats.csv` of `xmtps-buoyancy-model.py` in the xmtps-control repository):
+  `buoyancy_descent` and `buoyancy_ascent` (excess volume δV = C_dA w|w|/(2g) per dive against
+  time), `neutral_pump_time` (pressure against the fall-pump time that makes the float neutral
+  there, from the latest full-depth profile, calibrated on the dives without seek pumps) and
+  `neutral_pump_time_fit` (predicted against used, with the 1:1 line), `neutral_pump_time_error`
+  (predicted minus used fall-pump time per dive), and `buoyancy_<phase>_v_pres` and
+  `buoyancy_<phase>_avg` (against pressure; per-dive min., mean, max. and σ). All titled "Estimate".
 ## 2026-11-15
 
 Python tools:

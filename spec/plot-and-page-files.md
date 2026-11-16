@@ -377,50 +377,59 @@ Structure:
 
 ```
 <!DOCTYPE html><html>
-<head><title>9303</title><style>...</style></head>
+<head><meta charset="utf-8"><title>9303</title><style>...</style></head>
 <body>
   <div class="nav"> fixed navigation links </div>
   <div id="top" class="plots-top-div"><div class="plots-div">
-    small images (top group)
+    small images (top group: positions and trajectory)
     <h2 id="prof">Profile Data</h2> ...
     <h2 id="wave">Wave Data</h2> ...            (only with wave data)
-    <h2 id="microstructure">Microstructure Data</h2> ...   (only with microstructure data)
-    <h2 id="drift">Drift Data</h2> ...
-    <h2 id="surf">Surface Data</h2> ...
-    <h2 id="ascent">Ascent</h2> ...
     <h2 id="descent">Descent</h2> ...
-    <h2 id="pump">Hydraulic System</h2> ...
-    <h2 id="air">Air Pump</h2> ...              (only with air pump figures)
-    <h2 id="sat">Satcom</h2> ...
+    <h2 id="drift">Drift</h2> ...
+    <h2 id="ascent">Ascent</h2> ...
+    <h2 id="surf">Surface Data</h2> ...
+    <h2 id="eng">Engineering Data</h2>
+      <h3 id="energy">Energy and Battery</h3> ...      (each subsection only with one of its figures)
+      <h3 id="control">Buoyancy Control</h3> ...
+      <h3 id="pump">Oil Pump</h3> ...
+      <h3 id="air">Air Pump</h3> ...
+      <h3 id="vac">Case Vacuum</h3> ...
+      <h3 id="gps">GPS</h3> ...
+      <h3 id="sat">Iridium</h3> ...
     <h2 id="figs">Figure Files</h2> <table class="figt"> ... </table>
   </div></div>
-  <div class="footer"><i>Page last updated 2026-11-04T19:38Z <span class="page-updated" ...>(runtime: 50 seconds)</span><br />Python utility version 0.11<br />XMTPS version 1.0.3351b (built 2026-11-04)<script>...</script></i></div>
+  <div class="footer"> ... </div>
 </body></html>
 ```
 
-- **Head.** The title is the serial number. Inline CSS only; no external stylesheet or script; no `<meta charset>`.
-- **Navigation.** A fixed pane (125 px) with links to Top, Profile Data, Wave Data (with wave data), Microstructure Data (with microstructure data), Drift Data, Surface Data, Ascent, Descent, Hydraulic System, Air Pump (with air pump figures), Satcom, Figure Files, and "Back" to the absolute URL `/alamo/`.
-- **Images.** Each shown figure is `<a href="<serial>_<id>.html"><img class="<size class>" src="<serial>_<id>_small.png" title="<title>" alt="<title>"></a>`. Images of class `fig`/`fig2` have `max-width: 50%` (two per row); wide classes `max-width: 100%`. The content column is at most 805 px wide (`figWide` small width + 25). A `<br>` ends each row.
-- **Missing data.** A section without data shows "No profile data.", "No drift data.", "No surface data.", "No ascent data.", "No descent data." or "No hydraulic system data.".
+The sections come from `FLOAT_PAGE_SECTIONS` (since 2026-11-16; before, each section was written by its own block, in the order Profile, Wave, Microstructure, Drift, Surface, Ascent, Descent, Hydraulic System, Air Pump, Engineering, Satcom). The science data come first, through one dive cycle, then the engineering data by subsystem.
+
+- **Head.** `<meta charset="utf-8">`, the title (the serial number) and inline CSS; no external stylesheet or script.
+- **Navigation.** A fixed pane (125 px) with Top, a link per section shown, in page order, the subsections indented (`a.sub`), then Figure Files and Back (`/alamo/`).
+- **Images.** Each shown figure is `<a href="<serial>_<id>.html"><img class="<size class>" src="<serial>_<id>_small.png" title="<title>" alt="<title>"></a>`. Images of class `fig`/`fig2` have `max-width: 50%` (two per row); wide classes `max-width: 100%`. Each row ends with a `<br>`.
+- **Missing data.** A science section whose aggregate has no data and no figure shows "No profile data.", "No descent data.", "No drift data.", "No ascent data." or "No surface data.". Wave Data is shown only with wave data; each engineering subsection only when one of its figures exists, and the Engineering Data heading only when a subsection is shown.
+- **Fallbacks.** Without bathymetry the top group shows `position_geo` in place of `position`; without CNO data the GPS subsection shows `position_all` in place of `satcom_gps_cno`.
 
 Figures shown in each section, in order (rows separated by `/`):
 
 | Section | Figures |
 |---|---|
 | top (no heading) | `position_globe`, `position` / `displacement_submerged_velocity`, `displacement_surface_velocity` / `trajectory` / `cycle_timing` |
-| Profile Data | `profile_temp`, `profile_saln` / `profile_ts`, `profile_sigma0` / `profile_contour_temp` / `profile_contour_saln` / `profile_contour_sigma0` / `profile_num_bins` |
+| Profile Data | `profile_temp`, `profile_saln` / `profile_ts`, `profile_sigma0` / `profile_contour_temp` / `profile_contour_saln` / `profile_contour_sigma0` / `profile_num_bins` / `microstructure_profile` / `microstructure_shear_spectra` |
 | Wave Data | `wave_mwm` / `wave_swh` / `wave_period` / `wave_spectra_disp_Szz` / `wave_waterfall_disp_Szz` / `wave_direction_mean` |
-| Microstructure Data | `microstructure_profile` / `microstructure_shear_spectra` |
-| Drift Data | `drift_pres`, `drift_pres_avg` / `drift_temp`, `drift_temp_avg` / `drift_saln`, `drift_saln_avg` / `drift_dens`, `drift_dens_avg` / `drift_sample_count` |
-| Surface Data | `surface_pres`, `surface_pres_avg` / `surface_temp`, `surface_temp_avg` / `surface_sample_count` |
-| Ascent | `ascent`, `ascent_rate_v_pres` / `ascent_rate_v_time`, `ascent_rate_avg` / `ascent_sample_count` |
 | Descent | `descent`, `descent_rate_v_pres` / `descent_rate_v_time`, `descent_rate_avg` / `descent_sample_count` |
-| Hydraulic System | `pump_first_duration` / `pump_pres`, `pump_power_v_pres` / `pump_volt`, `pump_volt_avg` / `pump_curr`, `pump_curr_avg` / `pump_energy`, `pump_energy_v_max_pres` / `pump_time_sum` / `pump_energy_sum` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` |
-| Air Pump | `air_pump_duration`, `air_pump_pres` |
-| Engineering (only if one of them is written) | `energy_per_cycle` / `energy_by_component` / `energy_remaining_cycles` / `phase_vac` (`ENGINEERING_PAGE_ROWS`; the energy plots were last until 2026-11-09, and the pump vacuum plots moved to Hydraulic System on 2026-11-09) |
-| Satcom | `satcom` / `position_gps`, `satcom_gps_cno` (or `position_all`) / `satcom_gps_hdop`, `satcom_gps_nsat` / `satcom_gps_ttf`, `satcom_gps_fix_cep` / `satcom_iridium_fix_cep_avg`, `satcom_sbd_data_size_avg` / `satcom_sbd_count` / `satcom_sbd_data_size` / `satcom_sbd_data_type` |
+| Drift | `drift_pres`, `drift_pres_avg` / `drift_temp`, `drift_temp_avg` / `drift_saln`, `drift_saln_avg` / `drift_dens`, `drift_dens_avg` / `drift_sample_count` |
+| Ascent | `ascent`, `ascent_rate_v_pres` / `ascent_rate_v_time`, `ascent_rate_avg` / `ascent_sample_count` |
+| Surface Data | `surface_pres`, `surface_pres_avg` / `surface_temp`, `surface_temp_avg` / `surface_sample_count` |
+| Engineering Data: Energy and Battery | `energy_per_cycle` / `energy_by_component` / `energy_remaining_cycles` |
+| Engineering Data: Buoyancy Control | `pump_first_duration` / `neutral_pump_time`, `neutral_pump_time_fit` / `neutral_pump_time_error` / `buoyancy_descent`, `buoyancy_ascent` |
+| Engineering Data: Oil Pump | `pump_pres`, `pump_power_v_pres` / `pump_volt`, `pump_volt_avg` / `pump_curr`, `pump_curr_avg` / `pump_energy`, `pump_energy_v_max_pres` / `pump_time_sum` / `pump_energy_sum` |
+| Engineering Data: Air Pump | `air_pump_duration` / `air_pump_pres` |
+| Engineering Data: Case Vacuum | `phase_vac` / `pump_vac`, `pump_vac_avg` / `pump_vac_v_time`, `pump_vac_v_pres` |
+| Engineering Data: GPS | `position_gps`, `satcom_gps_cno` (or `position_all`) / `satcom_gps_hdop`, `satcom_gps_nsat` / `satcom_gps_ttf`, `satcom_gps_fix_cep` |
+| Engineering Data: Iridium | `satcom` / `satcom_iridium_fix_cep_avg`, `satcom_sbd_data_size_avg` / `satcom_sbd_count` / `satcom_sbd_data_size` / `satcom_sbd_data_type` |
 
-The Hydraulic System section is shown only if the float has `pump` data, so a float without it shows `pump_first_duration` only in the figure table.
+Other figures (`profile_dens`, `profile_contour_dens`, `drift_sigma0`, the other wave spectra and waterfalls, `displacement_submerged`, `displacement_surface`) are only in the Figure Files table.
 
 **Figure Files table** (`table.figt`): one row per written figure, sorted by ID.
 
