@@ -14715,7 +14715,7 @@ def BuoyancyFallPumps(float_aggregate_data):
         if v is not None and 0 < v < 3000:
             dsd[int(m['dive'])] = float(v)
     pumps = df_pump[['dive', 'pres', 'time']].apply(pd.to_numeric, errors = 'coerce')
-    drift = df_drift[['dive', 'pres']].apply(pd.to_numeric, errors = 'coerce').dropna()
+    drift = df_drift[['dive', 'pres']].apply(pd.to_numeric, errors = 'coerce').astype(np.double).dropna()   # float, also when empty
     rows = []
     last_dsd = None
     for dive in sorted(int(d) for d in pumps['dive'].dropna().unique() if d >= 1):
