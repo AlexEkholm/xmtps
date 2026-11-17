@@ -403,7 +403,7 @@ fig.add_trace(go.Scatter(x=dive, y=mean, mode='lines', name='mean', customdata=n
 ### 7.4 Counts and sums per dive (e.g. `ascent_sample_count`)
 
 - **Trace:** `go.Bar(x=dives, y=values, marker=dict(color='rgb(220,220,220)'), showlegend=False)`, without an outline (section 7.6).
-- **Layout:** `bargap=0`, `hovermode='x'`, `xaxis=dict(title='Dive', range=[−0.5, last + 0.5])`; y from zero (section 4.3).
+- **Layout:** gaps by the number of dives (section 7.6), `hovermode='x'`, `xaxis=dict(title='Dive', range=[−0.5, last + 0.5])`; y from zero (section 4.3).
 - **Overlays:**
   - BIT tests: orange diamond markers.
   - Configured values: dashed blue steps over `dive ± 0.5`, with NaN breaks.
@@ -413,16 +413,23 @@ fig.add_trace(go.Scatter(x=dive, y=mean, mode='lines', name='mean', customdata=n
 ### 7.5 Stacked bars (`cycle_timing`, `energy_per_cycle`, `satcom_sbd_data_size`, `pump_energy_sum`)
 
 - **Traces:** one `go.Bar` per component, bottom up, with `marker=dict(color=…)` and no outline (section 7.6): the segments are told apart by their colors.
-- **Layout:** `barmode='stack'`, `bargap=0`, `hovermode='x unified'` with the invisible Total trace (section 6), `legend=dict(title=<what the components are>, traceorder='reversed')` (`Component`, `Cycle Phase`, `Message type`), so that the legend reads top-down like the stack. y titled with its unit, `rangemode='tozero'`.
+- **Layout:** `barmode='stack'`, gaps by the number of dives (section 7.6), `hovermode='x unified'` with the invisible Total trace (section 6), `legend=dict(title=<what the components are>, traceorder='reversed')` (`Component`, `Cycle Phase`, `Message type`), so that the legend reads top-down like the stack. y titled with its unit, `rangemode='tozero'`.
 - **Hover of a component:** in an `x unified` hover each line is one trace. Either leave `<extra></extra>` out so Plotly prefixes the trace name, or keep it and name the component in the template (`'Descent: Δt = …'`). The Total trace's template is `'Total: <b>…</b><extra></extra>'`.
 - **Segments colored by a continuous value** (pump pressure): color each segment with `plotly.colors.sample_colorscale(DEPTH_BLUES, 1 − p/pmax)`, gray `rgb(140,140,140)` where the value is invalid. No outline (section 7.6). Show the scale with an invisible-marker color bar (section 5.6) and write the plot without a legend (`showlegend=False`).
 - **Size:** `figWideS` for a breakdown, `figWideXS` for a count or sum (including `satcom_sbd_data_size`, bytes per dive by message type).
 
-### 7.6 Bar outlines and dense bar charts
+### 7.6 Bar outlines and gaps
 
-Bars have no outlines, in every bar chart, vertical or horizontal: adjacent bars and stacked segments are told apart by their colors. At a few pixels per bar, as in a long-lived float's per-dive plots, outlines alias into light striations across the plot, in the PNG images and in the HTML plot alike. A bar chart with more than `DENSE_BAR_COUNT` (150) bars in a vertical trace also has no gaps between bars (`bargap=0`, `bargroupgap=0`), for the same reason.
+Bars have no outlines, in every bar chart, vertical or horizontal: adjacent bars and stacked segments are told apart by their colors and by the gaps between bars. The gaps depend on the number of bars (dives) in the chart's vertical bar traces:
 
-`WritePlotImageFiles` enforces both: it calls `SolidBars(figure)` before it writes the HTML and queues the images, which sets `marker_line_width=0` on every bar trace and drops the gaps of a dense chart. Don't give new bars an outline.
+| Bars per trace | Gap | Why |
+|---|---|---|
+| fewer than `DENSE_BAR_COUNT` (100) | `bargap=BAR_GAP` (0.2) | Without outlines, the bars of neighboring dives would merge into one block. |
+| `DENSE_BAR_COUNT` or more | `bargap=0` | At a few pixels per bar, gaps (and outlines) alias into light striations across the plot, in the PNG images and in the HTML plot alike. |
+
+`bargroupgap` is 0 in both cases.
+
+`WritePlotImageFiles` enforces this: it calls `SolidBars(figure)` before it writes the HTML and queues the images, which sets `marker_line_width=0` on every bar trace and the gap of every vertical bar chart. A writer doesn't set `bargap` or bar outlines itself; any it sets are overridden. Horizontal bars (`ShareBarFigure`) keep their own gap.
 
 ### 7.7 Share of a total (`ShareBarFigure(title, labels, values, colors, text, hover_value)`)
 

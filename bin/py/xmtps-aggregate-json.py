@@ -15215,18 +15215,21 @@ def IntegerDiveTicks(figure):
             axis.update(tickmode = 'linear', tick0 = 0, dtick = 2)
 
 
-DENSE_BAR_COUNT = 150   # bars per trace above which a bar chart is drawn without gaps between bars
+DENSE_BAR_COUNT = 100   # bars per trace from which a bar chart has no gaps between bars
+BAR_GAP = 0.2           # the gap between bars (fraction of their spacing) of a chart with fewer bars
 
 def SolidBars(figure):
-    """Draw the figure's bars without outlines (every bar trace), and a bar chart with many bars
-    (more than DENSE_BAR_COUNT in a vertical trace, e.g. one per dive of a long-lived float)
-    without gaps between the bars: at a few pixels per bar, outlines and gaps alias into
-    striations, in the PNG images and in the HTML plot."""
+    """Draw the figure's bars without outlines (every bar trace). A vertical bar chart with fewer
+    than DENSE_BAR_COUNT bars per trace (e.g. one per dive) gets gaps of BAR_GAP between its bars,
+    so that they stay apart without outlines; one with more has none, since at a few pixels per
+    bar gaps (and outlines) alias into striations, in the PNG images and in the HTML plot."""
     bars = [t for t in figure.data if t.type == 'bar']
     for t in bars:
         t.update(marker_line_width = 0)
-    if any(t.orientation != 'h' and t.x is not None and len(t.x) > DENSE_BAR_COUNT for t in bars):
-        figure.update_layout(bargap = 0, bargroupgap = 0)
+    counts = [len(t.x) for t in bars if t.orientation != 'h' and t.x is not None]
+    if counts:
+        gap = BAR_GAP if max(counts) < DENSE_BAR_COUNT else 0
+        figure.update_layout(bargap = gap, bargroupgap = 0)
 
 
 def WritePlotImageFiles(
