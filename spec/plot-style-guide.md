@@ -241,7 +241,7 @@ colors[len(dives)-1] = 'rgb(0,0,0)'
 | Statistics: min./max. segments | `rgb(194,204,204)` |
 | Statistics: ±1σ segments | `rgb(123,123,123)` |
 | Statistics: mean | `rgb(0,0,0)` |
-| Neutral bars (counts, sums, durations) | fill `rgb(220,220,220)`, outline `rgb(188,188,188)` width 0.5 (none in dense bar charts, section 7.6) |
+| Neutral bars (counts, sums, durations) | fill `rgb(220,220,220)`, no outline (section 7.6) |
 | Reference lines (zero rate, constant-value guides) | `rgb(222,222,222)` |
 | Configured value (e.g. DFT, the pressure correction) | `rgb(0,0,255)` blue |
 | Pair of limits (e.g. air bladder SAX and SAN) | maximum `rgb(255,0,0)` red, minimum `rgb(0,0,255)` blue |
@@ -402,34 +402,33 @@ fig.add_trace(go.Scatter(x=dive, y=mean, mode='lines', name='mean', customdata=n
 
 ### 7.4 Counts and sums per dive (e.g. `ascent_sample_count`)
 
-- **Trace:** `go.Bar(x=dives, y=values, marker=dict(color='rgb(220,220,220)', line=dict(color='rgb(188,188,188)', width=0.5)), showlegend=False)`.
+- **Trace:** `go.Bar(x=dives, y=values, marker=dict(color='rgb(220,220,220)'), showlegend=False)`, without an outline (section 7.6).
 - **Layout:** `bargap=0`, `hovermode='x'`, `xaxis=dict(title='Dive', range=[−0.5, last + 0.5])`; y from zero (section 4.3).
 - **Overlays:**
   - BIT tests: orange diamond markers.
   - Configured values: dashed blue steps over `dive ± 0.5`, with NaN breaks.
   - A second quantity: `yaxis2=dict(overlaying='y', side='right', zeroline=True, zerolinecolor='rgb(188,188,188)')`, as lines+markers, width 1.2, size 3.
 - **Size:** `figWideXS` (`figWideS` with a second axis).
-- **Many dives:** see section 7.6.
 
 ### 7.5 Stacked bars (`cycle_timing`, `energy_per_cycle`, `satcom_sbd_data_size`, `pump_energy_sum`)
 
-- **Traces:** one `go.Bar` per component, bottom up, with `marker=dict(color=…, line=dict(color='rgb(255,255,255)', width=0.3))`. The thin white outline separates the segments; dense bar charts have none (section 7.6).
+- **Traces:** one `go.Bar` per component, bottom up, with `marker=dict(color=…)` and no outline (section 7.6): the segments are told apart by their colors.
 - **Layout:** `barmode='stack'`, `bargap=0`, `hovermode='x unified'` with the invisible Total trace (section 6), `legend=dict(title=<what the components are>, traceorder='reversed')` (`Component`, `Cycle Phase`, `Message type`), so that the legend reads top-down like the stack. y titled with its unit, `rangemode='tozero'`.
 - **Hover of a component:** in an `x unified` hover each line is one trace. Either leave `<extra></extra>` out so Plotly prefixes the trace name, or keep it and name the component in the template (`'Descent: Δt = …'`). The Total trace's template is `'Total: <b>…</b><extra></extra>'`.
-- **Segments colored by a continuous value** (pump pressure): color each segment with `plotly.colors.sample_colorscale(DEPTH_BLUES, 1 − p/pmax)`, gray `rgb(140,140,140)` where the value is invalid. Outline `rgba(90,90,90,0.35)`, width 0.4 (none in dense bar charts, section 7.6). Show the scale with an invisible-marker color bar (section 5.6) and write the plot without a legend (`showlegend=False`).
+- **Segments colored by a continuous value** (pump pressure): color each segment with `plotly.colors.sample_colorscale(DEPTH_BLUES, 1 − p/pmax)`, gray `rgb(140,140,140)` where the value is invalid. No outline (section 7.6). Show the scale with an invisible-marker color bar (section 5.6) and write the plot without a legend (`showlegend=False`).
 - **Size:** `figWideS` for a breakdown, `figWideXS` for a count or sum (including `satcom_sbd_data_size`, bytes per dive by message type).
 
-### 7.6 Dense bar charts (many dives)
+### 7.6 Bar outlines and dense bar charts
 
-With more than `DENSE_BAR_COUNT` (150) bars in a vertical bar trace, as in a long-lived float's per-dive plots, a bar is only a few pixels wide, and its outlines and any gaps between bars alias into light striations across the plot, in the PNG images and in the HTML plot alike. Such a chart is drawn solid: no bar outlines (`marker_line_width=0` on every vertical bar trace) and no gaps (`bargap=0`, `bargroupgap=0`). Stacked segments are still told apart by their colors.
+Bars have no outlines, in every bar chart, vertical or horizontal: adjacent bars and stacked segments are told apart by their colors. At a few pixels per bar, as in a long-lived float's per-dive plots, outlines alias into light striations across the plot, in the PNG images and in the HTML plot alike. A bar chart with more than `DENSE_BAR_COUNT` (150) bars in a vertical trace also has no gaps between bars (`bargap=0`, `bargroupgap=0`), for the same reason.
 
-Writers don't do this themselves: `WritePlotImageFiles` calls `SolidDenseBars(figure)` before it writes the HTML and queues the images, so every plot gets it. Draw bars with their usual outline (sections 5, 7.4, 7.5); it is removed when the chart is dense. Horizontal bars (`ShareBarFigure`) are not affected.
+`WritePlotImageFiles` enforces both: it calls `SolidBars(figure)` before it writes the HTML and queues the images, which sets `marker_line_width=0` on every bar trace and drops the gaps of a dense chart. Don't give new bars an outline.
 
 ### 7.7 Share of a total (`ShareBarFigure(title, labels, values, colors, text, hover_value)`)
 
 Call the helper, don't rebuild it. It draws one horizontal bar stacked in percent:
 
-- parts outlined white 0.5;
+- parts without outlines (section 7.6);
 - labels inside the parts of 5% or more (`uniformtext=dict(minsize=11, mode='hide')`);
 - `xaxis=dict(title='Share [%]', range=[0, 100], ticksuffix='%')`, hidden y;
 - a horizontal legend below the plot;
