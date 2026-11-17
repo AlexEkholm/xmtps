@@ -3,6 +3,19 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-17
+
+Python tools:
+
+- Bar charts with more than 150 bars in a trace (`DENSE_BAR_COUNT`, e.g. a long-lived float's
+  per-dive plots such as `cycle_timing`) are drawn solid, without bar outlines or gaps
+  (`SolidDenseBars`, called by `WritePlotImageFiles` for every plot): at a few pixels per bar the
+  white outlines aliased into striations, in the PNG images and the HTML plots.
+
+Documentation:
+
+- Plot style guide: section 7.6, dense bar charts; the later plot families renumbered.
+
 ## 2026-11-16
 
 Python tools:

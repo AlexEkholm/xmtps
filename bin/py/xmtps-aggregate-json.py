@@ -15215,6 +15215,20 @@ def IntegerDiveTicks(figure):
             axis.update(tickmode = 'linear', tick0 = 0, dtick = 2)
 
 
+DENSE_BAR_COUNT = 150   # bars per trace above which bar charts are drawn without outlines or gaps
+
+def SolidDenseBars(figure):
+    """Draw a bar chart with many bars (more than DENSE_BAR_COUNT in a trace, e.g. one per dive of
+    a long-lived float) without bar outlines or gaps between the bars: at a pixel or two per bar,
+    the white outlines and gaps alias into striations, in the PNG images and in the HTML plot."""
+    bars = [t for t in figure.data if t.type == 'bar' and t.orientation != 'h']
+    if not any(t.x is not None and len(t.x) > DENSE_BAR_COUNT for t in bars):
+        return
+    for t in bars:
+        t.update(marker_line_width = 0)
+    figure.update_layout(bargap = 0, bargroupgap = 0)
+
+
 def WritePlotImageFiles(
         id_str, 
         figure, 
@@ -15258,6 +15272,8 @@ def WritePlotImageFiles(
     """
     try: 
         
+        SolidDenseBars(figure)
+
         if dpath_float is None or len(dpath_float) < 1:
             
             # Generate path

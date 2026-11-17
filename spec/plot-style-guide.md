@@ -154,7 +154,7 @@ go.Figure(layout=go.Layout(
 ```
 
 - **Background.** `plot_bgcolor='white'`; leave `paper_bgcolor` at its default (white).
-- **Grid and axis lines.** Don't set them. The default Plotly template draws grid, zero and axis lines in white, so on the white background the plots show **no grid, no zero line and no axis line**. That's the house style. Where a reference value matters, draw it as a reference line (section 5.4) instead of turning the grid on. Polar and geographic plots are the exceptions (sections 7.10 and 7.11).
+- **Grid and axis lines.** Don't set them. The default Plotly template draws grid, zero and axis lines in white, so on the white background the plots show **no grid, no zero line and no axis line**. That's the house style. Where a reference value matters, draw it as a reference line (section 5.4) instead of turning the grid on. Polar and geographic plots are the exceptions (sections 7.11 and 7.12).
 - **Margins.** In the HTML, `l=10, r=10, b=20, t=50, pad=4`, or `t=70` with a `<sup>` subtitle. `WritePlotImageFiles` replaces them in the PNGs with `l=15, r=15, b=15, t=40, pad=0`, so you can't tune PNG margins per plot.
 - **Fonts.** Don't set a figure font. Plotly's default ("Open Sans", Verdana, Arial) matches the float page's CSS. Set explicit sizes only for annotations (12) and polar ticks (12, radial 10).
 - **Legend.** `legend=dict(title='Dive')` for per-dive traces. It appears only in the HTML (section 11).
@@ -231,7 +231,7 @@ colors[len(dives)-1] = 'rgb(0,0,0)'
 ```
 
 - `dives` includes the negative startup dives and dive 0. Index colors by **position** in `dives`, keeping a counter `i` that you increment even when you skip a dive. That keeps a dive's color the same in every plot.
-- **The latest dive is black and wider:** line width 2, against 1.2 for the others (`width=2 if dive == dives[-1] else 1.2`). On marker plots it is black at the normal size; on maps it is a star (section 7.11).
+- **The latest dive is black and wider:** line width 2, against 1.2 for the others (`width=2 if dive == dives[-1] else 1.2`). On marker plots it is black at the normal size; on maps it is a star (section 7.12).
 - **Exception, waves:** the ramp runs over dive numbers 0 to `max_dive` and is indexed by dive number (`colors[dive]`).
 
 ### 5.2 Named colors
@@ -241,7 +241,7 @@ colors[len(dives)-1] = 'rgb(0,0,0)'
 | Statistics: min./max. segments | `rgb(194,204,204)` |
 | Statistics: ±1σ segments | `rgb(123,123,123)` |
 | Statistics: mean | `rgb(0,0,0)` |
-| Neutral bars (counts, sums, durations) | fill `rgb(220,220,220)`, outline `rgb(188,188,188)` width 0.5 |
+| Neutral bars (counts, sums, durations) | fill `rgb(220,220,220)`, outline `rgb(188,188,188)` width 0.5 (none in dense bar charts, section 7.6) |
 | Reference lines (zero rate, constant-value guides) | `rgb(222,222,222)` |
 | Configured value (e.g. DFT, the pressure correction) | `rgb(0,0,255)` blue |
 | Pair of limits (e.g. air bladder SAX and SAN) | maximum `rgb(255,0,0)` red, minimum `rgb(0,0,255)` blue |
@@ -409,16 +409,23 @@ fig.add_trace(go.Scatter(x=dive, y=mean, mode='lines', name='mean', customdata=n
   - Configured values: dashed blue steps over `dive ± 0.5`, with NaN breaks.
   - A second quantity: `yaxis2=dict(overlaying='y', side='right', zeroline=True, zerolinecolor='rgb(188,188,188)')`, as lines+markers, width 1.2, size 3.
 - **Size:** `figWideXS` (`figWideS` with a second axis).
+- **Many dives:** see section 7.6.
 
 ### 7.5 Stacked bars (`cycle_timing`, `energy_per_cycle`, `satcom_sbd_data_size`, `pump_energy_sum`)
 
-- **Traces:** one `go.Bar` per component, bottom up, with `marker=dict(color=…, line=dict(color='rgb(255,255,255)', width=0.3))`. The thin white outline separates the segments.
+- **Traces:** one `go.Bar` per component, bottom up, with `marker=dict(color=…, line=dict(color='rgb(255,255,255)', width=0.3))`. The thin white outline separates the segments; dense bar charts have none (section 7.6).
 - **Layout:** `barmode='stack'`, `bargap=0`, `hovermode='x unified'` with the invisible Total trace (section 6), `legend=dict(title=<what the components are>, traceorder='reversed')` (`Component`, `Cycle Phase`, `Message type`), so that the legend reads top-down like the stack. y titled with its unit, `rangemode='tozero'`.
 - **Hover of a component:** in an `x unified` hover each line is one trace. Either leave `<extra></extra>` out so Plotly prefixes the trace name, or keep it and name the component in the template (`'Descent: Δt = …'`). The Total trace's template is `'Total: <b>…</b><extra></extra>'`.
-- **Segments colored by a continuous value** (pump pressure): color each segment with `plotly.colors.sample_colorscale(DEPTH_BLUES, 1 − p/pmax)`, gray `rgb(140,140,140)` where the value is invalid. Outline `rgba(90,90,90,0.35)`, width 0.4, or none above 150 dives. Show the scale with an invisible-marker color bar (section 5.6) and write the plot without a legend (`showlegend=False`).
+- **Segments colored by a continuous value** (pump pressure): color each segment with `plotly.colors.sample_colorscale(DEPTH_BLUES, 1 − p/pmax)`, gray `rgb(140,140,140)` where the value is invalid. Outline `rgba(90,90,90,0.35)`, width 0.4 (none in dense bar charts, section 7.6). Show the scale with an invisible-marker color bar (section 5.6) and write the plot without a legend (`showlegend=False`).
 - **Size:** `figWideS` for a breakdown, `figWideXS` for a count or sum (including `satcom_sbd_data_size`, bytes per dive by message type).
 
-### 7.6 Share of a total (`ShareBarFigure(title, labels, values, colors, text, hover_value)`)
+### 7.6 Dense bar charts (many dives)
+
+With more than `DENSE_BAR_COUNT` (150) bars in a vertical bar trace, as in a long-lived float's per-dive plots, a bar is only a few pixels wide, and its outlines and any gaps between bars alias into light striations across the plot, in the PNG images and in the HTML plot alike. Such a chart is drawn solid: no bar outlines (`marker_line_width=0` on every vertical bar trace) and no gaps (`bargap=0`, `bargroupgap=0`). Stacked segments are still told apart by their colors.
+
+Writers don't do this themselves: `WritePlotImageFiles` calls `SolidDenseBars(figure)` before it writes the HTML and queues the images, so every plot gets it. Draw bars with their usual outline (sections 5, 7.4, 7.5); it is removed when the chart is dense. Horizontal bars (`ShareBarFigure`) are not affected.
+
+### 7.7 Share of a total (`ShareBarFigure(title, labels, values, colors, text, hover_value)`)
 
 Call the helper, don't rebuild it. It draws one horizontal bar stacked in percent:
 
@@ -430,14 +437,14 @@ Call the helper, don't rebuild it. It draws one horizontal bar stacked in percen
 
 **Size:** `figWideBar`.
 
-### 7.7 Marker plots of records (`WritePumpPlots`, `phase_vac`)
+### 7.8 Marker plots of records (`WritePumpPlots`, `phase_vac`)
 
 - **Trace:** `go.Scatter(mode='lines+markers', opacity=0.7, line=dict(color=colors[i], width=1), marker=dict(color=colors[i], size=…, line=dict(color='rgb(0,0,0)', width=0.3)))`. Size the markers by a third quantity where one exists (section 5.5), otherwise use 8.
 - **Records without a time:** plot them against their order, titled `Pump #`, with range `[−1, n + 1]`.
 - **Categorical x** (phases): use `tickvals`/`ticktext`, with None gaps between categories, and `connectgaps=False`.
 - **Size:** `fig` (`figWide` for `phase_vac`).
 
-### 7.8 Contours and heatmaps (`WriteContourPlots`)
+### 7.9 Contours and heatmaps (`WriteContourPlots`)
 
 - **Regridding:** interpolate the profiles onto a pressure grid (1 dBar to 100, 2 dBar to 300, 5 dBar deeper) and onto the profile times.
 - **Trace:**
@@ -456,7 +463,7 @@ Call the helper, don't rebuild it. It draws one horizontal bar stacked in percen
 - Write the plot with `showlegend=False`.
 - **Size:** `figWideL`, or `figWideXL` when the pressure axis (before its 2% margin) goes deeper than 300 dBar.
 
-### 7.9 Spectra and waterfalls (`WriteWavePlots`, `WriteMicrostructurePlots`)
+### 7.10 Spectra and waterfalls (`WriteWavePlots`, `WriteMicrostructurePlots`)
 
 - **Line spectra:** per-dive lines as in 7.1. x `Frequency [Hz]` with a fixed range. Log y variants use `type='log'` with ranges in log<sub>10</sub>, floored so that noise doesn't stretch the axis.
 - **Backgrounds:**
@@ -466,7 +473,7 @@ Call the helper, don't rebuild it. It draws one horizontal bar stacked in percen
 - **Waterfalls:** pass the data as a grid, not one row per point: 1-D x (times) and y (frequencies), 2-D z (32-bit floats) and 2-D `customdata` of short preformatted strings (`WaveGrid`). One row per point repeats the time string and frequency in every cell and made these pages 15–20 MB for long missions. `go.Heatmap(zsmooth='best', connectgaps=True)` with the colorbar of section 5.6. Log variants plot log<sub>10</sub>(z), with `10<sup>n</sup>` tick text.
 - **Size:** `figWideL` for spectra, `figWideXL` for waterfalls.
 
-### 7.10 Polar plots (`WriteSubmergedDisplacementPlots`, `WriteSurfaceDisplacementPlots`)
+### 7.11 Polar plots (`WriteSubmergedDisplacementPlots`, `WriteSurfaceDisplacementPlots`)
 
 - **Trace:** `go.Scatterpolar(mode='markers', marker=dict(color=[colors[i]], size=10, line=dict(color=['black'], width=0.3)))`, one per dive.
 - **`polar`:**
@@ -477,7 +484,7 @@ Call the helper, don't rebuild it. It draws one horizontal bar stacked in percen
 - **Margins:** `l=10, r=10, b=10, t=70`.
 - **Size:** `fig`.
 
-### 7.11 Maps (`WriteGeoPlots`, `PositionBathymetryFigure`)
+### 7.12 Maps (`WriteGeoPlots`, `PositionBathymetryFigure`)
 
 **Geographic (`go.Scattergeo`):**
 - **`geo`:**
@@ -508,7 +515,7 @@ Call the helper, don't rebuild it. It draws one horizontal bar stacked in percen
 - **Hover:** `hovermode='closest'`, no legend.
 - **PNG:** written with `static_bare=True`, which drops the color bar and axis labels from the PNGs.
 
-### 7.12 Trajectory (`WriteTrajectoryPlots`)
+### 7.13 Trajectory (`WriteTrajectoryPlots`)
 
 - **Phase lines:** pressure vs date, in the bright phase colors (section 5.2), width 1, opacity 0.8. Surface is lines+markers with `circle-open` size 5.
 - **Background traces:**
@@ -517,7 +524,7 @@ Call the helper, don't rebuild it. It draws one horizontal bar stacked in percen
 - **Surface events:** at p = −0.5, the top of the reversed axis (section 5.5).
 - **Size:** `figWideL` if deeper than 500 dBar, else `figWide`.
 
-### 7.13 Estimate with an uncertainty band (`WriteRemainingCyclesPlot`)
+### 7.14 Estimate with an uncertainty band (`WriteRemainingCyclesPlot`)
 
 - **Band:** first the upper edge, invisible (`line=dict(width=0)`, `showlegend=False`, `hoverinfo='skip'`). Then the lower edge with `fill='tonexty'`, `fillcolor='rgba(31,119,180,0.18)'`, named `Range`.
 - **Estimate:** `rgb(31,119,180)`, width 2.
@@ -525,7 +532,7 @@ Call the helper, don't rebuild it. It draws one horizontal bar stacked in percen
 - **Layout:** `rangemode='tozero'`, `hovermode='x'`, `t=70` for the subtitle.
 - **Size:** `figWideS`.
 
-### 7.14 Subplots (`WriteMicrostructurePlots`)
+### 7.15 Subplots (`WriteMicrostructurePlots`)
 
 - **Construction:** `make_subplots(rows=1, cols=1+n, shared_yaxes=True, horizontal_spacing=0.05, column_widths=[0.3]+[0.7/n]*n)`.
 - **Axes:** pressure on the shared y axis, reversed. Label each panel's x axis.
