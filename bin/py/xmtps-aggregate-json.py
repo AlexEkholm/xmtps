@@ -14649,7 +14649,6 @@ BUOYANCY_T_REF = 10.0           # degC, reference temperature of the thermal-exp
 BUOYANCY_MIN_PRES = 10.0        # dBar; shallower samples ride surface waves (as in the model fit)
 BUOYANCY_MAX_SPEED = 1.0        # m/s; faster samples are implausible
 BUOYANCY_MIN_DIVES = 5          # calibration dives needed for the neutral fall-pump time plots
-BUOYANCY_DSD_TOL = 30.0         # dBar; the first pump is the fall pump if this close to DSD
 
 
 def BuoyancyModel(float_id):
@@ -14693,19 +14692,26 @@ def BuoyancyNeutralOil(fit, prof, p):
 
 
 def BuoyancyFallPumps(float_aggregate_data):
-    """Per dive (1 and later): the configured fall-pump pressure DSD, the fall pump's duration
-    (the first pump record, if within BUOYANCY_DSD_TOL of DSD), the number of seek pumps (the pump
-    records between the fall pump and the deepest pump, which starts the ascent) and the park
-    level reached (median of the middle half of the drift pressures), as in xmtps-control's
-    xmtps-control-fleet.py. Returns a DataFrame (dive, dsd, t_fall, n_seek, level)."""
+    """Per dive (1 and later): the configured fall-pump pressure DSD (NaN if not reported), the
+    fall pump's duration (the first pump record, which is always the fall pump), the number of
+    seek pumps (the pump records between the fall pump and the deepest pump, which starts the
+    ascent) and the park level reached (median of the middle half of the drift pressures), as in
+    xmtps-control's xmtps-control-fleet.py. Returns a DataFrame (dive, dsd, t_fall, n_seek, level)."""
     df_pump = float_aggregate_data.get('pump')
     df_drift = float_aggregate_data.get('drift')
     df_mission = float_aggregate_data.get('mission')
-    if df_pump is None or df_drift is None or df_mission is None or len(df_pump) < 1:
+    if df_pump is None or df_drift is None or len(df_pump) < 1:
         return pd.DataFrame(columns = ['dive', 'dsd', 't_fall', 'n_seek', 'level'])
+    if df_mission is None:
+        df_mission = pd.DataFrame(columns = ['dive'])
+    # The fall-pump pressure of each dive's mission phase: DSD<MPS>, MPS the phase the dive ran in
+    # (as reported in its mission configuration; DSD0, DSD1, DSD2 are the phases' fall-pump
+    # pressures), else DSD0, else DSD for firmware without phases
     dsd = {}
     for _, m in df_mission.iterrows():
-        v = next((pd.to_numeric(m[k], errors = 'coerce') for k in ('DSD0', 'DSD') if k in m and pd.notna(pd.to_numeric(m[k], errors = 'coerce'))), None)
+        mps = pd.to_numeric(m['MPS'], errors = 'coerce') if 'MPS' in m else np.nan
+        keys = (['DSD{:d}'.format(int(mps))] if pd.notna(mps) and 0 <= mps <= 9 else []) + ['DSD0', 'DSD']
+        v = next((pd.to_numeric(m[k], errors = 'coerce') for k in keys if k in m and pd.notna(pd.to_numeric(m[k], errors = 'coerce'))), None)
         if v is not None and 0 < v < 3000:
             dsd[int(m['dive'])] = float(v)
     pumps = df_pump[['dive', 'pres', 'time']].apply(pd.to_numeric, errors = 'coerce')
@@ -14716,15 +14722,14 @@ def BuoyancyFallPumps(float_aggregate_data):
         last_dsd = dsd.get(dive, last_dsd)          # the configuration of the last dive that sent it
         p = pumps[pumps['dive'] == dive]
         prs, tms = p['pres'].values, p['time'].values
-        if last_dsd is None or len(prs) < 1 or not np.isfinite(prs).any():
+        if len(prs) < 1 or not np.isfinite(prs).any() or not np.isfinite(tms[0]):
             continue
         k = int(np.nanargmax(prs))
-        fall = np.isfinite(prs[0]) and abs(prs[0] - last_dsd) < BUOYANCY_DSD_TOL
-        n_seek = k - (1 if fall else 0)
+        n_seek = k - 1                              # the first pump is the fall pump
         d = drift[drift['dive'] == dive]['pres'].values
         d = np.sort(d[np.isfinite(d)])
         level = float(np.median(d[len(d) // 4: len(d) - len(d) // 4])) if len(d) > 8 else np.nan
-        rows.append(dict(dive = dive, dsd = last_dsd, t_fall = float(tms[0]) if fall else np.nan,
+        rows.append(dict(dive = dive, dsd = np.nan if last_dsd is None else last_dsd, t_fall = float(tms[0]),
                          n_seek = n_seek, level = level))
     return pd.DataFrame(rows, columns = ['dive', 'dsd', 't_fall', 'n_seek', 'level'])
 
@@ -14867,7 +14872,7 @@ def WriteBuoyancyPlots(float_id, float_aggregate_data, dpath_float, dives, max_d
         cal = fp[(fp['n_seek'] == 0) & np.isfinite(fp['t_fall']) & np.isfinite(fp['level'])]
         cal = cal[[int(d) in prof and lv <= prof[int(d)][-1, 0] + 20 for d, lv in zip(cal['dive'], cal['level'])]]
         if len(cal) >= BUOYANCY_MIN_DIVES and len(prof):
-            dsd = float(np.median(cal['dsd']))
+            dsd = float(np.nanmedian(cal['dsd'])) if np.isfinite(cal['dsd']).any() else np.nan
             q = fit['q_p']                    # mL/min, nearly independent of pressure
             c_i = np.array([q * t / 60 - BuoyancyNeutralOil(fit, prof[int(d)], lv)
                             for d, t, lv in zip(cal['dive'], cal['t_fall'], cal['level'])])
@@ -14888,7 +14893,7 @@ def WriteBuoyancyPlots(float_id, float_aggregate_data, dpath_float, dives, max_d
 
             fig = go.Figure(layout = dict(
                 title = dict(text = '{}: Neutral Fall Pump Time Estimate'.format(float_id)),
-                xaxis = dict(title = 'Fall Pump Time at DSD = {:.0f} dBar [seconds]'.format(dsd), autorange = False, range = [0, round(tmax * 1.05 + 5, -1)]),
+                xaxis = dict(title = ('Fall Pump Time at DSD = {:.0f} dBar [seconds]'.format(dsd) if np.isfinite(dsd) else 'Fall Pump Time [seconds]'), autorange = False, range = [0, round(tmax * 1.05 + 5, -1)]),
                 yaxis = dict(title = 'Pressure [dBar]', autorange = False, range = [round(pmax + 10), 0]),
                 hoverlabel = hoverlabel, hovermode = 'closest', legend = dict(title = ''), plot_bgcolor = 'white', margin = margin))
             fig.add_trace(go.Scatter(x = np.round(t + tb, 1), y = np.round(p, 1), mode = 'lines', line = dict(width = 0),

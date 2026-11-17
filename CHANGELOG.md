@@ -22,6 +22,12 @@ Python tools:
   `neutral_pump_time_fit` (predicted against used, with the 1:1 line), `neutral_pump_time_error`
   (predicted minus used fall-pump time per dive), and `buoyancy_<phase>_v_pres` and
   `buoyancy_<phase>_avg` (against pressure; per-dive min., mean, max. and σ). All titled "Estimate".
+- Neutral fall-pump time plots: the first pump record of a dive is taken as its fall pump (it
+  always is), no longer only when it was within 30 dBar of DSD0, which is the fall-pump pressure
+  of mission phase 0 only; the axis label gives the DSD of the dive's phase (`DSD<MPS>`, from its
+  mission configuration). Floats without a DSD are calibrated too. With this, 187 floats have
+  enough calibration dives for the plots instead of 83 (11190 in phase 2, DSD2 70 dBar, had none).
+
 ## 2026-11-15
 
 Python tools:
