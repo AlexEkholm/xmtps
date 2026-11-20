@@ -7158,6 +7158,23 @@ def WriteContourPlots(float_id, float_aggregate_data, dpath_float, dives, max_di
             
             if not np.isfinite(rng['saln']).all():
                 DropFigures(figs, ['profile_contour_saln', 'profile_contour_dens', 'profile_contour_sigma0'], 'No salinity', float_id)
+
+            # Each contour only over the profiles with data for its variable: plotly.js fails to
+            # render a contour whose columns are mostly empty (Error 525; 9296, whose salinity is
+            # missing on 625 of 711 profiles, 2026-11-20), and the empty profiles add nothing.
+            for fig in list(figs.keys()):
+                trace = figs[fig].data[0]
+                z = np.asarray(trace.z, dtype=np.double)
+                keep = np.isfinite(z).any(axis=0)
+                if keep.all():
+                    continue
+                if keep.sum() < 2:
+                    DropFigures(figs, [fig], 'Fewer than 2 profiles with data', float_id)
+                    continue
+                logger.debug('{} of float {}: {} of {} profiles without data left out'.format(
+                    fig, float_id, int((~keep).sum()), len(keep)))
+                trace.update(x = np.asarray(grid_time)[keep], z = z[:, keep],
+                             customdata = np.asarray(trace.customdata)[:, keep])
             for fig in list(figs.keys()):
                 
                 fig_meta = WritePlotImageFiles(

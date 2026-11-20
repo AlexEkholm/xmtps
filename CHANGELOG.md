@@ -31,6 +31,10 @@ Python tools:
   colocations without the spectra flagged bad or probably bad (including the manual entries),
   storm center on the spline: RMS 0.064. The quality flags that depend on the corrected spectra
   (`lf_energy`, `lf_energy_minor`, `hs_jump`) shift slightly.
+- Profile contour plots: each contour is drawn only over the profiles with data for its variable
+  (a contour with fewer than two is skipped). plotly.js failed to render the salinity, density and
+  σ0 contours of 9296 (Error 525), whose salinity is missing on 625 of its 711 profiles, so their
+  images were not written and the plots were left off its page.
 
 Documentation:
 
