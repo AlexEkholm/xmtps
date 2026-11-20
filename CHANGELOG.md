@@ -3,6 +3,27 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-20
+
+Python tools:
+
+- WIMS wave spectra quality flag: `qc_flag` (`good`, `probably good`, `ok`, `probably bad` or
+  `bad`, the worst level among the reasons) and `qc_reasons` (reason codes) in the per-dive
+  `Wave` and as two new columns of the aggregate `_wave` file (`FloatClasses.WAVE_QC_REASONS`).
+  Per spectrum (`Wave.PostProcess`): the three existing rejections, now named `lf_accel`,
+  `max_accel` and `max_disp`, and `no_spectra` and `no_energy` (bad); `lf_energy`, more than 0.30
+  of the `Szz` energy in 0.04–0.48 Hz below 0.06 Hz (bad: rejected like the others), and
+  `lf_energy_minor`, more than 0.15 (probably good); `no_horizontal`, vertical-only spectra (ok). Per float, in the aggregate (`WaveQcFloat`): `hs_jump` and
+  `hs_jump_minor`, Hs more than 2 or 1.65 times off the median of up to two spectra on each side
+  within two days (probably bad, ok), and `float_hv`, the float's median H/V ratio over 0.06–0.30 Hz
+  above 2 (ok). All tests run before any rejection, so every reason that applies is listed.
+- Vertical-only spectra (`no_horizontal`) have no direction: `mwd`, `theta1` and `theta2` are `NaN`
+  instead of 0° magnetic plus the declination (float 9113).
+
+Documentation:
+
+- JSON file format: the quality flag and reasons (sections 3.15 and 4.18).
+
 ## 2026-11-17
 
 Python tools:

@@ -1335,7 +1335,42 @@ class Surface:
         self.dt_str  = [ x.dt_str for x in self.dt ]
         del self.__dict__["dt"]
               
-class Wave: 
+# Quality levels of a wave spectrum, best first, and the reasons a spectrum is flagged, in the
+# order they are listed, with the level each sets. The first six are set per spectrum by
+# Wave.PostProcess(); hs_jump, hs_jump_minor and float_hv need the float's other spectra and are
+# set by xmtps-aggregate-json.py (WaveQcFloat).
+WAVE_QC_LEVELS = ['good', 'probably good', 'ok', 'probably bad', 'bad']
+WAVE_QC_REASONS = {
+    'no_spectra':       'bad',              # no spectra (slen < 1)
+    'lf_accel':         'bad',              # acceleration > 0.09 g^2/Hz at or below 0.05 Hz
+    'max_accel':        'bad',              # acceleration > 0.3 g^2/Hz
+    'max_disp':         'bad',              # displacement > 300 m^2/Hz at or above freq_min, or Szz NaN
+    'lf_energy':        'bad',              # low-frequency share of the Szz energy > 0.30
+    'no_energy':        'bad',              # m0 of Szz not positive (spectra not otherwise bad)
+    'lf_energy_minor':  'probably good',    # the same share in (0.15, 0.30]
+    'no_horizontal':    'ok',               # no horizontal spectra in 0.06-0.30 Hz (vertical only:
+                                            # no directions)
+    'hs_jump':          'probably bad',     # Hs / median Hs of its neighbours outside [1/2, 2]
+    'hs_jump_minor':    'ok',               # the same ratio outside [1/1.65, 1.65]
+    'float_hv':         'ok',               # the float's median H/V ratio > 2
+}
+
+
+def WaveQcFlag(reasons):
+    """Return the quality level of a wave spectrum flagged for reasons (codes of WAVE_QC_REASONS):
+    the worst level among them, or 'good' if there are none."""
+    worst = 0
+    for code in reasons:
+        worst = max(worst, WAVE_QC_LEVELS.index(WAVE_QC_REASONS[code]))
+    return WAVE_QC_LEVELS[worst]
+
+
+def WaveQcSort(reasons):
+    """Return the reason codes in the order of WAVE_QC_REASONS, without duplicates."""
+    return [code for code in WAVE_QC_REASONS if code in set(reasons)]
+
+
+class Wave:
     """Surface wave spectra measured by the float's accelerometer, and the wave statistics.
 
     The listing's WVS line gives the sample rate and FFT length; each wvs line gives one
@@ -1379,6 +1414,9 @@ class Wave:
             direction_ref: 'true' if the directions are referenced to true north (the declination
                 was applied), else 'magnetic'.
             period_peak, period_avg, period_zero: peak, mean and zero-crossing periods, in s.
+            qc_flag: quality of the spectra, one of WAVE_QC_LEVELS ('good' until PostProcess()).
+            qc_reasons: the codes of WAVE_QC_REASONS the spectra were flagged for, in that order;
+                empty when good.
         """
         self.slen = slen
         flen = slen//2
@@ -1482,12 +1520,15 @@ class Wave:
         self.period_peak    = np.nan            # Dominant period         
         self.period_avg     = np.nan            # Average period
         self.period_zero    = np.nan            # Zero-crossing
-        
+
+        self.qc_flag        = 'good'            # Quality level (WAVE_QC_LEVELS)
+        self.qc_reasons     = []                # Reason codes (WAVE_QC_REASONS)
+
     def PostProcess(self, freq_min: float = 0.0625, interpolate = True, rolling_average: int = 3,
                     lat: float = np.nan, lon: float = np.nan, dt_epoch: float = None):
         """Compute displacement spectra, directional coefficients and wave statistics.
 
-        Does nothing if slen < 1. Otherwise:
+        If slen < 1, only flags the spectra 'bad' (reason no_spectra). Otherwise:
 
         1. Keep the received acceleration spectra in the raw_ attributes.
         2. If interpolate, interpolate the acceleration spectra linearly onto 0.030 to 1.250 Hz
@@ -1500,10 +1541,16 @@ class Wave:
         4. Convert to displacement spectra in m^2/Hz by multiplying by g^2 / (2 pi f)^4 and
            compute the deep-water wavenumber (2 pi f)^2 / g in rad/m.
         5. Smooth the displacement spectra with a rolling_average-point RollingAverage.
-        6. Reject the spectra (set all displacement spectra to NaN) if any acceleration
-           auto-spectrum exceeds 0.09 g^2/Hz at or below 0.05 Hz (low-frequency noise) or
-           0.3 g^2/Hz anywhere, or any displacement auto-spectrum at or above freq_min exceeds
-           300 m^2/Hz or the vertical one is NaN.
+        6. Quality-check the spectra (qc_reasons, all tests on the spectra of steps 3 to 5, before
+           any rejection; qc_flag the worst level among the reasons, see WAVE_QC_REASONS):
+           lf_accel (bad) if any acceleration auto-spectrum exceeds 0.09 g^2/Hz at or below
+           0.05 Hz (low-frequency noise); max_accel (bad) if one exceeds 0.3 g^2/Hz anywhere;
+           max_disp (bad) if any displacement auto-spectrum at or above freq_min exceeds
+           300 m^2/Hz or the vertical one is NaN; lf_energy (bad) if more than 0.30 of the Szz
+           energy in 0.04 to 0.48 Hz lies below 0.06 Hz, lf_energy_minor (probably good) if more
+           than 0.15; no_horizontal (ok) if the horizontal acceleration spectra Sxx_g + Syy_g are
+           zero or NaN at every frequency in 0.06 to 0.30 Hz (vertical-only spectra). Reject the
+           spectra flagged bad (set all displacement spectra to NaN).
         7. Compute the moments m0, m1, m2 of Szz (summed up to the first NaN bin) and the peak
            bin, and the directional coefficients: a0 = Szz / pi,
            a1, b1 = Qzx, Qzy / sqrt(Szz (Sxx + Syy)), a2 = (Sxx - Syy) / (Sxx + Syy),
@@ -1518,7 +1565,9 @@ class Wave:
            lat, lon and dt_epoch is available (IGRF, ppigrf), it is added to the directions,
            which are then referenced to true north (direction_ref 'true'); otherwise they stay
            referenced to magnetic north. Angles are converted to whole degrees in [0, 360). If m0 is not positive, the spectra, coefficients, moments and
-           statistics are set to NaN and the angles to 0.
+           statistics are set to NaN and the angles to 0, and spectra not already flagged bad
+           are flagged no_energy (bad). Spectra flagged no_horizontal have no
+           direction: mwd, theta1 and theta2 are NaN.
         9. Round everything and convert the arrays to lists for pickling.
 
         Args:
@@ -1561,8 +1610,10 @@ class Wave:
         try: 
         
             if self.slen < 1:
+                self.qc_reasons = ['no_spectra']
+                self.qc_flag    = WaveQcFlag(self.qc_reasons)
                 return
-            
+
             # copy raw spectra
                 
             self.raw_Szz_g          = self.Szz_g 
@@ -1684,53 +1735,61 @@ class Wave:
                 self.Qzx = RollingAverage(self.Qzx, rolling_average)
                 self.Qzy = RollingAverage(self.Qzy, rolling_average)
                     
-            # Remove spectra with vert LF accel noise
-            
-            spectra_max_lf_g = 0.09
-            spectra_lf_cutoff_f = 0.05
-            for idx in range(0, len(self.freq)):
-                if self.freq[idx] > spectra_lf_cutoff_f:
-                    break    
-                if self.Szz_g[idx] > spectra_max_lf_g or self.Sxx_g[idx] > spectra_max_lf_g or self.Syy_g[idx] > spectra_max_lf_g:
-                # if self.Szz_g[idx] > 0.1:
-                    self.Szz[:] = np.nan
-                    self.Syy[:] = np.nan
-                    self.Sxx[:] = np.nan
-                    self.Cxy[:] = np.nan
-                    self.Qzx[:] = np.nan
-                    self.Qzy[:] = np.nan
-                    break
-                
-            # 
-                
-                
-            # Remove spectra with peaks above maximum
-            
+            # Quality checks, all on the spectra as they are now (before any rejection), so that
+            # every reason that applies is listed
+
+            freq = np.asarray(self.freq, dtype=np.double)
+            eps  = 1e-9                                         # Hz, for the grid's rounding
+            reasons = []
+
+            # Low-frequency acceleration noise
+            spectra_max_lf_g    = 0.09   # g^2/Hz
+            spectra_lf_cutoff_f = 0.05   # Hz
+            lf = freq <= spectra_lf_cutoff_f + eps
+            if np.any((self.Szz_g[lf] > spectra_max_lf_g) | (self.Sxx_g[lf] > spectra_max_lf_g) | (self.Syy_g[lf] > spectra_max_lf_g)):
+                reasons.append('lf_accel')
+
+            # Acceleration peaks above the maximum
             if spectra_max_g > 0:
-                for idx in range(0, len(self.freq)):
-                    if self.Szz_g[idx] > spectra_max_g or self.Sxx_g[idx] > spectra_max_g or self.Syy_g[idx] > spectra_max_g:
-                    # if self.Szz_g[idx] > spectra_max_g:
-                        self.Szz[:] = np.nan
-                        self.Syy[:] = np.nan
-                        self.Sxx[:] = np.nan
-                        self.Cxy[:] = np.nan
-                        self.Qzx[:] = np.nan
-                        self.Qzy[:] = np.nan
-                        break
-            
+                if np.any((self.Szz_g > spectra_max_g) | (self.Sxx_g > spectra_max_g) | (self.Syy_g > spectra_max_g)):
+                    reasons.append('max_accel')
+
+            # Displacement peaks above the maximum, or no vertical spectrum
             if spectra_max > 0:
-                for idx in range(0, len(self.freq)):
-                    if self.freq[idx] < freq_min:
-                        continue
-                    if self.Szz[idx] > spectra_max or self.Sxx[idx] > spectra_max or self.Syy[idx] > spectra_max or np.isnan(self.Szz[idx]):
-                        self.Szz[:] = np.nan
-                        self.Syy[:] = np.nan
-                        self.Sxx[:] = np.nan
-                        self.Cxy[:] = np.nan
-                        self.Qzx[:] = np.nan
-                        self.Qzy[:] = np.nan
-                        break
-        
+                m = freq >= freq_min
+                if np.any((self.Szz[m] > spectra_max) | (self.Sxx[m] > spectra_max) | (self.Syy[m] > spectra_max) | np.isnan(self.Szz[m])):
+                    reasons.append('max_disp')
+
+            # Low-frequency share of the vertical displacement energy: the share of the Szz energy
+            # in 0.04 to 0.48 Hz that lies below 0.06 Hz
+            band = (freq >= 0.04 - eps) & (freq <= 0.48 + eps)
+            total = np.nansum(self.Szz[band])
+            if total > 0:
+                share = np.nansum(self.Szz[band & (freq < 0.06 - eps)]) / total
+                if share > 0.30:
+                    reasons.append('lf_energy')
+                elif share > 0.15:
+                    reasons.append('lf_energy_minor')
+
+            # Vertical-only spectra: no horizontal acceleration anywhere in 0.06 to 0.30 Hz
+            band = (freq >= 0.06 - eps) & (freq <= 0.30 + eps)
+            horizontal = self.Sxx_g[band] + self.Syy_g[band]
+            if not np.any(np.isfinite(horizontal) & (horizontal != 0)):
+                reasons.append('no_horizontal')
+
+            self.qc_reasons = WaveQcSort(reasons)
+            self.qc_flag    = WaveQcFlag(self.qc_reasons)
+
+            # Reject the spectra flagged bad
+
+            if self.qc_flag == 'bad':
+                self.Szz[:] = np.nan
+                self.Syy[:] = np.nan
+                self.Sxx[:] = np.nan
+                self.Cxy[:] = np.nan
+                self.Qzx[:] = np.nan
+                self.Qzy[:] = np.nan
+
             
         
             # Calculate derived fields
@@ -1852,7 +1911,12 @@ class Wave:
                 self.theta2         = np.mod(self.theta2, 360)
                   
             else:
-            
+
+                # No energy: rejected for this reason unless already rejected for another
+                if self.qc_flag != 'bad':
+                    self.qc_reasons = WaveQcSort(self.qc_reasons + ['no_energy'])
+                    self.qc_flag    = WaveQcFlag(self.qc_reasons)
+
                 # self.freq[:]        = np.nan
                 self.Szz[:]         = np.nan
                 self.Syy[:]         = np.nan
@@ -1882,7 +1946,14 @@ class Wave:
                 self.period_peak    = np.nan            # Dominant period         
                 self.period_avg     = np.nan            # Average period
                 self.period_zero    = np.nan            # Zero-crossing
-                
+
+            # Vertical-only spectra have no direction (atan2(0, 0) would give 0, magnetic north)
+
+            if 'no_horizontal' in self.qc_reasons:
+                self.mwd            = np.nan
+                self.theta1         = np.full(len(self.freq), np.nan)
+                self.theta2         = np.full(len(self.freq), np.nan)
+
             # Convert arrays to lists
         
             self.raw_freq       = np.round(self.raw_freq, 3).tolist()
@@ -1916,9 +1987,13 @@ class Wave:
             
             self.r1             = np.round(self.r1, 3).tolist()
             self.r2             = np.round(self.r2, 3).tolist()
-            self.theta1         = np.round(self.theta1, 0).astype(int).tolist()
-            self.theta2         = np.round(self.theta2, 0).astype(int).tolist()
-            self.mwd            = np.round(self.mwd, 0).astype(int).tolist()
+            # Angles as whole degrees (int), or float with NaN where there is no direction
+            def angles(a):
+                a = np.round(np.asarray(a, dtype=np.double), 0)
+                return a.astype(int).tolist() if np.all(np.isfinite(a)) else a.tolist()
+            self.theta1         = angles(self.theta1)
+            self.theta2         = angles(self.theta2)
+            self.mwd            = angles(self.mwd)
         
             self.moment         = np.round(self.moment, 5).tolist()
             
@@ -1929,8 +2004,10 @@ class Wave:
             self.period_zero    = float(np.round(self.period_zero, 1)) # Zero-crossing
             
             
-        except: 
-        
+        except:
+
+            self.qc_reasons = ['no_spectra']
+            self.qc_flag    = WaveQcFlag(self.qc_reasons)
             raise Exception('Failed to post-process wave data.')
 
 class MicrostructureChannel:

@@ -72,7 +72,7 @@ from yattag import Doc
 
 # local
 from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
-from FloatClasses import FieldResetDives, ReadLaunchTimes
+from FloatClasses import FieldResetDives, ReadLaunchTimes, WaveQcFlag, WaveQcSort
 from EnergyModel import (ENERGY_COMPONENTS, ENERGY_PIE_ONLY, ENERGY_SECONDS_PER_YEAR, ENERGY_USABLE_FRACTION,
                          ENERGY_CONTROLLER_UNCERTAINTY, ENERGY_REMAINING_RECENT_DIVES,
                          ENERGY_VOLTAGE_FALL_FRACTION, PumpVoltageFallDive, RemainingCycles)
@@ -638,6 +638,81 @@ def WaveSampleRate(wave_data):
         return fsam
     except Exception:
         return np.nan
+
+
+# Wave spectra quality checks that need the float's other spectra (WaveQcFloat)
+WAVE_QC_HS_RATIO       = 2.0            # hs_jump: Hs / neighbours' median Hs outside [1/x, x]
+WAVE_QC_HS_RATIO_MINOR = 1.65           # hs_jump_minor: the same, outside [1/x, x]
+WAVE_QC_HS_NEIGHBOURS  = 2              # neighbours taken on each side
+WAVE_QC_HS_WINDOW_S    = 2 * 86400.0    # neighbours within this time of the spectrum, in s
+WAVE_QC_HS_MIN_NEIGHBOURS = 2           # the test runs only with at least this many neighbours
+WAVE_QC_HV_BAND        = (0.06, 0.30)   # Hz, band of the H/V ratio
+WAVE_QC_HV_MAX         = 2.0            # float_hv: the float's median H/V ratio above this
+
+
+def WaveQcFloat(df_wave, df_wave_spectra, times):
+    """Add the float-level quality checks to the per-spectrum ones of the aggregate wave table and
+    set its qc_flag and qc_reasons columns (in place; see FloatClasses.WAVE_QC_REASONS).
+
+    hs_jump (probably bad) and hs_jump_minor (ok): the ratio of the spectrum's Hs (swh) to the
+    median Hs of its neighbours is outside [1/2, 2], or outside [1/1.65, 1.65] but inside
+    [1/2, 2]. The neighbours are up to 2 spectra before and 2 after it, not flagged bad, within
+    2 days of its time; the test runs only with at least 2 of them.
+    float_hv (ok), on every spectrum of the float: the median, over the spectra not flagged bad,
+    of the H/V ratio (Sxx + Syy) / Szz of the displacement spectra summed over 0.06 to 0.30 Hz
+    exceeds 2.
+
+    Args:
+        df_wave: the float's 'wave' table (dive, swh, qc_flag, qc_reasons, ...), one row per dive.
+        df_wave_spectra: the float's 'wave_spectra' table (dive, freq, Szz, Sxx, Syy, ...).
+        times: dive -> time of the spectrum (epoch seconds, NaN if unknown).
+    """
+    if df_wave is None or len(df_wave) < 1:
+        return
+    n = len(df_wave)
+    if 'qc_flag' not in df_wave:
+        df_wave['qc_flag'] = 'good'
+    if 'qc_reasons' not in df_wave:
+        df_wave['qc_reasons'] = ''
+    reasons = [[c for c in str(r).split(';') if c] if isinstance(r, str) else [] for r in df_wave['qc_reasons']]
+    dives = df_wave['dive'].astype(int).values
+    swh = pd.to_numeric(df_wave['swh'], errors='coerce').values.astype(float)
+    t = np.array([times.get(int(d), np.nan) for d in dives], dtype=float)
+    ok = np.array([str(f) != 'bad' for f in df_wave['qc_flag']]) & np.isfinite(swh) & (swh > 0)
+
+    # Hs jumps: neighbours among the spectra not flagged bad, with a time, in time order
+    cand = np.where(ok & np.isfinite(t))[0]
+    cand = cand[np.argsort(t[cand], kind='stable')]
+    for i in range(n):
+        if not (np.isfinite(swh[i]) and swh[i] > 0 and np.isfinite(t[i])):
+            continue
+        others = cand[cand != i]
+        before = others[(t[others] <= t[i]) & (t[others] >= t[i] - WAVE_QC_HS_WINDOW_S)]
+        after = others[(t[others] > t[i]) & (t[others] <= t[i] + WAVE_QC_HS_WINDOW_S)]
+        neigh = np.concatenate([before[-WAVE_QC_HS_NEIGHBOURS:], after[:WAVE_QC_HS_NEIGHBOURS]])
+        if len(neigh) < WAVE_QC_HS_MIN_NEIGHBOURS:
+            continue
+        ratio = swh[i] / np.median(swh[neigh])
+        if not (1 / WAVE_QC_HS_RATIO <= ratio <= WAVE_QC_HS_RATIO):
+            reasons[i].append('hs_jump')
+        elif not (1 / WAVE_QC_HS_RATIO_MINOR <= ratio <= WAVE_QC_HS_RATIO_MINOR):
+            reasons[i].append('hs_jump_minor')
+
+    # The float's H/V ratio
+    if df_wave_spectra is not None and len(df_wave_spectra) > 0:
+        s = df_wave_spectra[['dive', 'freq', 'Szz', 'Sxx', 'Syy']].apply(pd.to_numeric, errors='coerce')
+        s = s[(s['freq'] >= WAVE_QC_HV_BAND[0] - 1e-9) & (s['freq'] <= WAVE_QC_HV_BAND[1] + 1e-9)
+              & s['dive'].isin(dives[ok])]
+        if len(s) > 0:
+            g = s.assign(h = s['Sxx'] + s['Syy']).groupby('dive')[['h', 'Szz']].sum(min_count=1)
+            g = g[(g['Szz'] > 0) & np.isfinite(g['h'])]
+            if len(g) > 0 and float(np.median(g['h'] / g['Szz'])) > WAVE_QC_HV_MAX:
+                for r in reasons:
+                    r.append('float_hv')
+
+    reasons = [WaveQcSort(r) for r in reasons]
+    df_wave['qc_reasons'] = [';'.join(r) for r in reasons]
+    df_wave['qc_flag'] = [WaveQcFlag(r) for r in reasons]
 
 def EnergyEstimates(float_aggregate_data, float_id=None):
     """Return the float's estimated energy use per dive (the 'energy' aggregate), in J.
@@ -2015,6 +2090,7 @@ def AggregateDiveData():
                 
                 logger.debug('Aggregating wave data for float {:04d}...'.format(float_id))
 
+                wave_times = {}                 # dive -> time of its surface fix, for WaveQcFloat
                 for dive_data in float_data.dives:
                     
                     dive_num = dive_data.dive_num
@@ -2046,8 +2122,12 @@ def AggregateDiveData():
                                 'swh':          np.array([wave_data.swh], dtype='float'),
                                 'slen':         np.array([wave_data.slen], dtype='int'),
                                 'fe_hz':        np.array([WaveSampleRate(wave_data)], dtype='float'),
+                                'qc_flag':      np.array([getattr(wave_data, 'qc_flag', 'good')], dtype='object'),
+                                'qc_reasons':   np.array([';'.join(getattr(wave_data, 'qc_reasons', []))], dtype='object'),
                             }
                         )
+                        fix = dive_data.SurfaceFix() if hasattr(dive_data, 'SurfaceFix') else None
+                        wave_times[dive_num] = fix.dt_epoch if fix is not None else np.nan
                         float_aggregate_data['wave'] = AppendRows(float_aggregate_data['wave'], df_wave)
                         
                         n_freq = len(wave_data.freq)
@@ -2099,6 +2179,14 @@ def AggregateDiveData():
                         logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
                 
                 float_aggregate_data['wave_spectra'] = float_aggregate_data['wave_spectra'].sort_values(['dive', 'freq'], ignore_index=True)
+
+                try:
+                    WaveQcFloat(float_aggregate_data['wave'], float_aggregate_data['wave_spectra'], wave_times)
+                except Exception as exc:
+                    errstr = 'Failed to quality-check the wave spectra of float {}'.format(float_id)
+                    if hasattr(args, 'halt') and args.halt:
+                        raise Exception(errstr)
+                    logger.error('{} ({}: {})'.format(errstr, type(exc).__name__, exc))
 
                    
                 if (len(float_aggregate_data['wave']) < 1) or (len(float_aggregate_data['wave_spectra']) < 1):
