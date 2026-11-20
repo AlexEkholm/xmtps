@@ -1343,6 +1343,9 @@ class Surface:
 # Wave.PostProcess(); hs_jump, hs_jump_minor and float_hv need the float's other spectra and are
 # set by xmtps-aggregate-json.py (WaveQcFloat).
 WAVE_QC_LEVELS = ['good', 'probably good', 'ok', 'probably bad', 'bad']
+# Levels whose spectra are rejected: displacement spectra and wave parameters NaN (per dive in
+# Wave.PostProcess; for the float-level reasons in xmtps-aggregate-json.py, WaveQcReject)
+WAVE_QC_REJECT = ('bad', 'probably bad')
 WAVE_QC_REASONS = {
     'manual':           'bad',              # set by hand in the manual QC file (WAVE_QC_MANUAL_FILE),
                                             # at the level given there; 'bad' is only the default
@@ -1608,13 +1611,14 @@ class Wave:
            energy in 0.04 to 0.48 Hz lies below 0.06 Hz, lf_energy_minor (probably good) if more
            than 0.15; no_horizontal (ok) if the horizontal acceleration spectra Sxx_g + Syy_g are
            zero or NaN at every frequency in 0.06 to 0.30 Hz (vertical-only spectra). Reject the
-           spectra flagged bad (set all displacement spectra to NaN).
+           spectra flagged bad or probably bad (WAVE_QC_REJECT; set all displacement spectra to
+           NaN).
         7. Compute the moments m0, m1, m2 of Szz (summed up to the first NaN bin) and the peak
            bin, and the directional coefficients: a0 = Szz / pi,
            a1, b1 = Qzx, Qzy / sqrt(Szz (Sxx + Syy)), a2 = (Sxx - Syy) / (Sxx + Syy),
            b2 = 2 Cxy / (Sxx + Syy), r1, r2 their magnitudes, theta1 = atan2(a1, b1) and
            theta2 = atan2(b2, -a2) / 2, taken at the end of that axis (theta2 or theta2 + 180)
-           nearest theta1 (NaN angles become 0). Directions are clockwise from magnetic north and
+           nearest theta1 (NaN where r1 is NaN: bins without a direction). Directions are clockwise from magnetic north and
            give the direction the waves propagate toward (not from).
         8. If m0 > 0: swh = 4 sqrt(m0) (m), period_peak = 1 / f_peak, period_avg = m0 / m1 and
            period_zero = sqrt(m0 / m2) (s), and mwd is the mean of the theta1 directions
@@ -1623,7 +1627,7 @@ class Wave:
            lat, lon and dt_epoch is available (IGRF, ppigrf), it is added to the directions,
            which are then referenced to true north (direction_ref 'true'); otherwise they stay
            referenced to magnetic north. Angles are converted to whole degrees in [0, 360). If m0 is not positive, the spectra, coefficients, moments and
-           statistics are set to NaN and the angles to 0, and spectra not already flagged bad
+           statistics are set to NaN, the angles too, and spectra not already flagged bad
            are flagged no_energy (bad). Spectra flagged no_horizontal have no
            direction: mwd, theta1 and theta2 are NaN.
         9. Round everything and convert the arrays to lists for pickling.
@@ -1845,9 +1849,9 @@ class Wave:
             self.qc_reasons = WaveQcSort(manual + reasons)
             self.qc_flag    = WaveQcFlag(self.qc_reasons, manual_flag)
 
-            # Reject the spectra flagged bad
+            # Reject the spectra flagged bad or probably bad
 
-            if self.qc_flag == 'bad':
+            if self.qc_flag in WAVE_QC_REJECT:
                 self.Szz[:] = np.nan
                 self.Syy[:] = np.nan
                 self.Sxx[:] = np.nan
@@ -1911,11 +1915,14 @@ class Wave:
             # direction the waves propagate toward. a2 and b2 only give the principal axis, unique
             # modulo 180, so theta2 is taken at the end of the axis nearest theta1.
 
+            # Bins without a direction (r1 NaN: no vertical or no horizontal spectrum) get NaN
+            # angles (0 before 2026-11-20)
             self.theta1 = np.arctan2(self.a1, self.b1)
-            self.theta1 = np.where(np.isnan(self.theta1), 0, self.theta1)
             self.theta2 = 0.5 * np.arctan2(self.b2, -self.a2)
-            self.theta2 = np.where(np.isnan(self.theta2), 0, self.theta2)
             self.theta2 = np.where(np.cos(self.theta2 - self.theta1) < 0, self.theta2 + math.pi, self.theta2)
+            no_dir = np.isnan(self.r1) | np.isnan(self.theta1)
+            self.theta1 = np.where(no_dir, np.nan, self.theta1)
+            self.theta2 = np.where(no_dir | np.isnan(self.theta2), np.nan, self.theta2)
             
             # Check that we have good spectra
             
@@ -1941,13 +1948,16 @@ class Wave:
                         break
                         
                     
-                    # Bins without a direction (theta1 NaN, set to 0 above) get no weight.
-                    weight = 0 if np.isnan(self.r1[idx]) else math.sqrt(self.Szz[idx])
+                    # Bins without a direction (r1 or theta1 NaN) are skipped.
+                    if np.isnan(self.r1[idx]) or np.isnan(self.theta1[idx]) or not self.Szz[idx] > 0:
+                        continue
+                    weight = math.sqrt(self.Szz[idx])
                     
                     sum_x = sum_x + (math.cos(self.theta1[idx]) * weight)
                     sum_y = sum_y + (math.sin(self.theta1[idx]) * weight)
                 
-                self.mwd = math.atan2(sum_y, sum_x)
+                # NaN if no bin has a direction (atan2(0, 0) would give 0, north)
+                self.mwd = math.atan2(sum_y, sum_x) if (sum_x != 0 or sum_y != 0) else np.nan
                   
                 # Convert angles to degrees
                 
@@ -1960,8 +1970,8 @@ class Wave:
                 self.declination = MagneticDeclination(lat, lon, dt_epoch)
                 if not np.isnan(self.declination):
                     self.mwd            = self.mwd + self.declination
-                    self.theta1         = np.where(np.isnan(self.r1), self.theta1, self.theta1 + self.declination)
-                    self.theta2         = np.where(np.isnan(self.r2), self.theta2, self.theta2 + self.declination)
+                    self.theta1         = self.theta1 + self.declination    # NaN stays NaN
+                    self.theta2         = self.theta2 + self.declination
                     self.direction_ref  = 'true'
                 
                 # self.theta1         = np.round(self.theta1/15, 0)
@@ -1978,7 +1988,7 @@ class Wave:
             else:
 
                 # No energy: rejected for this reason unless already rejected for another
-                if self.qc_flag != 'bad':
+                if self.qc_flag not in WAVE_QC_REJECT:
                     self.qc_reasons = WaveQcSort(self.qc_reasons + ['no_energy'])
                     self.qc_flag    = WaveQcFlag(self.qc_reasons, manual_flag)
 
@@ -2000,9 +2010,9 @@ class Wave:
                 
                 self.r1[:]          = np.nan
                 self.r2[:]          = np.nan
-                self.theta1[:]      = 0
-                self.theta2[:]      = 0
-                self.mwd            = 0
+                self.theta1[:]      = np.nan            # no directions (was 0 before 2026-11-20)
+                self.theta2[:]      = np.nan
+                self.mwd            = np.nan
             
                 self.moment[:]      = np.nan
                 

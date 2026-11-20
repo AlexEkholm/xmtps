@@ -31,6 +31,17 @@ Python tools:
   colocations without the spectra flagged bad or probably bad (including the manual entries),
   storm center on the spline: RMS 0.064. The quality flags that depend on the corrected spectra
   (`lf_energy`, `lf_energy_minor`, `hs_jump`) shift slightly.
+- WIMS spectra flagged probably bad are rejected like bad ones (`WAVE_QC_REJECT`): NaN
+  displacement spectra and wave parameters, per dive (`Wave.PostProcess`, manual entries) and in
+  the aggregate for the float-level reasons (`WaveQcReject`: NaN `swh`, `mwd`, periods, spectra,
+  coefficients and angles). The flags and reasons are unchanged; the `hs_jump` neighbours are those
+  of the per-dive results, so rejecting a spectrum does not cascade. Spectra set probably bad by
+  hand no longer get `no_energy`, and are no longer `hs_jump` neighbours.
+- Rejected WIMS spectra carry no directions: `mwd`, `theta1` and `theta2` are `NaN` (were 0) for
+  spectra rejected per dive, as for those rejected by the float-level checks (`r1`, `r2` were
+  already `NaN`).
+- Bins without a direction in kept WIMS spectra (`r1` `NaN`) have `theta1` and `theta2` `NaN`
+  (were 0); `mwd` skips them and is `NaN` if no bin has a direction.
 - Profile contour plots: each contour is drawn only over the profiles with data for its variable
   (a contour with fewer than two is skipped). plotly.js failed to render the salinity, density and
   σ0 contours of 9296 (Error 525), whose salinity is missing on 625 of its 711 profiles, so their

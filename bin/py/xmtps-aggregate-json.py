@@ -72,7 +72,7 @@ from yattag import Doc
 
 # local
 from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
-from FloatClasses import FieldResetDives, ReadLaunchTimes, WaveQcFlag, WaveQcSort, WaveQcWorst
+from FloatClasses import FieldResetDives, ReadLaunchTimes, WaveQcFlag, WaveQcSort, WaveQcWorst, WAVE_QC_REJECT
 from EnergyModel import (ENERGY_COMPONENTS, ENERGY_PIE_ONLY, ENERGY_SECONDS_PER_YEAR, ENERGY_USABLE_FRACTION,
                          ENERGY_CONTROLLER_UNCERTAINTY, ENERGY_REMAINING_RECENT_DIVES,
                          ENERGY_VOLTAGE_FALL_FRACTION, PumpVoltageFallDive, RemainingCycles)
@@ -720,6 +720,41 @@ def WaveQcFloat(df_wave, df_wave_spectra, times):
     df_wave['qc_reasons'] = [';'.join(r) for r in reasons]
     df_wave['qc_flag'] = [WaveQcWorst(f, WaveQcFlag([c for c in r if c != 'manual']))
                           for f, r in zip(dive_flags, reasons)]
+
+
+# Wave parameters and spectra blanked when a spectrum is rejected (WaveQcReject)
+WAVE_REJECT_PARAMS = ['mwd', 'period_peak', 'period_avg', 'period_zero', 'swh']
+WAVE_REJECT_SPECTRA = ['Szz', 'Syy', 'Sxx', 'Cxy', 'Qzx', 'Qzy', 'a0', 'a1', 'a2', 'b1', 'b2',
+                       'r1', 'r2', 'theta1', 'theta2']
+
+
+def WaveQcReject(df_wave, df_wave_spectra):
+    """Reject, in the aggregate tables, the spectra that WaveQcFloat flagged bad or probably bad
+    (WAVE_QC_REJECT) but that the per-dive post-processing kept (finite swh): their wave
+    parameters (WAVE_REJECT_PARAMS) and displacement spectra and directional coefficients
+    (WAVE_REJECT_SPECTRA) become NaN, in place; qc_flag and qc_reasons are kept. The acceleration
+    spectra (_g) are kept, as for the spectra the post-processing rejects. Returns the dives.
+
+    It runs after all the checks, so the hs_jump neighbours are those of the post-processing
+    results: rejecting a spectrum here does not change its neighbours' tests."""
+    if df_wave is None or len(df_wave) < 1 or 'qc_flag' not in df_wave:
+        return []
+    swh = pd.to_numeric(df_wave['swh'], errors='coerce')
+    rows = df_wave['qc_flag'].isin(WAVE_QC_REJECT) & swh.notna()
+    dives = sorted(int(d) for d in df_wave.loc[rows, 'dive'])
+    if not dives:
+        return []
+    for c in WAVE_REJECT_PARAMS:
+        if c in df_wave:
+            df_wave[c] = pd.to_numeric(df_wave[c], errors='coerce').astype(float)
+            df_wave.loc[rows, c] = np.nan
+    if df_wave_spectra is not None and len(df_wave_spectra) > 0:
+        srows = df_wave_spectra['dive'].isin(dives)
+        for c in WAVE_REJECT_SPECTRA:
+            if c in df_wave_spectra:
+                df_wave_spectra[c] = pd.to_numeric(df_wave_spectra[c], errors='coerce').astype(float)
+                df_wave_spectra.loc[srows, c] = np.nan
+    return dives
 
 def EnergyEstimates(float_aggregate_data, float_id=None):
     """Return the float's estimated energy use per dive (the 'energy' aggregate), in J.
@@ -2189,6 +2224,10 @@ def AggregateDiveData():
 
                 try:
                     WaveQcFloat(float_aggregate_data['wave'], float_aggregate_data['wave_spectra'], wave_times)
+                    rejected = WaveQcReject(float_aggregate_data['wave'], float_aggregate_data['wave_spectra'])
+                    if rejected:
+                        logger.debug('Wave spectra of float {} rejected by the float-level checks: dives {}'.format(
+                            float_id, ', '.join(str(d) for d in rejected)))
                 except Exception as exc:
                     errstr = 'Failed to quality-check the wave spectra of float {}'.format(float_id)
                     if hasattr(args, 'halt') and args.halt:
