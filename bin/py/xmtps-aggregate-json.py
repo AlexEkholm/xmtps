@@ -72,7 +72,7 @@ from yattag import Doc
 
 # local
 from FloatClasses import DateTime, Dive, File, Float, Gps, CompositePosition, PositionVector, Sbd
-from FloatClasses import FieldResetDives, ReadLaunchTimes, WaveQcFlag, WaveQcSort
+from FloatClasses import FieldResetDives, ReadLaunchTimes, WaveQcFlag, WaveQcSort, WaveQcWorst
 from EnergyModel import (ENERGY_COMPONENTS, ENERGY_PIE_ONLY, ENERGY_SECONDS_PER_YEAR, ENERGY_USABLE_FRACTION,
                          ENERGY_CONTROLLER_UNCERTAINTY, ENERGY_REMAINING_RECENT_DIVES,
                          ENERGY_VOLTAGE_FALL_FRACTION, PumpVoltageFallDive, RemainingCycles)
@@ -661,6 +661,9 @@ def WaveQcFloat(df_wave, df_wave_spectra, times):
     float_hv (ok), on every spectrum of the float: the median, over the spectra not flagged bad,
     of the H/V ratio (Sxx + Syy) / Szz of the displacement spectra summed over 0.06 to 0.30 Hz
     exceeds 2.
+    The flag is the worst of the dive's own flag (from the per-dive file, which includes a level
+    set by hand, reason manual) and the levels of these reasons; spectra the dive flags bad,
+    by hand or not, are not neighbours.
 
     Args:
         df_wave: the float's 'wave' table (dive, swh, qc_flag, qc_reasons, ...), one row per dive.
@@ -710,9 +713,13 @@ def WaveQcFloat(df_wave, df_wave_spectra, times):
                 for r in reasons:
                     r.append('float_hv')
 
+    # The flag is the worst of the dive's own (which includes a level set by hand, reason
+    # 'manual') and the levels of the reasons
+    dive_flags = [str(f) for f in df_wave['qc_flag']]
     reasons = [WaveQcSort(r) for r in reasons]
     df_wave['qc_reasons'] = [';'.join(r) for r in reasons]
-    df_wave['qc_flag'] = [WaveQcFlag(r) for r in reasons]
+    df_wave['qc_flag'] = [WaveQcWorst(f, WaveQcFlag([c for c in r if c != 'manual']))
+                          for f, r in zip(dive_flags, reasons)]
 
 def EnergyEstimates(float_aggregate_data, float_id=None):
     """Return the float's estimated energy use per dive (the 'energy' aggregate), in J.

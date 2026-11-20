@@ -720,17 +720,18 @@ Processing (`Wave.PostProcess`, defaults `freq_min` 0.0625 Hz, interpolation on,
 
 1. Copy the received spectra to the `raw_` attributes.
 2. Interpolate the six acceleration spectra onto `freq` (values outside the received band become 0).
-3. Weight every spectrum by 0 where `Szz_g` < 0.0005 g²/Hz (noise-floor mask) and by the low-frequency taper: 0 below f0, (1 − cos(π (f − f0) / w)) / 2 from f0 to f0 + w, 1 above, with f0 = 0.02622 Hz and w = 0.08951 Hz. The `_g` attributes keep the unweighted values.
+3. Weight every spectrum by 0 where `Szz_g` < 0.0005 g²/Hz (noise-floor mask) and by the low-frequency taper: 0 below f0, (1 − cos(π (f − f0) / w)) / 2 from f0 to f0 + w, 1 above, with f0 = 0.01866 Hz and w = 0.10105 Hz (WIMS user manual rev. 3.24; [0.02622, 0.08951] Hz before 2026-11-20). The `_g` attributes keep the unweighted values.
 4. Displacement spectrum = weight × g² / (2πf)⁴ × acceleration spectrum, with g = 9.80665 m/s².
 5. Smooth the six displacement spectra with a centered 3-point moving average.
 6. Quality-check the spectra of steps 3 to 5, all tests before any rejection (`qc_reasons`, `qc_flag`; table below), and reject the spectra flagged `bad` (set all six displacement spectra to `NaN`).
 7. a0 = Szz / π; a1 = Qzx / √(Szz (Sxx + Syy)); b1 = Qzy / √(Szz (Sxx + Syy)); a2 = (Sxx − Syy) / (Sxx + Syy); b2 = 2 Cxy / (Sxx + Syy); θ1 = atan2(a1, b1); θ2 = atan2(b2, −a2) / 2, flipped by 180° if it points away from θ1.
 8. If m0 > 0: compute `swh` and the periods; `mwd` is the mean of `theta1` weighted by √Szz over `freq_min` to 0.6 Hz (bins with `r1` `NaN` get no weight). The declination at the dive's surface fix is added when available. If m0 ≤ 0: the displacement spectra, coefficients, moments and statistics are `NaN`, the angles 0, and no declination is applied; spectra not already flagged `bad` are flagged `no_energy`. Spectra flagged `no_horizontal` get `mwd`, `theta1` and `theta2` `NaN` (`atan2(0, 0)` would give 0°, magnetic north).
 
-Quality reasons (`FloatClasses.WAVE_QC_REASONS`; frequencies on the `freq` grid). The first eight are set per dive by `Wave.PostProcess`; the last three need the float's other spectra and are set only in the aggregate `_wave` file (section 4.18).
+Quality reasons (`FloatClasses.WAVE_QC_REASONS`; frequencies on the `freq` grid). The first nine are set per dive by `Wave.PostProcess`; the last three need the float's other spectra and are set only in the aggregate `_wave` file (section 4.18).
 
 | Code | Test | Level |
 |---|---|---|
+| `manual` | the spectrum is listed in the manual QC file (below) | the level given there |
 | `no_spectra` | `slen` < 1, or the post-processing failed | bad |
 | `lf_accel` | `Szz_g`, `Sxx_g` or `Syy_g` > 0.09 g²/Hz at f ≤ 0.05 Hz | bad |
 | `max_accel` | `Szz_g`, `Sxx_g` or `Syy_g` > 0.3 g²/Hz at any f | bad |
@@ -743,7 +744,9 @@ Quality reasons (`FloatClasses.WAVE_QC_REASONS`; frequencies on the `freq` grid)
 | `hs_jump_minor` | the same ratio outside [1/1.65, 1.65], inside [1/2, 2] | ok |
 | `float_hv` | the float's median H/V ratio, (`Sxx` + `Syy`) / `Szz` summed over 0.06–0.30 Hz, over its spectra not flagged bad, > 2; set on every spectrum of the float | ok |
 
-The neighbours of `hs_jump` are up to 2 spectra before and 2 after, of the same float, not flagged bad, within ±2 days (times of the dives' surface fixes, `Dive.SurfaceFix`); the test runs only with at least 2 of them.
+The neighbours of `hs_jump` are up to 2 spectra before and 2 after, of the same float, not flagged bad (by hand or not), within ±2 days (times of the dives' surface fixes, `Dive.SurfaceFix`); the test runs only with at least 2 of them.
+
+Manual QC file (since 2026-11-20): `/data1/alamo/etc/wave_qc_manual.csv` (`FloatClasses.WAVE_QC_MANUAL_FILE`; `xmtps-list2json.py --wave-qc FILE` for another; template `etc/wave_qc_manual.csv` in the repository). One line per spectrum, `float,dive,qc_flag,note`: the float serial, the dive number, one of the five levels and free text (who, when, why; quoted if it contains commas). Lines starting with `#`, blank lines and the header line are ignored; a later line for the same float and dive replaces an earlier one. An entry adds the reason `manual` at its level; the flag stays the worst level of all reasons, so an entry can lower a spectrum's flag but never raise it. At `bad` the spectra are rejected like the automatic bad criteria (displacement spectra `NaN`, no wave parameters), in the per-dive and the aggregate files. A malformed line, a level not among the five, an unknown float (no listing directory) or an unknown dive (no listing file) is logged as an error and skipped. A change takes effect when the float is next reprocessed: `xmtps-list2json.py -f` on its listing directory, then `xmtps-aggregate-json.py -f` on its dives directory (only the floats in the file need it).
 
 The declination uses the first valid fix with `idx` 0 or 2, else the first valid fix of the dive (`Dive.SurfaceFix`). A dive without a valid fix uses the latest valid fix of the most recent earlier dive with dive number ≥ 0 (`PreviousValidFix` in `xmtps-list2json.py`).
 
@@ -1176,7 +1179,7 @@ One row per dive ≥ 0 with a `Wave` of `slen` ≥ 1, in read order. Values from
 | `period_peak`, `period_avg`, `period_zero` | float | s |
 | `swh` | float | m |
 | `slen` | int | samples, FFT segment length |
-| `qc_flag` | string | worst level among `qc_reasons` (section 3.15), `"good"` when none. Since 2026-11-20. |
+| `qc_flag` | string | worst of the dive's `qc_flag` (which includes a level set by hand, reason `manual`) and the levels of the float-level codes (section 3.15), `"good"` when none. Since 2026-11-20. |
 | `qc_reasons` | string | the dive's `qc_reasons` and the float-level codes `hs_jump`, `hs_jump_minor`, `float_hv`, in table order, joined with `;`; `""` when none. Since 2026-11-20. |
 | `fe_hz` | float | Hz, true accelerometer sample rate: `fbase` / `fdiv` when the per-dive file has them, else `fsam`, halved when the upper half of `raw_Szz_g` is all zero and the lower half is not (every-other-bin firmware, [xmessage-format.md](xmessage-format.md) C.3.8). Since 2026-11-05. |
 

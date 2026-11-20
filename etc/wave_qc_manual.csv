@@ -1,0 +1,27 @@
+# Wave spectra quality flags set by hand (WIMS floats).
+#
+# Installed as /data1/alamo/etc/wave_qc_manual.csv and read by xmtps-list2json.py (option --wave-qc).
+# One line per spectrum:
+#
+#   float,dive,qc_flag,note
+#
+#   float    float serial number (WHOI ID), e.g. 9309
+#   dive     dive number of the spectrum, e.g. 85
+#   qc_flag  good, probably good, ok, probably bad or bad
+#   note     free text: who set it, when and why (quote it if it contains commas)
+#
+# Each entry adds the reason 'manual' at the level given. A spectrum's qc_flag is the worst level
+# among all its reasons, so an entry can lower the flag but never raise it. At 'bad' the spectra
+# are rejected like the automatic bad criteria: the displacement spectra are NaN and no wave
+# parameters are reported, in the per-dive and the aggregate JSON files.
+#
+# Lines starting with '#' and blank lines are ignored. An unknown float or dive, a level not in the
+# list above, or a malformed line is reported as an error and skipped. A later line for the same
+# float and dive replaces an earlier one.
+#
+# Changes take effect when the float is next reprocessed: xmtps-list2json.py -f on its listings,
+# then xmtps-aggregate-json.py -f on its dives.
+#
+# Example (not active):
+# 9309,85,bad,"XY 2026-11-20: Hs twice NDBC 41047, direction 70 deg off"
+float,dive,qc_flag,note

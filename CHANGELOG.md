@@ -19,10 +19,23 @@ Python tools:
   above 2 (ok). All tests run before any rejection, so every reason that applies is listed.
 - Vertical-only spectra (`no_horizontal`) have no direction: `mwd`, `theta1` and `theta2` are `NaN`
   instead of 0° magnetic plus the declination (float 9113).
+- Wave spectra quality flags set by hand: `/data1/alamo/etc/wave_qc_manual.csv`
+  (`float,dive,qc_flag,note`; template `etc/wave_qc_manual.csv`), read by `xmtps-list2json.py`
+  (`--wave-qc FILE` for another file). Each entry adds the reason `manual` at its level, which can
+  lower a spectrum's flag but not raise it; at `bad` the spectra are rejected like the automatic
+  criteria and are not `hs_jump` neighbours. Malformed lines, unknown levels, floats and dives are
+  logged as errors and skipped. Takes effect when the float is next reprocessed.
+- WIMS spectra low-frequency correction (WIMS user manual rev. 3.24): the cosine taper refitted
+  with the quality flags, [f0, w] = [0.01866, 0.10105] Hz (was [0.02622, 0.08951] Hz; the taper
+  reaches 1 at 0.1197 Hz), to the same-quadrant Erin (NDBC 41047, A-DWSD) and Lowell (A-DWSD)
+  colocations without the spectra flagged bad or probably bad (including the manual entries),
+  storm center on the spline: RMS 0.064. The quality flags that depend on the corrected spectra
+  (`lf_energy`, `lf_energy_minor`, `hs_jump`) shift slightly.
 
 Documentation:
 
-- JSON file format: the quality flag and reasons (sections 3.15 and 4.18).
+- JSON file format: the quality flag and reasons (sections 3.15 and 4.18), and the manual QC
+  file.
 
 ## 2026-11-17
 

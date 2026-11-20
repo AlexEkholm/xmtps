@@ -22,6 +22,7 @@ from dateutil import parser
 from geographiclib.geodesic import Geodesic
 import math
 import numpy as np
+import os
 import pytz
 import re
 from scipy.interpolate import interp1d
@@ -681,12 +682,13 @@ class Dive:
                 return g
         return fixes[0] if fixes else None
 
-    def PostProcess(self, fallback_fix: 'Gps' = None):
+    def PostProcess(self, fallback_fix: 'Gps' = None, wave_qc_manual: str = None):
         """Post-process every part of the dive and set the drift sample times, before pickling.
 
         The wave spectra are post-processed with the position of SurfaceFix(), for the magnetic
         declination; if the dive has no valid fix, fallback_fix (the most recent valid fix of
-        the float, from an earlier dive) is used instead, if given.
+        the float, from an earlier dive) is used instead, if given. wave_qc_manual is the
+        quality level set by hand for the dive's wave spectra (manual QC file), or None.
 
         Drift sample times are the measured ones if every sample has one (see
         Drift.HasMeasuredDatetimes); otherwise, if there are ascent and descent samples, they are
@@ -704,9 +706,10 @@ class Dive:
             if fix is None and fallback_fix is not None and fallback_fix.is_valid():
                 fix = fallback_fix
             if fix is None:
-                self.wave.PostProcess()
+                self.wave.PostProcess(manual_flag=wave_qc_manual)
             else:
-                self.wave.PostProcess(lat=fix.lat, lon=fix.lon, dt_epoch=fix.dt_epoch)
+                self.wave.PostProcess(lat=fix.lat, lon=fix.lon, dt_epoch=fix.dt_epoch,
+                                      manual_flag=wave_qc_manual)
         else:
             del self.wave
         if self.microstructure is not None:
@@ -1341,6 +1344,8 @@ class Surface:
 # set by xmtps-aggregate-json.py (WaveQcFloat).
 WAVE_QC_LEVELS = ['good', 'probably good', 'ok', 'probably bad', 'bad']
 WAVE_QC_REASONS = {
+    'manual':           'bad',              # set by hand in the manual QC file (WAVE_QC_MANUAL_FILE),
+                                            # at the level given there; 'bad' is only the default
     'no_spectra':       'bad',              # no spectra (slen < 1)
     'lf_accel':         'bad',              # acceleration > 0.09 g^2/Hz at or below 0.05 Hz
     'max_accel':        'bad',              # acceleration > 0.3 g^2/Hz
@@ -1356,13 +1361,65 @@ WAVE_QC_REASONS = {
 }
 
 
-def WaveQcFlag(reasons):
+def WaveQcFlag(reasons, manual_level: str = None):
     """Return the quality level of a wave spectrum flagged for reasons (codes of WAVE_QC_REASONS):
-    the worst level among them, or 'good' if there are none."""
+    the worst level among them, or 'good' if there are none. The level of the code 'manual' is
+    manual_level when given (one of WAVE_QC_LEVELS), else that of WAVE_QC_REASONS."""
     worst = 0
     for code in reasons:
-        worst = max(worst, WAVE_QC_LEVELS.index(WAVE_QC_REASONS[code]))
+        level = manual_level if code == 'manual' and manual_level else WAVE_QC_REASONS[code]
+        worst = max(worst, WAVE_QC_LEVELS.index(level))
     return WAVE_QC_LEVELS[worst]
+
+
+def WaveQcWorst(*levels):
+    """Return the worst of the quality levels given (WAVE_QC_LEVELS; unknown ones are ignored),
+    or 'good' if there are none."""
+    known = [WAVE_QC_LEVELS.index(lv) for lv in levels if lv in WAVE_QC_LEVELS]
+    return WAVE_QC_LEVELS[max(known)] if known else 'good'
+
+
+# File of wave spectra quality flags set by hand: one line per spectrum, 'float,dive,qc_flag,note'
+# (qc_flag one of WAVE_QC_LEVELS, note free text); lines starting with '#', blank lines and the
+# column header line ('float,dive,qc_flag,note') are skipped. A template is in etc/ of the repo. Read by xmtps-list2json.py (ReadWaveQcManual) and applied by Wave.PostProcess().
+WAVE_QC_MANUAL_FILE = '/data1/alamo/etc/wave_qc_manual.csv'
+
+
+def ReadWaveQcManual(fpath, logger = None):
+    """Read the manual wave QC file (format of WAVE_QC_MANUAL_FILE).
+
+    A malformed line (not four fields, float or dive not an integer, or a level not in
+    WAVE_QC_LEVELS) is logged as an error and skipped; a later line for the same float and dive
+    replaces an earlier one. A missing file gives no entries.
+
+    Returns:
+        dict (float, dive) -> (qc_flag, note), float and dive as int.
+    """
+    import csv
+    entries = {}
+    if not fpath or not os.path.isfile(fpath):
+        return entries
+    with open(fpath, newline='', encoding='utf-8', errors='replace') as f:
+        for num, row in enumerate(csv.reader(f), 1):
+            if not row or not ''.join(row).strip() or row[0].lstrip().startswith('#'):
+                continue
+            if row[0].strip().lower() == 'float':        # the column header line
+                continue
+            fields = [x.strip() for x in row]
+            if len(fields) > 4:                      # an unquoted comma in the note
+                fields = fields[:3] + [','.join(fields[3:])]
+            try:
+                if len(fields) < 3:
+                    raise ValueError('expected float,dive,qc_flag,note')
+                float_id, dive, level = int(fields[0]), int(fields[1]), fields[2].lower()
+                if level not in WAVE_QC_LEVELS:
+                    raise ValueError('qc_flag {!r} is not one of {}'.format(fields[2], ', '.join(WAVE_QC_LEVELS)))
+            except ValueError as exc:
+                if logger is not None:
+                    logger.error('{} line {}: {}; skipped: {!r}'.format(fpath, num, exc, ','.join(row)))
+                continue
+            entries[(float_id, dive)] = (level, fields[3] if len(fields) > 3 else '')
+    return entries
 
 
 def WaveQcSort(reasons):
@@ -1525,7 +1582,8 @@ class Wave:
         self.qc_reasons     = []                # Reason codes (WAVE_QC_REASONS)
 
     def PostProcess(self, freq_min: float = 0.0625, interpolate = True, rolling_average: int = 3,
-                    lat: float = np.nan, lon: float = np.nan, dt_epoch: float = None):
+                    lat: float = np.nan, lon: float = np.nan, dt_epoch: float = None,
+                    manual_flag: str = None):
         """Compute displacement spectra, directional coefficients and wave statistics.
 
         If slen < 1, only flags the spectra 'bad' (reason no_spectra). Otherwise:
@@ -1576,6 +1634,9 @@ class Wave:
             rolling_average: rolling average window, in bins; 1 or less for none.
             lat, lon, dt_epoch: position (decimal degrees) and time (seconds since epoch) of the
                 measurement, for the magnetic declination.
+            manual_flag: quality level set by hand for these spectra (manual QC file,
+                WAVE_QC_MANUAL_FILE), or None. Adds the reason 'manual' at that level; at 'bad'
+                the spectra are rejected like the automatic bad criteria.
 
         Raises:
             Exception: 'Failed to post-process wave data.' if any step fails.
@@ -1596,22 +1657,26 @@ class Wave:
         F_INTER_STEP = 0.005 # Hz
         F_INTER_MAX  = 1.250 # Hz
         
-        # Low-frequency response correction (WIMS user manual rev. 3.22), a cosine taper [f0, w]
-        # in Hz: fitted to the Hurricane Erin (NDBC 41047, A-DWSD) and Hurricane Lowell (A-DWSD)
-        # colocations, without floats 9298 and 9310, using only pairs in the same storm quadrant
-        # within 600 km of the center or both beyond 600 km, and without A-DWSD reference
-        # outliers; storm center and direction of motion from a cubic spline through the best track.
-        ccoef = [0.02622, 0.08951]
+        # Low-frequency response correction (WIMS user manual rev. 3.24), a cosine taper [f0, w] in
+        # Hz: refitted to the same-quadrant Hurricane Erin (NDBC 41047, A-DWSD) and Hurricane
+        # Lowell (A-DWSD) colocations, excluding spectra flagged bad or probably bad (including
+        # wave_qc_manual.csv), storm center on the spline (fit RMS 0.064).
+        ccoef = [0.01866, 0.10105]
     
         # spectra peak
         peak_zz  = 0
         peak_idx = -1
         
+        # A flag set by hand (manual QC file) is the reason 'manual', at its level
+        if manual_flag is not None and manual_flag not in WAVE_QC_LEVELS:
+            manual_flag = None
+        manual = ['manual'] if manual_flag else []
+
         try: 
         
             if self.slen < 1:
-                self.qc_reasons = ['no_spectra']
-                self.qc_flag    = WaveQcFlag(self.qc_reasons)
+                self.qc_reasons = WaveQcSort(manual + ['no_spectra'])
+                self.qc_flag    = WaveQcFlag(self.qc_reasons, manual_flag)
                 return
 
             # copy raw spectra
@@ -1777,8 +1842,8 @@ class Wave:
             if not np.any(np.isfinite(horizontal) & (horizontal != 0)):
                 reasons.append('no_horizontal')
 
-            self.qc_reasons = WaveQcSort(reasons)
-            self.qc_flag    = WaveQcFlag(self.qc_reasons)
+            self.qc_reasons = WaveQcSort(manual + reasons)
+            self.qc_flag    = WaveQcFlag(self.qc_reasons, manual_flag)
 
             # Reject the spectra flagged bad
 
@@ -1915,7 +1980,7 @@ class Wave:
                 # No energy: rejected for this reason unless already rejected for another
                 if self.qc_flag != 'bad':
                     self.qc_reasons = WaveQcSort(self.qc_reasons + ['no_energy'])
-                    self.qc_flag    = WaveQcFlag(self.qc_reasons)
+                    self.qc_flag    = WaveQcFlag(self.qc_reasons, manual_flag)
 
                 # self.freq[:]        = np.nan
                 self.Szz[:]         = np.nan
@@ -2006,8 +2071,8 @@ class Wave:
             
         except:
 
-            self.qc_reasons = ['no_spectra']
-            self.qc_flag    = WaveQcFlag(self.qc_reasons)
+            self.qc_reasons = WaveQcSort(manual + ['no_spectra'])
+            self.qc_flag    = WaveQcFlag(self.qc_reasons, manual_flag)
             raise Exception('Failed to post-process wave data.')
 
 class MicrostructureChannel:

@@ -38,6 +38,7 @@ import re
 
 # local
 from FloatClasses import DateTime, Dive, Drift, FloatId, Gps, Sbd, SbdSession, SbdType, Profile, Wave, Microstructure
+from FloatClasses import ReadWaveQcManual, WAVE_QC_MANUAL_FILE
 import RhoLUT
 
 """
@@ -128,6 +129,14 @@ parser.add_argument(
     dest='exclude',
     help='exclude paths that match regular expression REGEX',
     metavar='REGEX')
+
+parser.add_argument(
+    '--wave-qc',
+    default=WAVE_QC_MANUAL_FILE,
+    dest='wave_qc',
+    help='read wave spectra quality flags set by hand from FILE (lines float,dive,qc_flag,note; '
+         'default=\'{}\', none if it does not exist)'.format(WAVE_QC_MANUAL_FILE),
+    metavar='FILE')
 
 parser.add_argument(
     # action='append',
@@ -562,6 +571,52 @@ def PreviousValidFix(fpath_list, dive_num):
         if fixes:
             return max(fixes, key = lambda g: g.dt_epoch)
     return None
+
+def CheckWaveQcManual(entries, fpath, paths_in):
+    """Check the manual wave QC entries (ReadWaveQcManual) against the listing directories.
+
+    The listing root is each input directory's parent when the directory is named by a serial
+    (<root>/<serial>), else the directory itself. An entry whose float has no directory in any
+    root, or (for the floats being processed) whose dive has no listing file, is logged as an
+    error and removed from entries, so that it is skipped.
+    """
+    if not entries:
+        return
+    roots, processed = set(), set()
+    for p in paths_in:
+        p = os.path.normpath(p)
+        if os.path.isfile(p):
+            p = os.path.dirname(p)
+        if not os.path.isdir(p):
+            continue
+        if os.path.basename(p).isdigit():
+            roots.add(os.path.dirname(p))
+            processed.add(int(os.path.basename(p)))
+        else:
+            roots.add(p)
+            processed.update(int(d) for d in os.listdir(p) if d.isdigit())
+    dives = {}
+    for (float_id, dive) in sorted(entries):
+        fdir = next((os.path.join(r, str(float_id)) for r in sorted(roots)
+                     if os.path.isdir(os.path.join(r, str(float_id)))), None)
+        if fdir is None:
+            logger.error('{}: unknown float {} (no listing directory); entry for dive {} skipped'.format(
+                fpath, float_id, dive))
+            del entries[(float_id, dive)]
+            continue
+        if float_id not in processed:
+            continue
+        if float_id not in dives:
+            dives[float_id] = set()
+            for name in os.listdir(fdir):
+                m = re.match(r'^lis[0-9]+-(-?[0-9]+)\.txt$', name)
+                if m:
+                    dives[float_id].add(int(m.group(1)))
+        if dive not in dives[float_id]:
+            logger.error('{}: float {} has no dive {} (no listing file); entry skipped'.format(
+                fpath, float_id, dive))
+            del entries[(float_id, dive)]
+
 
 def ProcessListingFile(fpath_list):
     """Parse one listing file into a Dive object and write its JSON file.
@@ -1293,7 +1348,16 @@ def ProcessListingFile(fpath_list):
                 if fallback_fix is not None:
                     logger.debug('No valid fix; using the fix of {} for the magnetic declination'.format(
                         fallback_fix.dt_str))
-            dive_data.PostProcess(fallback_fix = fallback_fix)
+            manual = None
+            if dive_data.wave is not None:
+                try:
+                    manual = wave_qc_manual.get((int(dive_data.id.whoi), int(dive_data.dive_num)))
+                except (TypeError, ValueError):
+                    manual = None
+                if manual is not None:
+                    logger.debug('Wave spectra set {} by hand ({})'.format(manual[0], manual[1]))
+            dive_data.PostProcess(fallback_fix = fallback_fix,
+                                  wave_qc_manual = manual[0] if manual is not None else None)
         
         except: 
             
@@ -1484,6 +1548,10 @@ try:
         args.output = '.'
     elif not os.path.isdir(args.output):
         logger.error('Output directory not found: ' + args.output)
+
+    # Wave spectra quality flags set by hand
+    wave_qc_manual = ReadWaveQcManual(args.wave_qc, logger)
+    CheckWaveQcManual(wave_qc_manual, args.wave_qc, args.path_in)
 
     # Iterate over directories:
     for path in args.path_in:
