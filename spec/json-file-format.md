@@ -708,7 +708,7 @@ wvs  9303  483    0   0.0000    +0.00006    +0.00040    +0.00089    +0.00023    
 | `moment` | list of 3 floats | m², m²·Hz, m²·Hz² | Spectral moments m0, m1, m2 of `Szz`, summed up to the first `NaN` bin, 5 decimals. |
 | `swh` | float | m | Significant wave height 4√m0, 2 decimals. |
 | `mwd` | int | deg | Mean wave direction, toward which waves travel, [0, 360). `NaN` (float) when the spectra are rejected (0 before 2026-11-20) and for vertical-only spectra (`no_horizontal`, since 2026-11-20). |
-| `qc_flag` | string | | Quality of the spectra: `"good"`, `"probably good"`, `"ok"`, `"probably bad"` or `"bad"`, the worst level among `qc_reasons` (`"good"` when there are none). Since 2026-11-20. |
+| `qc_flag` | string | | Quality of the spectra: `"good"`, `"probably good"`, `"suspect"` (`"ok"` before 2026-11-24), `"probably bad"` or `"bad"`, the worst level among `qc_reasons` (`"good"` when there are none). Since 2026-11-20. |
 | `qc_reasons` | list of string | | The reason codes below that apply, in table order; empty when good. Since 2026-11-20. |
 | `declination` | float | deg, east positive | Magnetic declination added to the directions (IGRF via `ppigrf`). `NaN` if none was applied. |
 | `direction_ref` | string | | `"true"` when the declination was applied, otherwise `"magnetic"`. |
@@ -725,7 +725,7 @@ Processing (`Wave.PostProcess`, defaults `freq_min` 0.0625 Hz, interpolation on,
 5. Smooth the six displacement spectra with a centered 3-point moving average.
 6. Quality-check the spectra of steps 3 to 5, all tests before any rejection (`qc_reasons`, `qc_flag`; table below), and reject the spectra flagged `bad` or `probably bad` (`FloatClasses.WAVE_QC_REJECT`, since 2026-11-20; before, `bad` only) (set all six displacement spectra to `NaN`).
 7. a0 = Szz / π; a1 = Qzx / √(Szz (Sxx + Syy)); b1 = Qzy / √(Szz (Sxx + Syy)); a2 = (Sxx − Syy) / (Sxx + Syy); b2 = 2 Cxy / (Sxx + Syy); θ1 = atan2(a1, b1); θ2 = atan2(b2, −a2) / 2, flipped by 180° if it points away from θ1; both `NaN` where `r1` is `NaN` (bins without a direction).
-8. If m0 > 0: compute `swh` and the periods; `mwd` is the mean of `theta1` weighted by √Szz over `freq_min` to 0.6 Hz (bins with `r1` `NaN` are skipped; `NaN` if no bin has a direction). The declination at the dive's surface fix is added when available. If m0 ≤ 0: the displacement spectra, coefficients, moments and statistics are `NaN`, the angles `NaN` (0 before 2026-11-20), and no declination is applied; spectra not already flagged `bad` are flagged `no_energy`. Spectra flagged `no_horizontal` get `mwd`, `theta1` and `theta2` `NaN` (`atan2(0, 0)` would give 0°, magnetic north).
+8. If m0 > 0: compute `swh` and the periods; `mwd` is the mean of `theta1` weighted by √Szz over `freq_min` to 0.6 Hz (bins with `r1` `NaN` are skipped; `NaN` if no bin has a direction). The declination at the dive's surface fix is added when available. If m0 ≤ 0: the displacement spectra, coefficients, moments and statistics are `NaN`, the angles `NaN` (0 before 2026-11-20), and no declination is applied; spectra not already rejected are flagged `no_energy` (`probably bad`). Spectra flagged `no_horizontal` get `mwd`, `theta1` and `theta2` `NaN` (`atan2(0, 0)` would give 0°, magnetic north).
 
 Quality reasons (`FloatClasses.WAVE_QC_REASONS`; frequencies on the `freq` grid). The first nine are set per dive by `Wave.PostProcess`; the last three need the float's other spectra and are set only in the aggregate `_wave` file (section 4.18).
 
@@ -736,13 +736,14 @@ Quality reasons (`FloatClasses.WAVE_QC_REASONS`; frequencies on the `freq` grid)
 | `lf_accel` | `Szz_g`, `Sxx_g` or `Syy_g` > 0.09 g²/Hz at f ≤ 0.05 Hz | bad |
 | `max_accel` | `Szz_g`, `Sxx_g` or `Syy_g` > 0.3 g²/Hz at any f | bad |
 | `max_disp` | `Szz`, `Sxx` or `Syy` > 300 m²/Hz, or `Szz` `NaN`, at f ≥ `freq_min` | bad |
-| `lf_energy` | the share of the `Szz` energy in 0.04–0.48 Hz that lies below 0.06 Hz > 0.30 | bad |
-| `no_energy` | m0 ≤ 0, for spectra not flagged bad for another reason | bad |
+| `lf_energy` | the share of the `Szz` energy in 0.04–0.48 Hz that lies below 0.06 Hz > 0.30 | probably bad (bad before 2026-11-24) |
+| `no_energy` | m0 ≤ 0, for spectra not rejected for another reason | probably bad (bad before 2026-11-24) |
+| `long_period` | the peak period of `Szz` (the bin of its maximum, as `period_peak`) > 20 s (`WAVE_QC_PEAK_PERIOD_MAX_S`); mostly low-frequency noise | probably bad (since 2026-11-24) |
 | `lf_energy_minor` | the same share as `lf_energy`, in (0.15, 0.30] | probably good |
-| `no_horizontal` | `Sxx_g` + `Syy_g` zero or `NaN` at every f in 0.06–0.30 Hz (vertical-only spectra, which some older floats report); no directions | ok |
+| `no_horizontal` | `Sxx_g` + `Syy_g` zero or `NaN` at every f in 0.06–0.30 Hz (vertical-only spectra, which some older floats report); no directions | suspect |
 | `hs_jump` | `swh` / median `swh` of its neighbours outside [1/2, 2] | probably bad |
-| `hs_jump_minor` | the same ratio outside [1/1.65, 1.65], inside [1/2, 2] | ok |
-| `float_hv` | the float's median H/V ratio, (`Sxx` + `Syy`) / `Szz` summed over 0.06–0.30 Hz, over its spectra not flagged bad, > 2; set on every spectrum of the float | ok |
+| `hs_jump_minor` | the same ratio outside [1/1.65, 1.65], inside [1/2, 2] | suspect |
+| `float_hv` | the float's median H/V ratio, (`Sxx` + `Syy`) / `Szz` summed over 0.06–0.30 Hz, over its spectra not flagged bad, > 2; set on every spectrum of the float | suspect |
 
 The neighbours of `hs_jump` are up to 2 spectra before and 2 after, of the same float, not flagged bad (by hand or not), within ±2 days (times of the dives' surface fixes, `Dive.SurfaceFix`); the test runs only with at least 2 of them.
 

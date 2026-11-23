@@ -654,11 +654,11 @@ def WaveQcFloat(df_wave, df_wave_spectra, times):
     """Add the float-level quality checks to the per-spectrum ones of the aggregate wave table and
     set its qc_flag and qc_reasons columns (in place; see FloatClasses.WAVE_QC_REASONS).
 
-    hs_jump (probably bad) and hs_jump_minor (ok): the ratio of the spectrum's Hs (swh) to the
+    hs_jump (probably bad) and hs_jump_minor (suspect): the ratio of the spectrum's Hs (swh) to the
     median Hs of its neighbours is outside [1/2, 2], or outside [1/1.65, 1.65] but inside
     [1/2, 2]. The neighbours are up to 2 spectra before and 2 after it, not flagged bad, within
     2 days of its time; the test runs only with at least 2 of them.
-    float_hv (ok), on every spectrum of the float: the median, over the spectra not flagged bad,
+    float_hv (suspect), on every spectrum of the float: the median, over the spectra not flagged bad,
     of the H/V ratio (Sxx + Syy) / Szz of the displacement spectra summed over 0.06 to 0.30 Hz
     exceeds 2.
     The flag is the worst of the dive's own flag (from the per-dive file, which includes a level

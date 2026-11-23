@@ -1342,7 +1342,11 @@ class Surface:
 # order they are listed, with the level each sets. The first six are set per spectrum by
 # Wave.PostProcess(); hs_jump, hs_jump_minor and float_hv need the float's other spectra and are
 # set by xmtps-aggregate-json.py (WaveQcFloat).
-WAVE_QC_LEVELS = ['good', 'probably good', 'ok', 'probably bad', 'bad']
+WAVE_QC_LEVELS = ['good', 'probably good', 'suspect', 'probably bad', 'bad']
+# Former names of the levels, still accepted in the manual QC file ('ok' before 2026-11-24)
+WAVE_QC_LEVEL_ALIASES = {'ok': 'suspect'}
+# Longest peak period of a kept spectrum (s): longer peaks are mostly low-frequency noise (long_period)
+WAVE_QC_PEAK_PERIOD_MAX_S = 20.0
 # Levels whose spectra are rejected: displacement spectra and wave parameters NaN (per dive in
 # Wave.PostProcess; for the float-level reasons in xmtps-aggregate-json.py, WaveQcReject)
 WAVE_QC_REJECT = ('bad', 'probably bad')
@@ -1353,14 +1357,15 @@ WAVE_QC_REASONS = {
     'lf_accel':         'bad',              # acceleration > 0.09 g^2/Hz at or below 0.05 Hz
     'max_accel':        'bad',              # acceleration > 0.3 g^2/Hz
     'max_disp':         'bad',              # displacement > 300 m^2/Hz at or above freq_min, or Szz NaN
-    'lf_energy':        'bad',              # low-frequency share of the Szz energy > 0.30
-    'no_energy':        'bad',              # m0 of Szz not positive (spectra not otherwise bad)
+    'lf_energy':        'probably bad',     # low-frequency share of the Szz energy > 0.30
+    'no_energy':        'probably bad',     # m0 of Szz not positive (spectra not otherwise rejected)
+    'long_period':      'probably bad',     # peak period of Szz longer than WAVE_QC_PEAK_PERIOD_MAX_S
     'lf_energy_minor':  'probably good',    # the same share in (0.15, 0.30]
-    'no_horizontal':    'ok',               # no horizontal spectra in 0.06-0.30 Hz (vertical only:
+    'no_horizontal':    'suspect',             # no horizontal spectra in 0.06-0.30 Hz (vertical only:
                                             # no directions)
     'hs_jump':          'probably bad',     # Hs / median Hs of its neighbours outside [1/2, 2]
-    'hs_jump_minor':    'ok',               # the same ratio outside [1/1.65, 1.65]
-    'float_hv':         'ok',               # the float's median H/V ratio > 2
+    'hs_jump_minor':    'suspect',             # the same ratio outside [1/1.65, 1.65]
+    'float_hv':         'suspect',             # the float's median H/V ratio > 2
 }
 
 
@@ -1415,6 +1420,7 @@ def ReadWaveQcManual(fpath, logger = None):
                 if len(fields) < 3:
                     raise ValueError('expected float,dive,qc_flag,note')
                 float_id, dive, level = int(fields[0]), int(fields[1]), fields[2].lower()
+                level = WAVE_QC_LEVEL_ALIASES.get(level, level)
                 if level not in WAVE_QC_LEVELS:
                     raise ValueError('qc_flag {!r} is not one of {}'.format(fields[2], ', '.join(WAVE_QC_LEVELS)))
             except ValueError as exc:
@@ -1607,9 +1613,10 @@ class Wave:
            lf_accel (bad) if any acceleration auto-spectrum exceeds 0.09 g^2/Hz at or below
            0.05 Hz (low-frequency noise); max_accel (bad) if one exceeds 0.3 g^2/Hz anywhere;
            max_disp (bad) if any displacement auto-spectrum at or above freq_min exceeds
-           300 m^2/Hz or the vertical one is NaN; lf_energy (bad) if more than 0.30 of the Szz
-           energy in 0.04 to 0.48 Hz lies below 0.06 Hz, lf_energy_minor (probably good) if more
-           than 0.15; no_horizontal (ok) if the horizontal acceleration spectra Sxx_g + Syy_g are
+           300 m^2/Hz or the vertical one is NaN; lf_energy (probably bad) if more than 0.30 of
+           the Szz energy in 0.04 to 0.48 Hz lies below 0.06 Hz, lf_energy_minor (probably good)
+           if more than 0.15; long_period (probably bad) if the peak period of Szz (the bin of its
+           maximum, as in step 8) is longer than WAVE_QC_PEAK_PERIOD_MAX_S (20 s); no_horizontal (suspect) if the horizontal acceleration spectra Sxx_g + Syy_g are
            zero or NaN at every frequency in 0.06 to 0.30 Hz (vertical-only spectra). Reject the
            spectra flagged bad or probably bad (WAVE_QC_REJECT; set all displacement spectra to
            NaN).
@@ -1627,8 +1634,8 @@ class Wave:
            lat, lon and dt_epoch is available (IGRF, ppigrf), it is added to the directions,
            which are then referenced to true north (direction_ref 'true'); otherwise they stay
            referenced to magnetic north. Angles are converted to whole degrees in [0, 360). If m0 is not positive, the spectra, coefficients, moments and
-           statistics are set to NaN, the angles too, and spectra not already flagged bad
-           are flagged no_energy (bad). Spectra flagged no_horizontal have no
+           statistics are set to NaN, the angles too, and spectra not already rejected are
+           flagged no_energy (probably bad). Spectra flagged no_horizontal have no
            direction: mwd, theta1 and theta2 are NaN.
         9. Round everything and convert the arrays to lists for pickling.
 
@@ -1840,6 +1847,14 @@ class Wave:
                     reasons.append('lf_energy')
                 elif share > 0.15:
                     reasons.append('lf_energy_minor')
+
+            # Long peak period: the bin of the maximum of Szz (as period_peak, step 8) below
+            # 1 / WAVE_QC_PEAK_PERIOD_MAX_S, mostly low-frequency noise rather than swell
+            szz = np.asarray(self.Szz, dtype=np.double)
+            if np.any(np.isfinite(szz) & (szz > 0)):
+                i_peak = int(np.nanargmax(np.where(np.isfinite(szz), szz, -np.inf)))
+                if 1 / freq[i_peak] > WAVE_QC_PEAK_PERIOD_MAX_S + 1e-6:
+                    reasons.append('long_period')
 
             # Vertical-only spectra: no horizontal acceleration anywhere in 0.06 to 0.30 Hz
             band = (freq >= 0.06 - eps) & (freq <= 0.30 + eps)

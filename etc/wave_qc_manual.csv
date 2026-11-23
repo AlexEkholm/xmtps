@@ -7,7 +7,7 @@
 #
 #   float    float serial number (WHOI ID), e.g. 9309
 #   dive     dive number of the spectrum, e.g. 85
-#   qc_flag  good, probably good, ok, probably bad or bad
+#   qc_flag  good, probably good, suspect, probably bad or bad ('ok' is read as suspect)
 #   note     free text: who set it, when and why (quote it if it contains commas)
 #
 # Each entry adds the reason 'manual' at the level given. A spectrum's qc_flag is the worst level

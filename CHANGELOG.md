@@ -3,6 +3,26 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-24
+
+Python tools:
+
+- WIMS spectra quality flags (WIMS user manual rev. 3.25): `lf_energy` and `no_energy` are at
+  level `probably bad` (were `bad`); both levels are rejected, so the same spectra are rejected,
+  but `bad` is left for the spectra that cannot be used at all. New reason `long_period`
+  (`probably bad`): the peak period of `Szz` (the bin of its maximum, as `period_peak`) longer
+  than 20 s (`WAVE_QC_PEAK_PERIOD_MAX_S`), mostly low-frequency noise rather than swell; it is
+  checked before the rejection, with the other per-dive reasons. 96 entries of the manual QC
+  file that it now catches were removed (the spectra with long peak periods set probably bad by
+  hand on 2026-11-23, and 9245 dives 87 and 88).
+- The QC level `ok` is renamed `suspect` (`no_horizontal`, `hs_jump_minor`, `float_hv`); `ok`
+  is still read as `suspect` in the manual QC file (`WAVE_QC_LEVEL_ALIASES`).
+- The WIMS floats were reprocessed.
+
+Documentation:
+
+- JSON file format: the levels and the new reason.
+
 ## 2026-11-23
 
 Python tools:
