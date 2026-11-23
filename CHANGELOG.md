@@ -3,6 +3,23 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-23
+
+Python tools:
+
+- WIMS spectra low-frequency correction (WIMS user manual rev. 3.25): the cosine taper refitted
+  to the colocated pairs whose WIMS and reference positions are in the same or adjacent octant of
+  the storm (45° sectors relative to its direction of motion) on the same side of the storm
+  track, or both more than 600 km from every storm center, instead of the same quadrant:
+  [f0, w] = [0.01817, 0.10202] Hz (was [0.01866, 0.10105] Hz; the taper reaches 1 at 0.1202 Hz,
+  and is 0.222 at 0.05 Hz, was 0.219), from 787 Erin NDBC 41047, 883 Erin A-DWSD and 9547 Lowell
+  A-DWSD pairs, without the spectra flagged bad or probably bad (build 3446): RMS 0.064. The
+  WIMS floats were reprocessed.
+
+Documentation:
+
+- JSON file format and README: the new coefficients.
+
 ## 2026-11-20
 
 Python tools:
