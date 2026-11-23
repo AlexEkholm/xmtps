@@ -720,7 +720,7 @@ Processing (`Wave.PostProcess`, defaults `freq_min` 0.0625 Hz, interpolation on,
 
 1. Copy the received spectra to the `raw_` attributes.
 2. Interpolate the six acceleration spectra onto `freq` (values outside the received band become 0).
-3. Weight every spectrum by 0 where `Szz_g` < 0.0005 g²/Hz (noise-floor mask) and by the low-frequency taper: 0 below f0, (1 − cos(π (f − f0) / w)) / 2 from f0 to f0 + w, 1 above, with f0 = 0.01817 Hz and w = 0.10202 Hz (WIMS user manual rev. 3.25; [0.01866, 0.10105] Hz from 2026-11-20 to 2026-11-23, [0.02622, 0.08951] Hz before). The `_g` attributes keep the unweighted values.
+3. Weight every spectrum by 0 where `Szz_g` < 0.0005 g²/Hz (noise-floor mask) and by the low-frequency taper: 0 below f0, (1 − cos(π (f − f0) / w)) / 2 from f0 to f0 + w, 1 above, with f0 = 0.01780 Hz and w = 0.10254 Hz (WIMS user manual rev. 3.25, since 2026-11-24; [0.01817, 0.10202] Hz on 2026-11-23, [0.01866, 0.10105] Hz from 2026-11-20, [0.02622, 0.08951] Hz before). The `_g` attributes keep the unweighted values.
 4. Displacement spectrum = weight × g² / (2πf)⁴ × acceleration spectrum, with g = 9.80665 m/s².
 5. Smooth the six displacement spectra with a centered 3-point moving average.
 6. Quality-check the spectra of steps 3 to 5, all tests before any rejection (`qc_reasons`, `qc_flag`; table below), and reject the spectra flagged `bad` or `probably bad` (`FloatClasses.WAVE_QC_REJECT`, since 2026-11-20; before, `bad` only) (set all six displacement spectra to `NaN`).

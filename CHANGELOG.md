@@ -7,6 +7,12 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- WIMS spectra low-frequency correction refitted with the quality flags of build 3449, only the
+  spectra flagged good or probably good, and the NDBC 41047 data of the NDBC historical archive
+  (2% higher than the real-time data used before): [f0, w] = [0.01780, 0.10254] Hz (was
+  [0.01817, 0.10202] Hz; the correction factor changes by at most 0.003, near 0.05 Hz), from
+  772 Erin NDBC 41047, 875 Erin A-DWSD and 9547 Lowell A-DWSD pairs: RMS 0.065. The WIMS floats
+  were reprocessed.
 - WIMS spectra quality flags (WIMS user manual rev. 3.25): `lf_energy` and `no_energy` are at
   level `probably bad` (were `bad`); both levels are rejected, so the same spectra are rejected,
   but `bad` is left for the spectra that cannot be used at all. New reason `long_period`
