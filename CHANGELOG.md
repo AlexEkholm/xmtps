@@ -7,6 +7,11 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- `wave_direction_mean` is no longer written for a float without wave direction data (no
+  `theta1` in its usable wave spectra, e.g. 9108 and 9113); the log says why.
+- Summary, mission, startup and energy pages: the ID column sorts by serial number. The cell's
+  text, with the WMO number under it for some floats, sorted as text; it now has the serial as its
+  sort key (`data-order`) and the serial and WMO numbers as its search text (`data-search`).
 - WIMS spectra low-frequency correction (WIMS user manual rev. 3.25): the cosine taper refitted
   to the colocated pairs whose WIMS and reference positions are in the same or adjacent octant of
   the storm (45° sectors relative to its direction of motion) on the same side of the storm

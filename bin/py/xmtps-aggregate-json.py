@@ -14326,6 +14326,8 @@ def WriteWavePlots(float_id, float_aggregate_data, dpath_float, dives, max_dive)
             
             if df_wave_spectra['dive'].nunique() < 2:
                 DropFigures(figs, [k for k in figs if k.startswith('wave_waterfall_')], 'Fewer than 2 wave dives', float_id)
+            if not np.isfinite(pd.to_numeric(df_wave_spectra['theta1'], errors = 'coerce').astype(np.double)).any():
+                DropFigures(figs, ['wave_direction_mean'], 'No wave direction data', float_id)
             for fig in list(figs.keys()):
                 
                 fig_meta = WritePlotImageFiles(

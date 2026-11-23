@@ -565,7 +565,10 @@ def WriteStartupFile(dpath):
 
                                         with tag('tr'):
 
-                                            with tag('td'): # id
+                                            # sorted by serial number (the cell's text, with the WMO number under it, would sort as
+                                            # text) and searched by the serial and WMO numbers, not by the cell's HTML
+                                            with tag('td', ('data-order', '{}'.format(int(float_id))),
+                                                     ('data-search', '{} {}'.format(float_id, int(summary['id'].wmo) if summary['id'].wmo > 1 else '').strip())): # id
                                                 with tag('a', href='{}/{}'.format(args.plots_url, float_id)):
                                                     text('{}'.format(float_id))
                                                 if summary['id'].wmo > 1:

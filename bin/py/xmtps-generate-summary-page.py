@@ -472,7 +472,10 @@ $(document).ready(function () {
                                             # with tag('td'): # idx
                                             #     text('{}'.format(idx))
                                             
-                                            with tag('td'): # id, with the WMO number under it
+                                            # sorted by serial number (the cell's text, with the WMO number under it, would sort as
+                                            # text) and searched by the serial and WMO numbers, not by the cell's HTML
+                                            with tag('td', ('data-order', '{}'.format(int(float_id))),
+                                                     ('data-search', '{} {}'.format(float_id, int(x['id'].wmo) if x['id'].wmo > 1 else '').strip())): # id, with the WMO number under it
                                                 with tag('a', href='{}'.format(float_id)):
                                                     text('{}'.format(float_id))
                                                 row['serial'] = int(float_id)
