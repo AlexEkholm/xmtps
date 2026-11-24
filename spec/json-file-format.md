@@ -734,7 +734,6 @@ Quality reasons (`FloatClasses.WAVE_QC_REASONS`; frequencies on the `freq` grid)
 | `manual` | the spectrum is listed in the manual QC file (below) | the level given there |
 | `no_spectra` | `slen` < 1, or the post-processing failed | bad |
 | `lf_accel` | `Szz_g`, `Sxx_g` or `Syy_g` > 0.09 g²/Hz at f ≤ 0.05 Hz | bad |
-| `max_accel` | `Szz_g`, `Sxx_g` or `Syy_g` > 0.3 g²/Hz at any f | bad |
 | `max_disp` | `Szz`, `Sxx` or `Syy` > 300 m²/Hz, or `Szz` `NaN`, at f ≥ `freq_min` | bad |
 | `lf_energy` | the share of the `Szz` energy in 0.04–0.48 Hz that lies below 0.06 Hz > 0.30 | probably bad (bad before 2026-11-24) |
 | `no_energy` | m0 ≤ 0, for spectra not rejected for another reason | probably bad (bad before 2026-11-24) |

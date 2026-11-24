@@ -7,6 +7,11 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- WIMS spectra QC: the acceleration range check `max_accel` (any of `Szz_g`, `Sxx_g`, `Syy_g` above
+  0.3 g²/Hz, bad) is dropped. Of its 258 spectra in build 3450, 255 are also `lf_accel` and stay
+  bad; the other 3 (9301 dives 9 and 14 in Ian, 9305 dive 25 in Lowell) are genuine hurricane swell
+  peaks of 0.31–0.34 g²/Hz at 0.10 Hz, and the A-DWSD reference spectra exceed 0.3 g²/Hz in 123
+  hurricane pairs. The displacement check `max_disp` (300 m²/Hz) stays.
 - WIMS spectra low-frequency correction refitted with the quality flags of build 3449, only the
   spectra flagged good or probably good, and the NDBC 41047 data of the NDBC historical archive
   (2% higher than the real-time data used before): [f0, w] = [0.01780, 0.10254] Hz (was
@@ -27,7 +32,7 @@ Python tools:
 
 Documentation:
 
-- JSON file format: the levels and the new reason.
+- JSON file format: the levels and the new reason; `max_accel` removed from the reason table.
 
 ## 2026-11-23
 

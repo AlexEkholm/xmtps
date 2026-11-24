@@ -1355,7 +1355,6 @@ WAVE_QC_REASONS = {
                                             # at the level given there; 'bad' is only the default
     'no_spectra':       'bad',              # no spectra (slen < 1)
     'lf_accel':         'bad',              # acceleration > 0.09 g^2/Hz at or below 0.05 Hz
-    'max_accel':        'bad',              # acceleration > 0.3 g^2/Hz
     'max_disp':         'bad',              # displacement > 300 m^2/Hz at or above freq_min, or Szz NaN
     'lf_energy':        'probably bad',     # low-frequency share of the Szz energy > 0.30
     'no_energy':        'probably bad',     # m0 of Szz not positive (spectra not otherwise rejected)
@@ -1611,7 +1610,8 @@ class Wave:
         6. Quality-check the spectra (qc_reasons, all tests on the spectra of steps 3 to 5, before
            any rejection; qc_flag the worst level among the reasons, see WAVE_QC_REASONS):
            lf_accel (bad) if any acceleration auto-spectrum exceeds 0.09 g^2/Hz at or below
-           0.05 Hz (low-frequency noise); max_accel (bad) if one exceeds 0.3 g^2/Hz anywhere;
+           0.05 Hz (low-frequency noise) (the check of 0.3 g^2/Hz anywhere, max_accel, was
+           dropped on 2026-11-24: it rejected genuine hurricane swell peaks);
            max_disp (bad) if any displacement auto-spectrum at or above freq_min exceeds
            300 m^2/Hz or the vertical one is NaN; lf_energy (probably bad) if more than 0.30 of
            the Szz energy in 0.04 to 0.48 Hz lies below 0.06 Hz, lf_energy_minor (probably good)
@@ -1660,7 +1660,6 @@ class Wave:
         
         zero_below_freq_min = False
         spectra_max   = 300 # m^2/Hz
-        spectra_max_g = 0.3 # g^2/Hz
         
         # interpolation frequencies
         
@@ -1826,11 +1825,6 @@ class Wave:
             lf = freq <= spectra_lf_cutoff_f + eps
             if np.any((self.Szz_g[lf] > spectra_max_lf_g) | (self.Sxx_g[lf] > spectra_max_lf_g) | (self.Syy_g[lf] > spectra_max_lf_g)):
                 reasons.append('lf_accel')
-
-            # Acceleration peaks above the maximum
-            if spectra_max_g > 0:
-                if np.any((self.Szz_g > spectra_max_g) | (self.Sxx_g > spectra_max_g) | (self.Syy_g > spectra_max_g)):
-                    reasons.append('max_accel')
 
             # Displacement peaks above the maximum, or no vertical spectrum
             if spectra_max > 0:
