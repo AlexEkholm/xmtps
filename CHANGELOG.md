@@ -7,6 +7,14 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- WIMS spectra low-frequency correction refitted with the drifter quality flags of the Lagrangian
+  Drifter Laboratory instead of the A-DWSD outlier screening: the Erin A-DWSD data of the LDL Erin
+  data sets without the reports with LDL wave quality flags 4 to 10 (low-frequency energy and
+  gradients, less than 95% of the data), and the Lowell A-DWSD reports with less than 95% of the
+  data (SASCWATCH wavequality < 0.95, LDL flag 10) left out: [f0, w] = [0.01442, 0.10856] Hz (was
+  [0.01631, 0.10590] Hz; the correction factor changes by at most 0.012), from 772 Erin NDBC 41047,
+  805 Erin A-DWSD and 9189 Lowell A-DWSD pairs: RMS 0.068. Build 3456; the WIMS floats were
+  reprocessed.
 - WIMS spectra low-frequency correction refitted with the quality flags of build 3451 (without
   the 0.3 g²/Hz check, so with spectrum 25 of float 9305 in Hurricane Lowell, 68 pairs):
   [f0, w] = [0.01631, 0.10590] Hz (was [0.01780, 0.10254] Hz; the correction factor is up to

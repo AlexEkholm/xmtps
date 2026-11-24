@@ -1668,12 +1668,13 @@ class Wave:
         F_INTER_MAX  = 1.250 # Hz
         
         # Low-frequency response correction (WIMS user manual rev. 3.26), a cosine taper [f0, w] in
-        # Hz: refitted to the Hurricane Erin (NDBC 41047 historical archive, A-DWSD) and Hurricane
-        # Lowell (A-DWSD) colocations in the same or adjacent storm octant on the same side of the
-        # storm track (or both outside the storms), with only the spectra flagged good or probably
-        # good (build 3451 flags, without the 0.3 g^2/Hz check, including wave_qc_manual.csv), storm
-        # center on the spline (fit RMS 0.065).
-        ccoef = [0.01631, 0.10590]
+        # Hz: refitted to the Hurricane Erin (NDBC 41047 historical archive; A-DWSD of the LDL Erin
+        # data sets, without the reports with LDL wave quality flags 4 to 10) and Hurricane Lowell
+        # (A-DWSD, without the reports with less than 95% of the data, LDL flag 10) colocations in
+        # the same or adjacent storm octant on the same side of the storm track (or both outside the
+        # storms), with only the spectra flagged good or probably good (build 3455 flags, including
+        # wave_qc_manual.csv), storm center on the spline (fit RMS 0.068).
+        ccoef = [0.01442, 0.10856]
     
         # spectra peak
         peak_zz  = 0
