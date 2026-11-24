@@ -7,6 +7,12 @@ Changes to XMTPS, its Python tools and its documentation, newest first. See
 
 Python tools:
 
+- WIMS spectra low-frequency correction refitted with the quality flags of build 3451 (without
+  the 0.3 g²/Hz check, so with spectrum 25 of float 9305 in Hurricane Lowell, 68 pairs):
+  [f0, w] = [0.01631, 0.10590] Hz (was [0.01780, 0.10254] Hz; the correction factor is up to
+  0.006 higher below 0.05 Hz and up to 0.011 lower near 0.095 Hz), from 772 Erin NDBC 41047,
+  875 Erin A-DWSD and 9615 Lowell A-DWSD pairs: RMS 0.065. Build 3453; the WIMS floats were
+  reprocessed.
 - WIMS spectra QC: the acceleration range check `max_accel` (any of `Szz_g`, `Sxx_g`, `Syy_g` above
   0.3 g²/Hz, bad) is dropped. Of its 258 spectra in build 3450, 255 are also `lf_accel` and stay
   bad; the other 3 (9301 dives 9 and 14 in Ian, 9305 dive 25 in Lowell) are genuine hurricane swell
