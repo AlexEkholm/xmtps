@@ -49,6 +49,7 @@ Static configuration:
 
 
 JSON_VERSION = "0.11"
+DIVE_MIN_PRES = 5.0    # dBar; a float is listed once a dive 0 or later went deeper (summary max_dive_pres)
 
 """
 Global Variables:
@@ -447,12 +448,15 @@ $(document).ready(function () {
                                         
                                         # Check Float Data
                                         
-                                        # Listed once end-of-dive data (profile, rise or surface
-                                        # data) of the diagnostic dive 0 or a later dive has
-                                        # arrived. Summaries written before 'end_of_dive' existed
-                                        # use the old rule: dive 1 reached, with a profile.
+                                        # Listed once a complete dive cycle has arrived: end-of-dive
+                                        # data (profile, rise or surface data) of the diagnostic
+                                        # dive 0 or a later dive, and a dive 0 or later that went
+                                        # below DIVE_MIN_PRES (bench and tank tests stay at the
+                                        # surface or report -10 dBar). Summaries written before
+                                        # 'end_of_dive' existed use the old rule: dive 1 reached,
+                                        # with a profile.
                                         if 'end_of_dive' in x:
-                                            if not x['end_of_dive']:
+                                            if not x['end_of_dive'] or x.get('max_dive_pres', DIVE_MIN_PRES) < DIVE_MIN_PRES:
                                                 continue
                                         elif x['latest']['cycle'] < 1 or (x['profdepthsum'] <= 0) or np.isnan(x['profdepthsum']):
                                             continue

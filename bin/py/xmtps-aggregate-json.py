@@ -1444,6 +1444,7 @@ def AggregateDiveData():
                         # True once end-of-dive data (profile, rise or surface data) of a dive 0 or
                         # later has arrived; the summary page lists only such floats
                         'end_of_dive': False,
+                        'max_dive_pres': -999.0,   # dBar; set after all dives are read
                         'type': 'ALTO' if float_data.id.whoi > 10000 else 'ALAMO',
                         'startup':  { 
                             'gps': Gps(), 
@@ -2784,6 +2785,16 @@ def AggregateDiveData():
                     
                 float_aggregate_data['summary']['latest']['depth'] = float(round(float_aggregate_data['summary']['latest']['depth'], 1))
                 float_aggregate_data['summary']['profdepthsum'] = float(round(float_aggregate_data['summary']['profdepthsum'], 1))
+                # deepest valid pressure of dives 0 and later (descent, drift, ascent, profile, pump);
+                # the summary page lists a float only once it went below DIVE_MIN_PRES on such a dive
+                max_dive_pres = -999.0
+                for key in ['descent', 'drift', 'ascent', 'profile', 'pump']:
+                    df_key = float_aggregate_data.get(key)
+                    if isinstance(df_key, pd.DataFrame) and len(df_key) and 'dive' in df_key and 'pres' in df_key:
+                        pres = pd.to_numeric(df_key['pres'][pd.to_numeric(df_key['dive'], errors = 'coerce') >= 0], errors = 'coerce').astype(np.double)
+                        if np.isfinite(pres).any():
+                            max_dive_pres = max(max_dive_pres, float(np.nanmax(pres[np.isfinite(pres)])))
+                float_aggregate_data['summary']['max_dive_pres'] = float(round(max_dive_pres, 1))
                 
                 
                 # Save float aggregate data to map:

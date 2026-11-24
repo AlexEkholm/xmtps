@@ -1213,7 +1213,8 @@ When the same `Gps` or `Sbd` object fills two slots (for example the deployment 
 | `fwver` | string | | `mission.fwver` of the last dive (in read order) that has one; `""` if none. |
 | `ctdtype` | string | | Likewise for `mission.ctdtype`. |
 | `profdepthsum` | float | dBar | Sum over dives ≥ 0 that are in `_profile` of the dive's maximum profile pressure, 1 decimal. 0.0 if none. The pages treat a float with `profdepthsum` > 0 and `latest.cycle` ≥ 1 as deployed. |
-| `end_of_dive` | bool | | True once end-of-dive data of dive 0 (the diagnostic dive) or a later dive is in the aggregate: binned profile rows, rise (`_ascent`) rows or surface rows. The summary page lists only floats where it is true (since 2026-11-13; absent in older summaries). |
+| `end_of_dive` | bool | | True once end-of-dive data of dive 0 (the diagnostic dive) or a later dive is in the aggregate: binned profile rows, rise (`_ascent`) rows or surface rows. The summary page lists only floats where it is true (since 2026-11-13; absent in older summaries), and whose `max_dive_pres` is at least 5 dBar. |
+| `max_dive_pres` | float | dBar | Deepest valid pressure of dives 0 and later in `_descent`, `_drift`, `_ascent`, `_profile` and `_pump`, 1 decimal; -999.0 if none. Bench and tank tests stay near the surface or report -10 dBar (since 2026-11-24; absent in older summaries, which the summary page then lists by `end_of_dive` alone). |
 | `type` | string | | `"ALTO"` if the serial is above 10000, else `"ALAMO"`. |
 | `startup` | object | | `gps`, `sbd` at startup (below). |
 | `deployment` | object | | `gps`, `sbd` at deployment. |

@@ -34,6 +34,12 @@ Documentation:
 
 - JSON file format: the levels and the new reason; `max_accel` removed from the reason table.
 
+## 2026-11-24
+
+- Summary page: a float is listed only once a dive 0 or later went at least 5 dBar deep
+  (`DIVE_MIN_PRES`), from the new `max_dive_pres` in its summary JSON. Bench and tank tests
+  (11777-11783 and 11496 at -10 dBar, 11033 at 0.4 dBar) were listed from their end-of-dive data.
+
 ## 2026-11-23
 
 Python tools:
