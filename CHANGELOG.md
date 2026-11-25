@@ -3,6 +3,19 @@
 Changes to XMTPS, its Python tools and its documentation, newest first. See
 [README.md](README.md) for how the current version works.
 
+## 2026-11-25
+
+Python tools:
+
+- WIMS spectra low-frequency correction refitted with the Lowell A-DWSD Hs spikes also left out
+  (LDL wave quality flag 3, Hs minus its 3-point median more than 4 standard deviations from the
+  mean of the data set, computed from the SASCWATCH Hs; it reproduces the published Erin flag 3
+  without false alarms and flags 98 of the 22121 Lowell reports, among them all with Hs from 15.7
+  to 30.7 m). The rule is now LDL flags 3 to 10 for both storms (flag 3 removes no Erin report
+  that flags 4 to 10 keep): [f0, w] = [0.01951, 0.10156] Hz (was [0.01442, 0.10856] Hz), from
+  772 Erin NDBC 41047, 805 Erin A-DWSD and 9165 Lowell A-DWSD pairs: RMS 0.061. Build 3457; the
+  WIMS floats were reprocessed.
+
 ## 2026-11-24
 
 Python tools:
